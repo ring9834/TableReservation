@@ -106,6 +106,21 @@ classDiagram
     AggregateRoot <|-- Message
 ```
 
+It shows that the five main business records all inherit from one base class, AggregateRoot, which gives them the same machinery for identity, change tracking and events.
+
+How it fits with the outbox (ADR-002)
+A handler calls booking.Seat(...). The booking changes its status and adds BookingSeated to its event list. Nothing is sent yet.
+The handler calls SaveChangesAsync(). The outbox interceptor finds every tracked AggregateRoot, collects its events and writes them to the outbox table in the same transaction as the status change.
+
+After commit, the interceptor calls ClearDomainEvents().
+
+The shared base class is what makes step 2 generic: the interceptor doesn’t need to know about bookings or waitlists. It just asks every aggregate root for its events.
+
+Why these five (Venue, Guest, Booking, WaitlistEntry, Message)
+Each one is changed and saved as a unit, so each can raise events. Records inside an aggregate, such as Deposit and TableAssignment inside Booking, don’t inherit from it, because they only change through their parent.
+
+One gap in the design: the aggregates table in section 2.1 also lists PosMessage, but this diagram doesn’t show it. PosMessage raises no domain events (it’s a delivery queue item), so it doesn’t need AggregateRoot.
+
 **Venue aggregate**
 
 ```mermaid
