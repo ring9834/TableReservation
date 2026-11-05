@@ -68,6 +68,19 @@ This file turns the requirements and ADRs into buildable design: classes and the
 
 Rules that span aggregates (a table can hold one party at a time; pacing per slot) are enforced by the database and a lock in the command handler (§12), not by loading every booking into memory.
 
+In the design, each Booking is its own aggregate. It loads alone, checks its own rules (for example “can’t seat a cancelled booking”) and saves alone. That is enough for rules about one booking.
+
+Two rules are about the relationship between bookings: ①One party per table at a time: booking A for table 5 at 19:00–20:30 must not overlap booking B for table 5 at 20:00–21:30. ②Pacing: no more than 12 covers may start in any 15-minute slot (BR-03), across all bookings in that slot.
+
+To check these in C#, you would have to load every other booking for that table or slot, check, then save. Even then it fails under concurrency. Two guests booking the last free table at the same moment both load the bookings, both see the table free, and both save. Each check was correct when it ran, and the result is still a double booking. This is the classic “check-then-act” race.
+
+How the design handles it：
+①Table overlap: a PostgreSQL exclusion constraint. The table_assignments table has this rule: EXCLUDE USING gist (table_id WITH =, period WITH &&) WHERE (active). In plain words, no two active rows may have the same table_id and overlapping time ranges (&& means “overlaps”). PostgreSQL checks this inside the transaction, at insert time, with its own locking. In the race above, the second insert is rejected with error 23P01. The API turns that error into 409 slot_taken, and the guest is shown the next free times. However many servers or requests run at once, the database never stores a double booking.
+
+②Pacing: a short database lock before counting. A constraint can’t easily express “sum of party sizes in this slot ≤ 12”. Instead, the booking transaction first takes a lock on that venue and slot: SELECT pg_advisory_xact_lock(hashtext(:venueId || :slotStart)). It then counts the covers already booked and inserts only if there is room. A second request for the same slot waits at the lock until the first commits, then counts again and sees the new total. The lock is released automatically at commit and only blocks requests for that one slot, so other slots aren’t slowed down.
+
+In short: each booking enforces its own rules, and the database enforces the rules between bookings, because it is the one place that sees every write at once.
+
 ### 2.2 Class diagram: core domain
 
 ```mermaid
