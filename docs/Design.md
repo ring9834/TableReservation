@@ -131,6 +131,8 @@ classDiagram
         +string Name
         +string TimeZone
         +string Currency
+        +int SettingsVersion
+        +UpdateSettings(VenueSettings) Result
         +FindTable(TableId) Table
     }
     class VenueSettings {
@@ -179,6 +181,7 @@ classDiagram
         +string? Occasion
         +DateTimeOffset? HoldExpiresAt
         +DateTimeOffset? SeatedAt
+        +BookingTerms Terms
         +Create(...)$ Result~Booking~
         +CreateWalkIn(...)$ Result~Booking~
         +CaptureDeposit(PaymentRef, Money) Result
@@ -206,6 +209,15 @@ classDiagram
         +DateTimeOffset? RespondedAt
         +string PolicyShown
     }
+    class BookingTerms {
+        <<value object>>
+        +DepositRule Deposit
+        +CancellationRule Cancellation
+        +int TurnMinutes
+        +DateTimeOffset CapturedAt
+        +int SettingsVersion
+    }
+    Booking *-- "1" BookingTerms : Terms
     Booking *-- "0..1" Deposit
     Booking *-- "1..*" TableAssignment : Tables
     Booking *-- "0..1" ReminderRecord : Reminder
@@ -288,6 +300,7 @@ References between aggregates are **by ID only**; there are no navigation proper
 | `BookingReference` | 6 characters from an unambiguous alphabet (no 0/O/1/I), unique per venue, e.g. `GD7K4P` |
 | `FloorPosition` | `X`, `Y`, `Rotation`, `Shape` (`Round` / `Rect`), `Width`, `Height` in floor units (ADR-001) |
 | `Actor` | `Type` (`Guest` / `Staff` / `System` / `Pos`), `Id`, `Role?` (ADR-002 envelope) |
+| `BookingTerms` | A copy of the venue's deposit rule, cancellation rule and turn time, taken when the booking is created; never changed afterwards (§2.6) |
 
 ### 2.4 Enumerations
 
@@ -318,6 +331,37 @@ A table has no status column. Its state on the floor plan is computed from activ
 
 This removes a whole class of "table and booking disagree" bugs. Clearing a table means completing the booking seated at it (§3.1).
 
+### 2.6 Booking terms are copied at booking time
+
+The venue's rules live in `venues.settings` (`VenueSettings`) and a manager can change them at any time. A guest must be held to the terms shown **when they booked** (AC5.6), not to whatever the venue's settings say later. So `Booking.Create` and `Booking.CreateWalkIn` copy the rules that matter into the booking as `BookingTerms`:
+
+| Copied | From | Used by |
+| --- | --- | --- |
+| `Deposit` (min party size, per-guest amount) | `VenueSettings.Deposit` | Deposit amount at creation; shown on the confirmation |
+| `Cancellation` (free-until hours, refund when in time, host-cancel refund) | `VenueSettings.Cancellation` | `RefundPolicy` when the booking is cancelled |
+| `TurnMinutes` | `VenueSettings.TurnTimes` for the party size | Booking period; seating length |
+| `CapturedAt`, `SettingsVersion` | Clock; a counter on the venue that goes up each time the settings change | Audit: which version of the rules applied |
+
+Rules:
+
+- `BookingTerms` is set once, in `Create` / `CreateWalkIn`, and has no setters. Changing the venue's settings never touches existing bookings.
+- `RefundPolicy` and the guest's manage-booking page read `booking.Terms`, never the venue's current settings.
+- The confirmation and reminder messages render the cancellation wording from `booking.Terms`; `ReminderRecord.PolicyShown` stores the exact text the guest saw.
+- If a venue needs to change terms for existing bookings (rare, e.g. a goodwill refund), a manager cancels with a host refund (§8.3) rather than editing the terms.
+- Pacing, slots and service hours are **not** copied: they apply when a booking is made or seated, not afterwards.
+
+Stored as `bookings.terms jsonb` (§13), mapped with `OwnsOne(b => b.Terms, t => t.ToJson())`. Example:
+
+```json
+{
+  "deposit": { "minPartySize": 6, "perGuestCents": 2000 },
+  "cancellation": { "freeUntilHoursBefore": 2, "refundWhenInTime": "full", "hostCancelRefund": "full" },
+  "turnMinutes": 120,
+  "capturedAt": "2026-11-20T05:12:44Z",
+  "settingsVersion": 3
+}
+```
+
 ---
 
 ## 3. State machines
@@ -344,8 +388,8 @@ stateDiagram-v2
 
 | Transition | Method | Guards | Effects | Events raised |
 | --- | --- | --- | --- | --- |
-| → `PendingPayment` | `Create` | Party within online limit; slot within service hours; deposit rule applies | `HoldExpiresAt = now + 10 min`; `Deposit.Status = Pending`; table assigned | `BookingCreated` |
-| → `Booked` | `Create` | As above, no deposit | Table assigned | `BookingCreated` |
+| → `PendingPayment` | `Create` | Party within online limit; slot within service hours; deposit rule applies | `Terms` copied from venue settings (§2.6); `HoldExpiresAt = now + 10 min`; `Deposit.Status = Pending`; table assigned | `BookingCreated` |
+| → `Booked` | `Create` | As above, no deposit | `Terms` copied (§2.6); Table assigned | `BookingCreated` |
 | → `Seated` | `CreateWalkIn` | Table free now for the turn time | `Channel = WalkIn`; `Period = [now, now + turn)`; `SeatedAt = now` | `BookingCreated`, `BookingSeated` (`source: walkIn`) |
 | `PendingPayment` → `Booked` | `CaptureDeposit` | Status is `PendingPayment`; amount equals deposit due; hold not expired **or** table still free | `Deposit.Status = Captured`; `HoldExpiresAt = null` | `DepositCaptured` |
 | `PendingPayment` → `Cancelled` | `ExpireHold` | `now ≥ HoldExpiresAt` | `Deposit.Status = Released`; table released | `BookingCancelled` (`reason: HoldExpired`) |
@@ -855,7 +899,7 @@ classDiagram
         -string webhookSecret
     }
     class RefundPolicy {
-        +Decide(Booking, CancelReason, Actor, DateTimeOffset now, VenueSettings) RefundDecision
+        +Decide(Booking, CancelReason, Actor, DateTimeOffset now) RefundDecision
     }
     StripeWebhookEndpoint --> IPaymentProvider : ParseWebhook
     StripeWebhookEndpoint --> CaptureDepositHandler : payment succeeded
@@ -869,7 +913,7 @@ classDiagram
 
 ### 8.2 Deposit rule (BR-06)
 
-`DepositDue = partySize ≥ 6 ? partySize × NZD 20.00 : none`. Values come from `VenueSettings.Deposit`.
+`DepositDue = partySize ≥ 6 ? partySize × NZD 20.00 : none`. Values come from `VenueSettings.Deposit` at the moment of booking and are kept in `booking.Terms.Deposit` (§2.6).
 
 ### 8.3 Refund rule (BR-07)
 
@@ -879,6 +923,8 @@ classDiagram
 | Guest | < 2 h before start | No refund (deposit kept) |
 | Host | Any time | Full refund |
 | System (hold expired) | Before payment | Not applicable (`Released`) |
+
+The hours and refund amounts come from `booking.Terms.Cancellation` (§2.6), so a later change to the venue's rule does not affect this booking.
 
 `RefundOnCancelHandler` consumes `BookingCancelled` where `refundDecision = full` and calls Stripe with idempotency key `{eventId}:refund`. Stripe's `charge.refunded` webhook then raises `DepositRefunded` through `RecordRefundHandler`.
 
@@ -1178,7 +1224,8 @@ CREATE EXTENSION IF NOT EXISTS btree_gist;
 
 CREATE TABLE venues (
   id uuid PRIMARY KEY, name text NOT NULL, time_zone text NOT NULL,
-  currency char(3) NOT NULL DEFAULT 'NZD', settings jsonb NOT NULL
+  currency char(3) NOT NULL DEFAULT 'NZD', settings jsonb NOT NULL,
+  settings_version int NOT NULL DEFAULT 1           -- +1 on every settings change
 );
 
 CREATE TABLE areas (
@@ -1207,6 +1254,7 @@ CREATE TABLE bookings (
   deposit_cents bigint, deposit_status text, payment_intent_id text, refund_id text,
   hold_expires_at timestamptz, seated_at timestamptz, completed_at timestamptz,
   bill_total_cents bigint, notes text, occasion text, reminder jsonb,
+  terms jsonb NOT NULL,                              -- BookingTerms snapshot (§2.6)
   created_at timestamptz NOT NULL, UNIQUE (venue_id, reference)
 );
 CREATE INDEX ix_bookings_venue_day ON bookings (venue_id, lower(period));
@@ -1419,7 +1467,7 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | Step 2, AC2.1–AC2.6 | §2.5, §15, §16, §18 |
 | Step 3, AC3.1–AC3.8 | §3.1, §3.2, §10.2, §11.3, §11.4 |
 | Step 4, AC4.1–AC4.6 | §3.2, §7, §10.3, §16 |
-| Step 5, AC5.1–AC5.6 | §3.1, §7, §8.3, §10.4 |
+| Step 5, AC5.1–AC5.6 | §2.6, §3.1, §7, §8.3, §10.4 |
 | Step 6, AC6.1–AC6.6 | §6, §10.5, §13 (`pos_messages`) |
 | BR-01–BR-05 | §11 |
 | BR-06, BR-07 | §8.2, §8.3 |
