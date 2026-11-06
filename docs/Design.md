@@ -61,7 +61,7 @@ This file turns the requirements and ADRs into buildable design: classes and the
 | --- | --- | --- |
 | `Venue` | `Area`, `Table`, `VenueSettings` | Layout and rules change rarely and together |
 | `Guest` | Visit summary (last bill total, visit count) | Shared by bookings and waitlist; matched by phone |
-| `Booking` | `Deposit`, `TableAssignment`s, reminder record | Its status, tables and deposit must change together |
+| `Booking` | `Deposit`, `TableAssignment`s, `BookingBill`s, reminder record | Its status, tables and deposit must change together |
 | `WaitlistEntry` | Notification record | Independent lifecycle; becomes a booking when seated |
 | `Message` | Delivery attempts | Sent asynchronously after the change that caused it |
 | `PosMessage` | Delivery attempts | Ordered delivery queue per venue (§6) |
@@ -193,6 +193,7 @@ classDiagram
         +DateTimeOffset? SeatedAt
         +DateTimeOffset? CompletedAt
         +CompletionSource? CompletedBy
+        +IReadOnlyList~BookingBill~ Bills
         +Money? BillTotal
         +BookingTerms Terms
         +Create(...)$ Result~Booking~
@@ -202,10 +203,10 @@ classDiagram
         +Confirm(Actor by) Result
         +Cancel(Actor by, CancelReason, DateTimeOffset now) Result~RefundDecision~
         +Seat(TableId[] tables, DateTimeOffset now, Actor by) Result
-        +Complete(CompletionSource, Money? bill, DateTimeOffset now) Result
+        +Complete(CompletionSource, BookingBill? bill, DateTimeOffset now) Result
         +RecordRefund(RefundRef, Money) Result
         +RecordReminder(DateTimeOffset sentAt) Result
-        +AttachLateBill(Money bill, PosMessageId source, DateTimeOffset closedAt) Result
+        +AttachLateBill(BookingBill bill) Result
     }
     class Deposit {
         +Money Amount
@@ -232,6 +233,15 @@ classDiagram
         +int SettingsVersion
     }
     Booking *-- "1" BookingTerms : Terms
+    class BookingBill {
+        <<value object>>
+        +string PosBillId
+        +Money Total
+        +Money? Tip
+        +DateTimeOffset ClosedAt
+        +PosMessageId SourceMessage
+    }
+    Booking *-- "0..*" BookingBill : Bills
     Booking *-- "0..1" Deposit
     Booking *-- "1..*" TableAssignment : Tables
     Booking *-- "0..1" ReminderRecord : Reminder
@@ -318,6 +328,7 @@ References between aggregates are **by ID only**; there are no navigation proper
 | `BookingReference` | 6 characters from an unambiguous alphabet (no 0/O/1/I), unique per venue, e.g. `GD7K4P` |
 | `FloorPosition` | `X`, `Y`, `Rotation`, `Shape` (`Round` / `Rect`), `Width`, `Height` in floor units (ADR-001) |
 | `Actor` | `Type` (`Guest` / `Staff` / `System` / `Pos`), `Id`, `Role?` (ADR-002 envelope) |
+| `BookingBill` | One settled POS bill: POS bill ID, total, optional tip, closed time, source POS message. `Booking.BillTotal` is the sum of `Bills` (§6.6) |
 | `BookingTerms` | A copy of the venue's deposit rule, cancellation rule and turn time, taken when the booking is created; never changed afterwards (§2.6) |
 
 ### 2.4 Enumerations
@@ -581,13 +592,13 @@ public sealed record BookingSeated(
 | `BookingCancelled` | Booking | `bookingId, reason, cancelledBy, refundDecision (full / none / notApplicable)` |
 | `DepositRefunded` | Booking | `bookingId, refundId, amountCents` |
 | `BookingSeated` | Booking | `bookingId, tableIds[], partySize, source (booking / walkIn), waitlistEntryId?, seatedAt` |
-| `BookingCompleted` | Booking | `bookingId, source (billClosed / clearedByHost), billTotalCents?, closedAt` |
+| `BookingCompleted` | Booking | `bookingId, source (billClosed / clearedByHost), posBillId?, billTotalCents?, closedAt` |
 | `TableCleared` | Booking | `bookingId, tableIds[], clearedAt` |
 | `WaitlistJoined` | WaitlistEntry | `waitlistEntryId, guestId, partySize, quotedMinutes` |
 | `WaitlistNotified` | WaitlistEntry | `waitlistEntryId, tableId, notifiedAt` |
 | `WaitlistEnded` | WaitlistEntry | `waitlistEntryId, outcome (seated / walkedAway / removed), bookingId?` |
 | `MessageSent` | Message | `messageId, purpose, channel, subjectId, toMasked` |
-| `BookingBillAttached` | Booking | `bookingId, billTotalCents, posMessageId, matchedBy (lateMatch / manual), attachedAt` |
+| `BookingBillAttached` | Booking | `bookingId, posBillId, billTotalCents, posMessageId, matchedBy (lateMatch / manual), attachedAt` |
 
 `TableCleared` belongs to the `Booking` aggregate because table state is derived (§2.5); it exists so floor-plan consumers do not need to know completion rules.
 
@@ -851,7 +862,7 @@ The POS log must show messages **waiting** while the POS is offline (AC6.5), so 
 | `BookingCreated` | Booking has a guest | `UpsertMember` | `memberPhone, name, language` | `{eventId}:UpsertMember` |
 | `BookingSeated` | Always | `OpenTable` | `tableIds, partySize, guestName?, bookingId` | `{eventId}:OpenTable` |
 | `BookingSeated` | Deposit captured | `ApplyDeposit` | `tableIds, amountCents, paymentRef, bookingId` | `{eventId}:ApplyDeposit` |
-| (inbound) | POS sends `BillClosed` | → `CloseBillCommand` (matching rules in §6.5) | `posMessageId, tableId, billTotalCents, closedAt, bookingId?` | POS message ID in inbox |
+| (inbound) | POS sends `BillClosed` | → `CloseBillCommand` (matching rules in §6.5) | `posMessageId, posBillId, tableId, billTotalCents, tipCents?, closedAt, bookingId?` | POS message ID in inbox; POS bill ID unique per venue |
 
 `OpenTable` is always queued before `ApplyDeposit` for the same event (sequence order).
 
@@ -886,13 +897,28 @@ flowchart TB
 **Rules**
 
 - Step 3 never guesses between candidates: two or more possible bookings means `Unmatched`.
-- A booking can receive a bill only once; a second `BillClosed` for it is stored as `Unmatched` and flagged.
+- A repeated `BillClosed` with a `posBillId` already recorded is a duplicate and is ignored. A **different** bill for a booking that already has one is stored as `Unmatched` with reason `second_bill` (one bill per booking for now; §6.6).
 - `BookingBillAttached` updates the guest's visit (`Guest.RecordVisit`) and the audit log, the same as a normal completion. It does not change the table state, which is already free.
 - The window is a venue setting (`VenueSettings.LateBillMatchMinutes`, default 30), so it can be tuned per venue.
 - **Manual matching:** the POS log lists `Unmatched` bills. A manager can attach one to a completed booking from that list (`MatchPosBill`), which raises `BookingBillAttached` with `matchedBy: manual`, or dismiss it (e.g. a bar tab with no booking).
 - **Monitoring:** the pilot dashboard shows, per venue and day, the share of bookings completed by `ClearedByHost`, late matches and unmatched bills. A high share suggests the POS link is down or staff are skipping the POS (ADR-004 alarms).
 
 **Partner question:** can the POS return the `bookingId` it received in `OpenTable` when it sends `BillClosed`? If so, step 1 handles almost every case and steps 3–4 become rare.
+
+### 6.6 One bill per booking, ready for split bills
+
+The demo and the pilot assume **one POS bill per booking**. Split *payments* on one bill (cash plus card, several cards) need nothing here: the POS closes one bill with one total, and `BillClosed` carries that bill total, never the sum of payments.
+
+Split *bills* (one table, several separate bills) are not built, because the partner's POS may not support them. Two small choices keep the door open:
+
+| Choice | Now | If split bills are needed later |
+| --- | --- | --- |
+| Bills keyed by `posBillId` | Duplicates are ignored; a second, different bill is flagged `second_bill` instead of overwriting the first | Same key; the second bill is added instead of flagged |
+| Bills stored in `booking_bills`, one row per bill | At most one row per booking (enforced by a unique index on `booking_id`) | Drop that index; `BillTotal` already sums the rows |
+
+**Not built until needed:** a "table closed" signal from the POS, accepting several bills per booking in the late-match rule, and running totals in `BookingBillAttached`.
+
+**Watch in the pilot:** venues whose POS cannot split bills sometimes fake it by moving items to a virtual table (7A, 7B) or a quick-sale order. Those bills arrive with no matching booking and show as `Unmatched` for a manager (§6.5). A high count of `second_bill` or virtual-table bills is the signal to build split-bill support.
 
 ---
 
@@ -1333,6 +1359,14 @@ CREATE TABLE bookings (
 );
 CREATE INDEX ix_bookings_venue_day ON bookings (venue_id, lower(period));
 
+CREATE TABLE booking_bills (                         -- §6.6
+  booking_id uuid NOT NULL REFERENCES bookings(id), venue_id uuid NOT NULL,
+  pos_bill_id text NOT NULL, total_cents bigint NOT NULL, tip_cents bigint,
+  closed_at timestamptz NOT NULL, pos_message_id uuid NOT NULL,
+  PRIMARY KEY (venue_id, pos_bill_id)
+);
+CREATE UNIQUE INDEX ux_booking_bills_one_per_booking ON booking_bills (booking_id);  -- drop to allow split bills
+
 CREATE TABLE table_assignments (
   booking_id uuid NOT NULL REFERENCES bookings(id), table_id uuid NOT NULL REFERENCES tables(id),
   venue_id uuid NOT NULL, period tstzrange NOT NULL, active boolean NOT NULL,
@@ -1546,7 +1580,7 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | Step 3, AC3.1–AC3.8 | §3.1, §3.2, §10.2, §11.3, §11.4 |
 | Step 4, AC4.1–AC4.6 | §3.2, §7, §10.3, §16 |
 | Step 5, AC5.1–AC5.6 | §2.6, §3.1, §7, §8.3, §10.4 |
-| Step 6, AC6.1–AC6.6 | §6, §6.5, §10.5, §13 (`pos_messages`) |
+| Step 6, AC6.1–AC6.6 | §6, §6.5, §6.6, §10.5, §13 (`pos_messages`, `booking_bills`) |
 | BR-01–BR-05 | §11 |
 | BR-06, BR-07 | §8.2, §8.3 |
 | BR-08–BR-10 | §3.2, §11.3, §11.4 |
@@ -1566,4 +1600,5 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | ADR-004 validation examples (deposit for 8+, party 1–20) | Should read deposit for 6+ (BR-06) and online party 1–8 (BR-04) |
 | Seating a late party whose turn now overlaps the next booking | Seat fails with `slot_taken`; host picks another table. Revisit with real venues |
 | `BillClosed` for a table with no seated booking | Resolved: late-match rule (§6.5); still unmatched → manager matches or dismisses. Ask the partner whether the POS can return `bookingId` |
+| Split bills for one table | Not built; one bill per booking, keyed by POS bill ID, stored in `booking_bills` (§6.6). Ask the partner whether their POS supports split bills per table, and whether venues use virtual tables to fake them |
 | Language for guests who switch mid-booking | Guest's `Language` is the language active when they submit |
