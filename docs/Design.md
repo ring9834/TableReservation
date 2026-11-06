@@ -147,6 +147,7 @@ classDiagram
         +CancellationRule Cancellation
         +int NotifiedTimeoutMinutes
         +int PaymentHoldMinutes
+        +int LateBillMatchMinutes
     }
     class Area {
         +AreaId Id
@@ -162,6 +163,15 @@ classDiagram
     Venue *-- "1..*" Area : Areas
     Area *-- "1..*" Table : Tables
 ```
+
+LateBillMatchMinutes is a venue setting, 30 minutes by default, that controls how far back the system will look when a bill from the POS arrives too late to match a seated table. It belongs to the late-match rule in section 6.5, and it exists to solve one timing problem. A host often taps “Clear” as soon as the guests stand up, but the guests may still be at the counter paying. When the POS then sends BillClosed, nobody is seated at that table any more, so the normal rule (“complete the booking seated here”) finds nothing. Without a fallback, the bill total would be lost and the guest’s visit would show no spend.
+
+The setting tells the system how long a cleared table stays a reasonable home for a bill that arrives late. When a BillClosed finds no seated booking, the system looks for a booking at the same table that the host cleared without a bill no more than LateBillMatchMinutes before the POS closed the bill. If exactly one booking fits, the bill is attached to it and the guest’s visit is recorded. If none fits, or more than one does, the system doesn’t guess. The bill is kept as unmatched for a manager to deal with.
+
+The window has to be a sensible size in both directions, which is why it’s a setting rather than a fixed number in the code. If it’s too short, slow payers at a busy counter are missed and their spend disappears from the records. If it’s too long, the table may already have been cleared for a second party, and a bill could be attached to the wrong guest. The design limits that risk by refusing to match when more than one booking qualifies, but a sensible window keeps those cases rare. Venues differ too: a quick lunch café might want 10 minutes, while a banquet restaurant where large groups settle up slowly might want 45. Because the value is stored in the venue’s settings, each venue can be tuned without a code change.
+
+<i>If the partner’s POS can send back the booking ID it received with OpenTable, the match becomes exact and this time window is rarely used. Until then, LateBillMatchMinutes is what keeps the guest and revenue data complete when hosts clear tables a little early.</i>
+
 
 **Booking aggregate**
 
@@ -181,6 +191,9 @@ classDiagram
         +string? Occasion
         +DateTimeOffset? HoldExpiresAt
         +DateTimeOffset? SeatedAt
+        +DateTimeOffset? CompletedAt
+        +CompletionSource? CompletedBy
+        +Money? BillTotal
         +BookingTerms Terms
         +Create(...)$ Result~Booking~
         +CreateWalkIn(...)$ Result~Booking~
@@ -192,6 +205,7 @@ classDiagram
         +Complete(CompletionSource, Money? bill, DateTimeOffset now) Result
         +RecordRefund(RefundRef, Money) Result
         +RecordReminder(DateTimeOffset sentAt) Result
+        +AttachLateBill(Money bill, PosMessageId source, DateTimeOffset closedAt) Result
     }
     class Deposit {
         +Money Amount
@@ -222,6 +236,10 @@ classDiagram
     Booking *-- "1..*" TableAssignment : Tables
     Booking *-- "0..1" ReminderRecord : Reminder
 ```
+
+BillTotal is how much the guests spent, taken from the POS bill. It’s empty until a bill is matched to the booking. Having it on the booking means the guest’s visit history, average spend and later reports (revenue per cover, per channel) can use real amounts. An empty BillTotal also marks a booking that hasn’t received its bill yet, which is how the late-match rule knows a cleared booking can still take a late bill.
+
+CompletedBy records how the booking reached Completed: either BillClosed (the POS reported the bill paid) or ClearedByHost (a host tapped “Clear”). The late-match rule needs this, because it only attaches a late bill to bookings cleared by a host. A booking completed by BillClosed already has its bill. It also helps reports and checks: lots of ClearedByHost at a venue suggests the POS link isn’t working, or staff are skipping the POS.
 
 **Guest, waitlist entry and message aggregates**
 
@@ -384,6 +402,11 @@ stateDiagram-v2
     Seated --> Completed: BillClosed or table cleared
     Completed --> [*]
     Cancelled --> [*]
+    note right of Completed
+        Cleared with no bill?
+        A late BillClosed can
+        still attach it (§6.5)
+    end note
 ```
 
 | Transition | Method | Guards | Effects | Events raised |
@@ -397,6 +420,7 @@ stateDiagram-v2
 | → `Seated` | `Seat` | Status `Booked` or `Confirmed`; tables free from `now` to `now + turn` | `Period = [now, now + turn)`; `SeatedAt = now`; tables reassigned if host chose others | `BookingSeated` (`source: booking`) |
 | → `Cancelled` | `Cancel` | Status `PendingPayment`, `Booked` or `Confirmed` | Table released; refund decision (§8.3) | `BookingCancelled` (+ `DepositRefunded` later, from Stripe) |
 | `Seated` → `Completed` | `Complete` | Status `Seated` | Bill total recorded if from POS | `BookingCompleted`, `TableCleared` |
+| `Completed` → `Completed` | `AttachLateBill` | Completed by `ClearedByHost`; no bill total yet; `closedAt − CompletedAt ≤ LateBillMatchMinutes` (or matched by a manager) | Bill total and POS message ID recorded | `BookingBillAttached` |
 
 Any transition not in the table returns `Error.Conflict("invalid_transition")` → HTTP `409` with code `rule_broken`. Calling a method that leads to the current state (for example a second `Confirm`) is a no-op that returns success and raises nothing, so repeated taps and retried requests are safe.
 
@@ -482,6 +506,17 @@ stateDiagram-v2
     end note
 ```
 
+Inbound POS messages (`BillClosed`) are stored in the same table with `direction = inbound`:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Received: signed webhook accepted
+    Received --> Matched: booking completed or bill attached
+    Received --> Unmatched: no single booking fits (§6.5)
+    Unmatched --> Matched: manager matches by hand
+    Unmatched --> Dismissed: manager marks not a booking
+```
+
 ---
 
 ## 4. Domain events
@@ -521,6 +556,7 @@ classDiagram
     DomainEvent <|-- WaitlistNotified
     DomainEvent <|-- WaitlistEnded
     DomainEvent <|-- MessageSent
+    DomainEvent <|-- BookingBillAttached
     EventMetadataAttribute .. DomainEvent : describes each
 ```
 
@@ -551,6 +587,7 @@ public sealed record BookingSeated(
 | `WaitlistNotified` | WaitlistEntry | `waitlistEntryId, tableId, notifiedAt` |
 | `WaitlistEnded` | WaitlistEntry | `waitlistEntryId, outcome (seated / walkedAway / removed), bookingId?` |
 | `MessageSent` | Message | `messageId, purpose, channel, subjectId, toMasked` |
+| `BookingBillAttached` | Booking | `bookingId, billTotalCents, posMessageId, matchedBy (lateMatch / manual), attachedAt` |
 
 `TableCleared` belongs to the `Booking` aggregate because table state is derived (§2.5); it exists so floor-plan consumers do not need to know completion rules.
 
@@ -569,6 +606,7 @@ public sealed record BookingSeated(
 | `WaitlistJoined` / `WaitlistEnded` | ● | | | ● | | |
 | `WaitlistNotified` | ● | ● (table ready) | | ● | | |
 | `MessageSent` | ● (phone panel, message log) | | | ● | | |
+| `BookingBillAttached` | ● (POS log) | | | ● | | ● `RecordVisit` |
 
 The **waitlist suggester** computes "first waiting party that fits" (AC4.2, BR-09) when a table frees and pushes it with `waitlistChanged`; it changes no state.
 
@@ -813,7 +851,7 @@ The POS log must show messages **waiting** while the POS is offline (AC6.5), so 
 | `BookingCreated` | Booking has a guest | `UpsertMember` | `memberPhone, name, language` | `{eventId}:UpsertMember` |
 | `BookingSeated` | Always | `OpenTable` | `tableIds, partySize, guestName?, bookingId` | `{eventId}:OpenTable` |
 | `BookingSeated` | Deposit captured | `ApplyDeposit` | `tableIds, amountCents, paymentRef, bookingId` | `{eventId}:ApplyDeposit` |
-| (inbound) | POS sends `BillClosed` | → `CloseBillCommand` | `posMessageId, tableId, billTotalCents, closedAt` | POS message ID in inbox |
+| (inbound) | POS sends `BillClosed` | → `CloseBillCommand` (matching rules in §6.5) | `posMessageId, tableId, billTotalCents, closedAt, bookingId?` | POS message ID in inbox |
 
 `OpenTable` is always queued before `ApplyDeposit` for the same event (sequence order).
 
@@ -822,6 +860,39 @@ The POS log must show messages **waiting** while the POS is offline (AC6.5), so 
 - One worker loop per venue sends `Waiting` messages in `VenueSequence` order; it never sends message *n + 1* before *n* is `Sent` (AC6.5).
 - Mock offline → `PosSendResult.Unavailable` → retry after 5 s (demo) without counting towards failure for up to 24 h.
 - Each status change pushes `posLogChanged` to the venue group.
+
+### 6.5 Matching `BillClosed` to a booking (late-match rule)
+
+A host may tap "Clear" a few minutes before the guests pay at the POS. The POS's `BillClosed` then arrives for a table that has no seated booking. Without a rule, the bill total would be lost and the guest's visit would show no spend. `CloseBillHandler` therefore tries these steps in order and stops at the first that applies:
+
+```mermaid
+flowchart TB
+    start([BillClosed received]) --> s1{1. bookingId in message<br/>and booking found?}
+    s1 -->|yes| r1[Seated: complete it<br/>Cleared, no bill: attach bill<br/>Otherwise: Unmatched]
+    s1 -->|no| s2{2. A booking seated<br/>at the table?}
+    s2 -->|yes| r2[Complete it<br/>source: BillClosed]
+    s2 -->|no| s3{3. Exactly one booking<br/>cleared by host, no bill,<br/>within 30 min?}
+    s3 -->|yes| r3[AttachLateBill<br/>raises BookingBillAttached]
+    s3 -->|no| r4[Store as Unmatched<br/>for a manager to review]
+```
+
+| Step | Rule | Result |
+| --- | --- | --- |
+| 1 | The message carries a `bookingId` (the POS echoes the one sent in `OpenTable`) | Exact match: complete it if `Seated`, attach the bill if it was cleared by the host without one |
+| 2 | A booking is `Seated` at that table | Normal path: `Complete(BillClosed, bill)` |
+| 3 | Exactly one booking at that table was completed by `ClearedByHost`, has no bill total, and was cleared within `LateBillMatchMinutes` (30) before `closedAt` | Late match: `AttachLateBill` raises `BookingBillAttached` |
+| 4 | None of the above, or more than one candidate | The inbound POS message is stored as `Unmatched`; no booking changes |
+
+**Rules**
+
+- Step 3 never guesses between candidates: two or more possible bookings means `Unmatched`.
+- A booking can receive a bill only once; a second `BillClosed` for it is stored as `Unmatched` and flagged.
+- `BookingBillAttached` updates the guest's visit (`Guest.RecordVisit`) and the audit log, the same as a normal completion. It does not change the table state, which is already free.
+- The window is a venue setting (`VenueSettings.LateBillMatchMinutes`, default 30), so it can be tuned per venue.
+- **Manual matching:** the POS log lists `Unmatched` bills. A manager can attach one to a completed booking from that list (`MatchPosBill`), which raises `BookingBillAttached` with `matchedBy: manual`, or dismiss it (e.g. a bar tab with no booking).
+- **Monitoring:** the pilot dashboard shows, per venue and day, the share of bookings completed by `ClearedByHost`, late matches and unmatched bills. A high share suggests the POS link is down or staff are skipping the POS (ADR-004 alarms).
+
+**Partner question:** can the POS return the `bookingId` it received in `OpenTable` when it sends `BillClosed`? If so, step 1 handles almost every case and steps 3–4 become rare.
 
 ---
 
@@ -990,7 +1061,9 @@ No mediator library is used; endpoints call handlers directly through DI. `Error
 | Bookings | `SeatBooking` | `Seat` | `slot_taken`, `version_conflict` |
 | Bookings | `SeatWalkIn` | `Booking.CreateWalkIn` (+ `WaitlistEntry.MarkSeated` if from waitlist) | `slot_taken` |
 | Bookings | `ClearTable` | `Complete(ClearedByHost)` | `not_found` (no seated booking) |
-| Bookings | `CloseBill` (POS inbound) | `Complete(BillClosed, bill)` | (idempotent) |
+| Bookings | `CloseBill` (POS inbound) | `Complete(BillClosed, bill)` or `AttachLateBill` (§6.5) | (idempotent); no match → POS message `Unmatched` |
+| Bookings | `MatchPosBill` (manager) | `AttachLateBill` (`matchedBy: manual`) | `rule_broken` (booking already has a bill) |
+| Bookings | `DismissPosBill` (manager) | — (POS message → `Dismissed`) | — |
 | Payments | `CaptureDeposit` (Stripe inbound) | `CaptureDeposit` | `hold_expired` → automatic refund |
 | Payments | `RecordRefund` (Stripe inbound) | `RecordRefund` | (idempotent) |
 | Waitlist | `JoinWaitlist` | `WaitlistEntry.Join` | `validation_failed` |
@@ -1011,7 +1084,7 @@ Queries read with `AsNoTracking()` projections straight to DTOs; they never load
 | `GetWaitlist` | Active entries with waited minutes, overdue flag, suggested entry |
 | `GetSuggestedTable(partySize)` | Smallest free fitting table now (AC3.1) |
 | `GetQuotedWait(partySize)` | Minutes (BR-08) |
-| `GetMessageLog`, `GetPosLog` | Newest first, paged |
+| `GetMessageLog`, `GetPosLog` | Newest first, paged; `GetPosLog?status=unmatched` lists bills waiting to be matched |
 | `GetBookingByLink(token)` | Guest's view for confirm or cancel |
 
 ---
@@ -1255,6 +1328,7 @@ CREATE TABLE bookings (
   hold_expires_at timestamptz, seated_at timestamptz, completed_at timestamptz,
   bill_total_cents bigint, notes text, occasion text, reminder jsonb,
   terms jsonb NOT NULL,                              -- BookingTerms snapshot (§2.6)
+  completion_source text, bill_pos_message_id uuid,  -- §6.5
   created_at timestamptz NOT NULL, UNIQUE (venue_id, reference)
 );
 CREATE INDEX ix_bookings_venue_day ON bookings (venue_id, lower(period));
@@ -1301,8 +1375,10 @@ CREATE TABLE pos_messages (
   source_event_id uuid, payload jsonb NOT NULL, status text NOT NULL,
   venue_sequence bigint NOT NULL, attempts int NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL, delivered_at timestamptz,
+  booking_id uuid,                                   -- inbound: booking it was matched to
   UNIQUE (venue_id, venue_sequence)
 );
+CREATE INDEX ix_pos_unmatched ON pos_messages (venue_id, created_at) WHERE status = 'Unmatched';
 
 CREATE TABLE audit_log (
   id bigserial PRIMARY KEY, venue_id uuid NOT NULL, event_id uuid NOT NULL UNIQUE,
@@ -1338,7 +1414,9 @@ Base path `/api/v1`. Venue-scoped routes are `/api/v1/venues/{venueId}/…`. All
 | POST | `/venues/{venueId}/waitlist/{id}/notify` `{tableId}` | Host | `NotifyWaitlistEntry` |
 | POST | `/venues/{venueId}/waitlist/{id}/end` `{outcome}` | Host | `EndWaitlistEntry` |
 | GET | `/venues/{venueId}/messages` | Presenter | `GetMessageLog` |
-| GET | `/venues/{venueId}/pos-messages` | Presenter | `GetPosLog` |
+| GET | `/venues/{venueId}/pos-messages?status` | Presenter / manager | `GetPosLog` |
+| POST | `/venues/{venueId}/pos-messages/{id}/match` `{bookingId}` | Manager | `MatchPosBill` |
+| POST | `/venues/{venueId}/pos-messages/{id}/dismiss` | Manager | `DismissPosBill` |
 | POST | `/webhooks/stripe` | Stripe | Signed; inbox |
 | POST | `/webhooks/pos` | (Mock) POS | Signed; inbox → `CloseBill` |
 | POST | `/demo/reset` | Presenter | `ResetDemo` |
@@ -1468,7 +1546,7 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | Step 3, AC3.1–AC3.8 | §3.1, §3.2, §10.2, §11.3, §11.4 |
 | Step 4, AC4.1–AC4.6 | §3.2, §7, §10.3, §16 |
 | Step 5, AC5.1–AC5.6 | §2.6, §3.1, §7, §8.3, §10.4 |
-| Step 6, AC6.1–AC6.6 | §6, §10.5, §13 (`pos_messages`) |
+| Step 6, AC6.1–AC6.6 | §6, §6.5, §10.5, §13 (`pos_messages`) |
 | BR-01–BR-05 | §11 |
 | BR-06, BR-07 | §8.2, §8.3 |
 | BR-08–BR-10 | §3.2, §11.3, §11.4 |
@@ -1487,5 +1565,5 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | Layout editor and combining tables (ADR-001 lists them; Requirements put them out of scope) | Seams kept: `FloorPosition` stored, `TableAssignment` supports several tables. Not built for the demo |
 | ADR-004 validation examples (deposit for 8+, party 1–20) | Should read deposit for 6+ (BR-06) and online party 1–8 (BR-04) |
 | Seating a late party whose turn now overlaps the next booking | Seat fails with `slot_taken`; host picks another table. Revisit with real venues |
-| `BillClosed` for a table with no seated booking | Store in the POS log as `unmatched`; no state change |
+| `BillClosed` for a table with no seated booking | Resolved: late-match rule (§6.5); still unmatched → manager matches or dismisses. Ask the partner whether the POS can return `bookingId` |
 | Language for guests who switch mid-booking | Guest's `Language` is the language active when they submit |
