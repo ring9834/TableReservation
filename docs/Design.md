@@ -1317,6 +1317,27 @@ classDiagram
     Endpoint --> ResultToHttp
 ```
 
+It shows the shape every API request follows: an endpoint receives the HTTP call, a validation filter checks the input, a handler does the work and returns a `Result`, and `ResultToHttp` turns that result into an HTTP response. Every feature (bookings, waitlist, POS and so on) uses the same pieces, so they all behave the same way.
+
+**One request, step by step** (take `POST /venues/{venueId}/bookings/{id}/seat`)
+
+1. `Endpoint` (a minimal API route) receives the request and binds it to a `SeatBookingRequest`.
+2. `ValidationFilter<SeatBookingRequest>` runs first. It finds the matching FluentValidation validator (an `AbstractValidator<SeatBookingRequest>`) and checks the input. If something's wrong, it returns `400 validation_failed` with the field errors, and the handler never runs.
+3. The endpoint calls the `ICommandHandler<SeatBookingCommand, Unit>`, which loads the booking, applies the domain rules and saves.
+4. The handler returns a `Result<T>`: either success with a value, or failure with an `Error`.
+5. `ResultToHttp.ToProblem(error)` maps a failure to the right status and a Problem Details body (ADR-004). A success becomes `200`, `201` or `204`.
+
+| Class | Role |
+| --- | --- |
+| `Endpoint` | One small class per feature that maps its routes (`Map(IEndpointRouteBuilder)`), attaches the validation filter and calls the handler. It holds no business logic. |
+| `ValidationFilter<TRequest>` | A generic endpoint filter that runs the request's FluentValidation validator before the handler. It's written once and used by every endpoint. |
+| `AbstractValidator<TRequest>` | FluentValidation's base class; each request type has one validator, such as `CreateBookingRequestValidator` (ADR-004). |
+| `ICommandHandler<TCommand, TResult>` | Handles one action that changes data (seat, cancel, join the waitlist). It loads aggregates, calls their methods and saves; the outbox interceptor adds events automatically (§5). |
+| `IQueryHandler<TQuery, TResult>` | Handles one read (floor plan, waitlist, POS log). It reads directly into response objects and never loads aggregates or changes data. |
+| `Result<T>` | Either success with a `Value`, or failure with an `Error`. Expected failures, like a slot just taken, are returned this way instead of thrown as exceptions. |
+| `Error` | `Code` (stable, such as `slot_taken`, for the front end), `MessageKey` (for translated text), `Kind` (`Validation`, `NotFound`, `Conflict`, `Rule`, `Forbidden`, `External`) and optional field errors. |
+| `ResultToHttp` | Maps `Error.Kind` to the HTTP status in ADR-004's error table (`Conflict` → 409, `NotFound` → 404, and so on) and builds the Problem Details response. |
+
 No mediator library is used; endpoints call handlers directly through DI. `ErrorKind` (`Validation`, `NotFound`, `Conflict`, `Rule`, `Forbidden`, `External`) maps to the HTTP status in ADR-004's error table.
 
 ### 9.2 Commands
