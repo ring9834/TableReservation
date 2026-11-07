@@ -885,6 +885,8 @@ classDiagram
         +long VenueSequence
         +int Attempts
         +DateTimeOffset? DeliveredAt
+        +BookingId? BookingId
+        +string? UnmatchedReason
     }
     class PosDeliveryWorker {
         <<BackgroundService>>
@@ -921,9 +923,65 @@ classDiagram
     PosWebhookEndpoint --> CloseBillHandler
 ```
 
+It shows two paths. The **outbound** path, along the top and left, sends messages from the reservation system to the POS. The **inbound** path, on the right, receives `BillClosed` back from the POS. Both go through one interface, `IPosAdapter`, so the rest of the system never depends on which POS is on the other end.
+
+**Outbound: from event to POS**
+
+1. The outbox dispatcher delivers `BookingCreated` and `BookingSeated` to `PosProjectionHandler`.
+2. It asks `PosMessageFactory` to build the right POS message: `UpsertMember` for a new booking with a guest, `OpenTable` (and `ApplyDeposit` if a deposit was paid) when a party is seated.
+3. The factory creates a `PosMessage` row with status `Waiting`. It isn't sent yet, just stored in order.
+4. `PosDeliveryWorker`, a background service, picks up waiting rows for each venue in `VenueSequence` order and sends them through `IPosAdapter.SendAsync`. If the POS is offline, the message stays `Waiting` and is retried (AC6.5).
+
+**Inbound: from POS bill to booking**
+
+1. The POS posts a signed `BillClosed` to `PosWebhookEndpoint`. In the demo, `MockPosAdapter.SimulateBillClosed` does this when the host taps "Bill paid".
+2. The endpoint calls `IPosAdapter.ParseInbound`, which checks the message and turns the POS's own format into a standard `PosInbound` object.
+3. It then calls `CloseBillHandler`, which applies the matching rules in §6.5: complete the seated booking, attach a late bill, or store the bill as `Unmatched`.
+
+| Class | Role |
+| --- | --- |
+| `PosProjectionHandler` | Event handler that decides which POS messages an event needs. It only creates messages and never calls the POS, so a slow POS can't hold up other handlers. |
+| `PosMessageFactory` | Builds each message's payload and its idempotency key (`{eventId}:OpenTable`), which the POS uses to ignore repeats. |
+| `PosMessage` | One row in `pos_messages`, for both directions. It holds the type, payload, idempotency key, source event, status, the per-venue sequence number that keeps the order, the attempt count and the delivered time. For inbound bills, `BookingId` records the booking the bill was matched to, and `UnmatchedReason` records why it wasn't matched (`no_match`, `ambiguous`, `second_bill`). The POS log screen reads these rows. |
+| `PosDeliveryWorker` | Sends waiting messages per venue strictly in order. Message *n + 1* is never sent before *n*. It retries while the POS is offline. |
+| `IPosAdapter` | The single seam to the POS: `SendAsync` for outbound, `ParseInbound` for inbound. Everything POS-specific lives behind it. |
+| `MockPosAdapter` | The demo's POS. It accepts messages, can be switched online and offline (`SetOnline`), and simulates `BillClosed` for the "Bill paid" button. |
+| `PartnerPosAdapter` [pilot] | The real adapter for the partner's POS, built once their API, message formats and security are known. Only this class changes. |
+| `PosWebhookEndpoint` | Receives inbound POS messages, verifies the signature, uses the inbox to skip repeats (§5.5), then runs `CloseBill`. |
+| `CloseBillHandler` | Matches the bill to a booking (§6.5) and records the outcome. |
+
 ### 6.2 Why two steps (event → POS message → delivery)
 
 The POS log must show messages **waiting** while the POS is offline (AC6.5), so a POS message is a stored record from the moment its event is handled, with its own ordered delivery per venue. The outbox delivers the event once; the POS queue then retries the POS call as long as needed without holding up other event handlers.
+
+Both the **POS log** and the **POS queue** refer to the same thing: the `pos_messages` table, used in two ways. The POS queue is how the system *sends* from it. The POS log is how people *see* it.
+
+**The POS queue**
+
+There is no separate queue product. The queue is simply the outbound rows in `pos_messages` that are still `Waiting`, worked through by `PosDeliveryWorker`.
+
+How a message moves through it:
+
+1. A party is seated, so `BookingSeated` is raised and saved to the outbox.
+2. The outbox dispatcher hands the event to `PosProjectionHandler`, which inserts an `OpenTable` row: direction `outbound`, status `Waiting`, the next `VenueSequence` number for that venue. Inserting a row takes milliseconds and can't fail because of the POS, so the outbox marks the event done.
+3. `PosDeliveryWorker` picks up the venue's oldest waiting row and calls `IPosAdapter.SendAsync`:
+    - **accepted:** the row becomes `Sent`, then `Acknowledged` if the POS confirms
+    - **POS offline:** the row stays `Waiting` and is tried again in 5 seconds
+    - **retries used up:** the row becomes `Failed` and appears for an admin to replay
+
+**The POS log**
+
+The POS log is a screen: the side panel on the presenter screen in the demo (step 6, AC6.1–AC6.2), and an admin page in the pilot. It reads `pos_messages` rows in both directions, newest first.
+
+It updates live: every status change pushes `posLogChanged` over SignalR, so the screen refetches without a reload. Managers can filter it to `status=unmatched` to match or dismiss bills (§6.5).
+
+How the two look together in the demo (QA-5)
+
+| Time | Presenter does | POS queue | POS log shows |
+| --- | --- | --- | --- |
+| 14:00 | Switch the mock POS offline | — | — |
+| 14:01 | Seat three tables | Rows 41, 42, 43 `Waiting`; 41 retried every 5 s | Three `OpenTable` messages marked **Waiting** |
+| 14:03 | Switch the mock POS online | 41, then 42, then 43 sent | All three turn **Sent**, in order, once each |
 
 ### 6.3 Mapping
 
@@ -1556,7 +1614,8 @@ CREATE TABLE pos_messages (
   source_event_id uuid, payload jsonb NOT NULL, status text NOT NULL,
   venue_sequence bigint NOT NULL, attempts int NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL, delivered_at timestamptz,
-  booking_id uuid,                                   -- inbound: booking it was matched to
+  booking_id uuid,                                   -- inbound: booking it was matched to (§6.5)
+  unmatched_reason text,                             -- inbound: e.g. no_match, ambiguous, second_bill (§6.5, §6.6)
   UNIQUE (venue_id, venue_sequence)
 );
 CREATE INDEX ix_pos_unmatched ON pos_messages (venue_id, created_at) WHERE status = 'Unmatched';
