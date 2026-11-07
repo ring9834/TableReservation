@@ -1185,7 +1185,6 @@ loop:
 classDiagram
     direction TB
     class StripeWebhookEndpoint
-    class RefundOnCancelHandler
     class CaptureDepositHandler
     class RecordRefundHandler
     class IPaymentProvider {
@@ -1198,16 +1197,56 @@ classDiagram
         -StripeClient client
         -string webhookSecret
     }
+    class Booking {
+        +Cancel(Actor by, CancelReason, DateTimeOffset now) Result~RefundDecision~
+    }
     class RefundPolicy {
         +Decide(Booking, CancelReason, Actor, DateTimeOffset now) RefundDecision
+    }
+    class BookingCancelled {
+        <<event>>
+        +RefundDecision RefundDecision
+    }
+    class RefundOnCancelHandler {
+        +HandleAsync(BookingCancelled)
     }
     StripeWebhookEndpoint --> IPaymentProvider : ParseWebhook
     StripeWebhookEndpoint --> CaptureDepositHandler : payment succeeded
     StripeWebhookEndpoint --> RecordRefundHandler : charge refunded
-    RefundOnCancelHandler --> RefundPolicy : decide
-    RefundOnCancelHandler --> IPaymentProvider : Refund
+    Booking --> RefundPolicy : decides once, at cancel
+    Booking ..> BookingCancelled : raises with decision
+    RefundOnCancelHandler --> BookingCancelled : reads decision
+    RefundOnCancelHandler --> IPaymentProvider : Refund if full
     IPaymentProvider <|.. StripePaymentProvider
 ```
+
+It shows how the system works with Stripe in both directions: Stripe telling us something happened (webhooks, on the left), and us asking Stripe to do something (refunds, on the right). Everything Stripe-specific sits behind one interface, `IPaymentProvider`.
+
+**Three payment flows**
+
+1. **Taking a deposit** (not drawn, but it uses the same interface). When a party of 6 or more books, `CreateOnlineBooking` calls `IPaymentProvider.CreateDepositIntent(...)`. Stripe returns a client secret, and the guest pays in Stripe's own card form (Stripe Elements), so card details never reach our servers.
+2. **Stripe tells us what happened** (left side).
+    1. Stripe posts a webhook to `StripeWebhookEndpoint`.
+    2. The endpoint calls `ParseWebhook`, which checks Stripe's signature with the webhook secret and turns Stripe's JSON into a simple `PaymentWebhook` object.
+    3. It inserts an inbox row (§5.5), so a repeated webhook is ignored, then passes the event to the right handler:
+        - **payment succeeded** → `CaptureDepositHandler`: the booking moves from `PendingPayment` to `Booked`, and `DepositCaptured` is raised.
+        - **charge refunded** → `RecordRefundHandler`: the deposit becomes `Refunded`, and `DepositRefunded` is raised.
+3. **We ask Stripe for a refund** (right side).
+    1. A booking is cancelled. `Booking.Cancel(...)` asks `RefundPolicy` for the refund decision, once, using the terms saved on the booking (§2.6), and raises `BookingCancelled` carrying that decision.
+    2. `RefundOnCancelHandler` receives the event from the outbox. If the decision is "full", it calls `IPaymentProvider.Refund(...)` with the idempotency key `{eventId}:refund`. If the handler is retried, Stripe won't refund twice, and the decision can't change.
+    3. Stripe later confirms with a `charge.refunded` webhook, which goes through flow 2. The booking only records the refund once Stripe confirms it.
+
+| Class | Role |
+| --- | --- |
+| `StripeWebhookEndpoint` | Receives Stripe webhooks, verifies them, de-duplicates with the inbox, and routes each to a handler |
+| `CaptureDepositHandler` | Marks the deposit captured. If the 10-minute hold had already expired and the table is gone, it cancels the booking and refunds (§12). |
+| `RecordRefundHandler` | Records a refund that Stripe has confirmed |
+| `IPaymentProvider` | The single seam to the payment provider: create a deposit, refund, parse webhooks |
+| `StripePaymentProvider` | The Stripe implementation; holds the Stripe client and webhook secret (from Secrets Manager) |
+| `Booking` | `Cancel(...)` asks `RefundPolicy` for the decision at the moment of cancellation and raises `BookingCancelled` with it |
+| `BookingCancelled` | The event that carries the refund decision (`full`, `none` or `notApplicable`) to the handlers |
+| `RefundOnCancelHandler` | Reads the decision from `BookingCancelled` and requests the refund from Stripe when it is `full`; it never decides itself |
+| `RefundPolicy` | Applies the cancellation rule (BR-07): full refund at least 2 hours before, otherwise kept; host cancellations always refunded. It uses the terms saved on the booking (§2.6) and is called only by `Booking.Cancel`. |
 
 `DepositPolicy` is used by `CreateOnlineBooking` (§9.2) to work out the deposit due.
 
@@ -1226,7 +1265,7 @@ classDiagram
 
 The hours and refund amounts come from `booking.Terms.Cancellation` (§2.6), so a later change to the venue's rule does not affect this booking.
 
-`RefundOnCancelHandler` consumes `BookingCancelled` where `refundDecision = full` and calls Stripe with idempotency key `{eventId}:refund`. Stripe's `charge.refunded` webhook then raises `DepositRefunded` through `RecordRefundHandler`.
+The refund decision is made **once**, when the booking is cancelled: `Booking.Cancel(...)` calls `RefundPolicy.Decide(...)` with the terms saved on the booking (§2.6), and `BookingCancelled` carries the result. `RefundOnCancelHandler` never decides again; it reads the decision from the event and, when it is `full`, calls Stripe with idempotency key `{eventId}:refund`. A handler retried after the 2-hour line therefore gets the same answer as at cancellation. Stripe's `charge.refunded` webhook then raises `DepositRefunded` through `RecordRefundHandler`.
 
 ---
 
