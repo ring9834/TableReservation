@@ -295,8 +295,14 @@ classDiagram
         +MessageAction[] Actions
         +MessageStatus Status
         +Guid SubjectId
+        +int Attempts
+        +DateTimeOffset NextAttemptAt
+        +DateTimeOffset ExpiresAt
+        +string? ProviderRef
+        +string? LastError
         +MarkSent(string providerRef, DateTimeOffset at)
         +MarkDelivered(DateTimeOffset at)
+        +ScheduleRetry(string error, DateTimeOffset now)
         +MarkFailed(string reason)
     }
 ```
@@ -481,14 +487,18 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Queued: created by notification handler
-    Queued --> Sent: sender accepted
+    [*] --> Queued: created by a handler
+    Queued --> Sent: worker sends, provider accepts
     Sent --> Delivered: delivery report
-    Queued --> Failed: sender rejected after retries
+    Queued --> Failed: retries used up or expired
     Sent --> Failed: delivery report failed
+    note right of Queued
+        Provider error:
+        attempts + 1, retried later
+    end note
 ```
 
-`MessageSent` is raised on `Queued → Sent`. In the demo the phone-panel sender marks `Delivered` about 1 s after `Sent` (AC4.4).
+`Queued` is a status on the `messages` row, not a separate queue product: PostgreSQL is the queue (§7.1). `MessageDeliveryWorker` moves rows from `Queued` to `Sent`, and `MessageSent` is raised on that transition. In the demo the phone-panel sender marks `Delivered` about 1 s after `Sent` (AC4.4).
 
 ### 3.5 Outbox row and POS message
 
@@ -924,6 +934,8 @@ Split *bills* (one table, several separate bills) are not built, because the par
 
 ## 7. Messaging and the phone panel
 
+**Creating messages**
+
 ```mermaid
 classDiagram
     direction LR
@@ -948,6 +960,33 @@ classDiagram
         +Create(BookingId, LinkAction, DateTimeOffset expires) string
         +Verify(string token) Result~GuestLink~
     }
+    class Message {
+        +MessageStatus Status
+    }
+    NotificationHandler --> MessageComposer
+    SendRemindersHandler --> MessageComposer
+    MessageComposer --> ITemplateStore
+    MessageComposer --> GuestLinkSigner
+    MessageComposer ..> Message : creates as Queued
+```
+
+**Delivering messages**
+
+```mermaid
+classDiagram
+    direction TB
+    class MessageDeliveryWorker {
+        <<BackgroundService>>
+        +ExecuteAsync(CancellationToken)
+        -ClaimDue() Message[]
+        -DeliverAsync(Message)
+    }
+    class Message {
+        +MessageStatus Status
+        +int Attempts
+        +DateTimeOffset NextAttemptAt
+        +DateTimeOffset ExpiresAt
+    }
     class IMessageSender {
         <<interface>>
         +SendAsync(Message, CancellationToken) Task~SendResult~
@@ -955,22 +994,62 @@ classDiagram
     class PhonePanelSender {
         +SendAsync(Message, CancellationToken)
     }
-    class SmsSender {
+    class AwsSmsSender {
         <<pilot>>
     }
-    NotificationHandler --> MessageComposer
-    SendRemindersHandler --> MessageComposer
-    MessageComposer --> ITemplateStore
-    MessageComposer --> GuestLinkSigner
-    NotificationHandler --> IMessageSender
+    class SesEmailSender {
+        <<pilot>>
+    }
+    class MessageStatusWebhook {
+        <<pilot>>
+        +Post(HttpRequest) IResult
+    }
+    MessageDeliveryWorker --> Message : claims Queued rows
+    MessageDeliveryWorker --> IMessageSender : sends
     IMessageSender <|.. PhonePanelSender
-    IMessageSender <|.. SmsSender
+    IMessageSender <|.. AwsSmsSender
+    IMessageSender <|.. SesEmailSender
+    MessageStatusWebhook --> Message : Delivered or Failed
 ```
+
+Handlers only **create** messages (status `Queued`) in their own transaction; they never call a provider. `MessageDeliveryWorker` does the sending, so a slow or failing provider never holds up the outbox dispatcher or other event handlers (ADR-002).
 
 - Templates are per purpose and language (English and Simplified Chinese), stored in the API's resource files.
 - Reminder messages carry two actions, **Confirm** and **Cancel**, each a signed link (`GuestLinkSigner`, HMAC-SHA256 with a key from Secrets Manager) that expires at the booking start time (ADR-004).
 - `PhonePanelSender` stores the message, marks it `Sent`, pushes `messageLogChanged` to the venue's presenter screen, and marks it `Delivered` 1 s later. No real SMS is sent (Requirements §11).
 - The phone panel's buttons call the same guest endpoints a real link would (§14), so the flow is identical to the pilot's.
+
+### 7.1 Message delivery worker
+
+PostgreSQL is the message queue: the `messages` table with its `status` column. No separate queue product is needed for the demo or the pilot (ADR-002); Amazon SQS is the step up only if message volume or separate sender services call for it.
+
+```text
+loop:
+  await signal.WaitAsync(1s)                        -- new message, or every 1 s
+  BEGIN
+    rows = SELECT … FROM messages
+           WHERE status = 'Queued' AND next_attempt_at <= now()
+           ORDER BY next_attempt_at
+           LIMIT 20
+           FOR UPDATE SKIP LOCKED
+    for each row:
+      if now() > row.expires_at: row.MarkFailed('expired'); continue
+      result = await sender.SendAsync(row)          -- IMessageSender
+      accepted        → row.MarkSent(providerRef)   -- raises MessageSent
+      temporary error → row.ScheduleRetry(error)    -- attempts + 1, retry later
+      permanent error → row.MarkFailed(reason)      -- e.g. invalid number
+  COMMIT
+```
+
+| Rule | Detail |
+| --- | --- |
+| Backoff | 5 s, 30 s, 2 min, 10 min, then every 10 min until the message expires |
+| Expiry by purpose | `TableReady`: 10 min after creation (a late "table ready" text is worse than none). `Reminder`: the booking start time. `Confirmation`, `Cancellation`, `Refund`: 24 h |
+| Permanent errors | Invalid or unreachable number, opted-out recipient: `Failed` at once, no retries |
+| Idempotency | Each send passes the message ID as the provider's idempotency or client reference, so a retry after a timeout does not send twice |
+| Visibility | Every status change pushes `messageLogChanged`; failed messages show in the message log with the reason, and a `TableReady` failure is flagged on the waitlist entry so the host can call the guest |
+| Delivery reports [pilot] | The SMS and email providers report delivery to `/webhooks/messages`; the endpoint verifies the signature, uses the inbox (§5.5) and moves the row to `Delivered` or `Failed` |
+| Providers | Demo: `PhonePanelSender`. Pilot: AWS End User Messaging SMS and Amazon SES, keeping guest data in AWS (ADR-001 D10). Both sit behind `IMessageSender` |
 
 ---
 
@@ -1145,7 +1224,7 @@ sequenceDiagram
     loop every 2 s until Booked
         W->>A: GET status
     end
-    Note over D: NotificationHandler creates<br/>the confirmation message
+    Note over D: NotificationHandler queues the<br/>confirmation, MessageDeliveryWorker sends it
     D->>H: floorPlanChanged, messageLogChanged
     W-->>G: confirmation + reference
 ```
@@ -1385,7 +1464,9 @@ CREATE TABLE messages (
   id uuid PRIMARY KEY, venue_id uuid NOT NULL, guest_id uuid NOT NULL,
   purpose text NOT NULL, channel text NOT NULL, language text NOT NULL,
   body text NOT NULL, actions jsonb, subject_id uuid NOT NULL, status text NOT NULL,
-  created_at timestamptz NOT NULL, sent_at timestamptz, delivered_at timestamptz
+  created_at timestamptz NOT NULL, sent_at timestamptz, delivered_at timestamptz,
+  attempts int NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL,   -- §7.1
+  expires_at timestamptz NOT NULL, provider_ref text, last_error text      -- §7.1
 );
 
 CREATE TABLE outbox (
@@ -1453,6 +1534,7 @@ Base path `/api/v1`. Venue-scoped routes are `/api/v1/venues/{venueId}/…`. All
 | POST | `/venues/{venueId}/pos-messages/{id}/dismiss` | Manager | `DismissPosBill` |
 | POST | `/webhooks/stripe` | Stripe | Signed; inbox |
 | POST | `/webhooks/pos` | (Mock) POS | Signed; inbox → `CloseBill` |
+| POST | `/webhooks/messages` [pilot] | SMS / email provider | Signed; inbox → message `Delivered` / `Failed` (§7.1) |
 | POST | `/demo/reset` | Presenter | `ResetDemo` |
 | PUT | `/demo/clock` `{now}` | Presenter | `SetDemoClock` |
 | PUT | `/demo/pos/online` `{online}` | Presenter | `SetMockPosOnline` |
@@ -1485,12 +1567,13 @@ Notices carry IDs only, never personal data. On reconnect the client invalidates
 | --- | --- | --- | --- |
 | `OutboxDispatcher` | `BackgroundService` | Signal or 1 s | §5.3 |
 | `PosDeliveryWorker` | `BackgroundService` | Signal or 1 s; 5 s retry while offline | §6.4 |
+| `MessageDeliveryWorker` | `BackgroundService` | Signal or 1 s; backoff per message | Sends `Queued` texts and emails through `IMessageSender`; retries; expires stale messages (§7.1) |
 | `PaymentHoldExpiryJob` | `PeriodicTimer` | 30 s | `ExpireHold` on `PendingPayment` bookings past `HoldExpiresAt` |
 | `WaitlistOverdueJob` | `PeriodicTimer` | 30 s | Pushes `waitlistChanged` when a notified entry passes 10 min |
 | `ArrivingSoonTicker` | `PeriodicTimer` | 60 s | Pushes `floorPlanChanged` when a table crosses the 30-minute mark |
 | `OutboxHousekeeping` | `PeriodicTimer` | Daily | Deletes dispatched rows older than 30 days |
 
-All jobs use `TimeProvider`, so `DemoClock` moves them too. In the demo they run in the API process. For the pilot, the dispatcher and POS worker move to the separate worker service (ADR-005).
+All jobs use `TimeProvider`, so `DemoClock` moves them too. In the demo they run in the API process. For the pilot, the dispatcher, the POS worker and the message worker move to the separate worker service (ADR-005).
 
 ---
 
@@ -1600,5 +1683,6 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | ADR-004 validation examples (deposit for 8+, party 1–20) | Should read deposit for 6+ (BR-06) and online party 1–8 (BR-04) |
 | Seating a late party whose turn now overlaps the next booking | Seat fails with `slot_taken`; host picks another table. Revisit with real venues |
 | `BillClosed` for a table with no seated booking | Resolved: late-match rule (§6.5); still unmatched → manager matches or dismisses. Ask the partner whether the POS can return `bookingId` |
+| SMS provider for NZ numbers [pilot] | AWS End User Messaging SMS behind `IMessageSender` (§7.1). Before the pilot, confirm NZ mobile delivery, sender ID or number type, and opt-out handling |
 | Split bills for one table | Not built; one bill per booking, keyed by POS bill ID, stored in `booking_bills` (§6.6). Ask the partner whether their POS supports split bills per table, and whether venues use virtual tables to fake them |
 | Language for guests who switch mid-booking | Guest's `Language` is the language active when they submit |
