@@ -629,6 +629,27 @@ public sealed record BookingSeated(
 | `MessageSent` | ● (phone panel, message log) | | | ● | | |
 | `BookingBillAttached` | ● (POS log) | | | ● | | ● `RecordVisit` |
 
+**The columns (the consumers)**
+
+| Column | Handler | What it does |
+| --- | --- | --- |
+| Realtime | `RealtimeNotifier` | Pushes a small SignalR notice (`floorPlanChanged`, `waitlistChanged`, …) so host screens refetch and update within 2 seconds |
+| Notifications | `NotificationHandler` | Queues a text or email to the guest; `MessageDeliveryWorker` sends it (§7.1) |
+| POS | `PosProjectionHandler` | Turns the event into a message for the POS (`UpsertMember`, `OpenTable`, `ApplyDeposit`) and queues it for ordered delivery (§6) |
+| Audit | `AuditHandler` | Writes a row to the audit log: who did what, and when |
+| Waitlist suggester | `WaitlistSuggester` | When a table frees up, works out which waiting party fits first and highlights it; it changes no data |
+| Guest | `GuestVisitHandler` | Updates the guest's profile (visit count and last bill) |
+
+**Reading the rows**
+
+- **Realtime and Audit react to every event.** Every change should show on host screens straight away, and every change should be traceable. Those two columns are full for that reason.
+- **`BookingCreated` sends a confirmation "unless pending payment".** For a party of 6 or more, the booking starts as `PendingPayment` while the guest pays the deposit. Confirming before the payment succeeds would be wrong, so in that case the confirmation is sent on `DepositCaptured` instead. `BookingCreated` also sends `UpsertMember` to the POS, so the guest is known as a member before they arrive.
+- **`BookingSeated` is the main POS trigger.** It opens the table in the POS (`OpenTable`) and, if a deposit was paid, credits it to the bill (`ApplyDeposit`).
+- **`BookingCancelled` and `TableCleared` trigger the waitlist suggester.** Both free a table, so the suggester checks whether someone on the waitlist now fits.
+- **`BookingCompleted` and `BookingBillAttached` update the guest.** A booking ends with a bill from the POS, or a late bill is attached afterwards (§6.5). Either way the guest's visit and spend are recorded with `RecordVisit`.
+- **`WaitlistNotified` sends the "table ready" text.**
+- **`MessageSent` and `BookingBillAttached` show in the presenter's logs.** These are the phone panel and the POS log. The demo audience watches them, so they get their own real-time notices.
+
 The **waitlist suggester** computes "first waiting party that fits" (AC4.2, BR-09) when a table frees and pushes it with `waitlistChanged`; it changes no state.
 
 ---
