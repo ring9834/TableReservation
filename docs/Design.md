@@ -715,6 +715,20 @@ classDiagram
     OutboxSaveChangesInterceptor --> OutboxSignal : notifies after commit
 ```
 
+When a handler calls SaveChangesAsync(), OutboxSaveChangesInterceptor collects the events the changed records raised, turns each one into an OutboxMessage row (using EventEnvelopeSerializer and IRequestContext), and adds those rows to the same save. After commit, it pokes OutboxSignal so the dispatcher wakes up at once.
+
+**Each class**
+
+| Class | Role |
+| --- | --- |
+| `ReservationsDbContext` | The EF Core database context: one `DbSet` per table, here bookings, outbox, inbox, POS messages and audit. "uses" means the interceptor is registered on it, so every save goes through the interceptor automatically. |
+| `OutboxSaveChangesInterceptor` | An EF Core interceptor, a hook that runs just before EF writes to the database. `SavingChangesAsync` runs on every save, and `CollectEvents` asks every tracked `AggregateRoot` for its `DomainEvents`. Handlers never write outbox rows themselves, so they can't forget to. |
+| `IRequestContext` | Who and why: the `CorrelationId` (shared by everything one guest or host action causes), the `CausationId` (the event or command that caused this one) and the `Actor` (guest, staff, system or POS). These go into every event's envelope (ADR-002), so any change can be traced end to end. |
+| `EventEnvelopeSerializer` | Converts between events and rows. `Serialize` wraps an event in the standard envelope (ID, type, version, venue, aggregate, sequence, correlation, actor) and produces an `OutboxMessage`. `Deserialize` does the reverse for the dispatcher. `Upcast` upgrades an old event version to the current one, so old rows can still be read after an event changes (ADR-002 versioning). |
+| `EventTypeRegistry` | A lookup between event names and C# types. `Resolve("BookingSeated", 1)` returns the `BookingSeated` type, and `MetadataOf` reads its `[EventMetadata]` attribute (name, version, aggregate type). The table stores a name, not a C# type name, so renaming a class doesn't break stored events. |
+| `OutboxMessage` | One row in the `outbox` table. The event fields (`EventId`, `EventType`, `EventVersion`, `VenueId`, `AggregateType`, `AggregateId`, `Sequence`, `CorrelationId`, `CausationId`) and the full JSON `Envelope` are written once. The delivery fields (`Status`, `Attempts`, `NextAttemptAt`, `LastError`) are later updated by the dispatcher as it delivers and retries. |
+| `OutboxSignal` | A tiny in-process doorbell. `Notify()` is called after commit; the dispatcher waits on `WaitAsync(1s)`. Events go out within milliseconds instead of waiting for the next once-a-second poll. |
+
 **Dispatching side**
 
 ```mermaid
@@ -814,7 +828,32 @@ public async Task HandleAsync(T e, EventContext ctx, CancellationToken ct)
 
 ### 5.5 Inbound messages (Stripe, POS)
 
+```mermaid
+flowchart TB
+    req([Webhook arrives<br/>Stripe, POS or message provider]) --> sig{Signature valid?}
+    sig -->|no| r401[401 Unauthorized<br/>nothing saved, logged as a warning]
+    sig -->|yes| tx[Begin transaction<br/>insert inbox row: consumer + provider message ID]
+    tx --> dup{Row already exists?}
+    dup -->|yes| r200a[Roll back<br/>200 OK, nothing changes]
+    dup -->|no| cmd[Run the command<br/>e.g. CaptureDeposit, CloseBill]
+    cmd --> ok{Command succeeded?}
+    ok -->|yes| commit[Commit inbox row + changes + outbox events<br/>200 OK]
+    ok -->|business rule refused| rec[Commit inbox row,<br/>record the outcome e.g. Unmatched<br/>200 OK, no retry]
+    ok -->|unexpected error| r500[Roll back everything<br/>500, provider retries later]
+```
+
 Webhooks use the same `inbox` table with `consumer = 'stripe-webhook'` or `'pos-webhook'` and the provider's message ID. The webhook endpoint verifies the signature, inserts the inbox row and runs the command in one transaction, then returns `200`. A repeat returns `200` and does nothing.
+
+**How a webhook becomes a command**
+
+The endpoint reads the provider's message and maps it to a command. `CaptureDeposit` and `CloseBill` are the two main examples.
+
+| Webhook | Command | What the handler does | Main outcome |
+| --- | --- | --- | --- |
+| Stripe `payment_intent.succeeded` | `CaptureDeposit` | Loads the booking by its payment intent and calls `booking.CaptureDeposit(...)` | `PendingPayment` → `Booked`; raises `DepositCaptured`, and the guest gets the confirmation |
+| Stripe `charge.refunded` | `RecordRefund` | Calls `booking.RecordRefund(...)` | Deposit → `Refunded`; raises `DepositRefunded` |
+| POS `BillClosed` | `CloseBill` | Applies the matching rules in §6.5 | Completes the seated booking, or attaches a late bill, or stores the bill as `Unmatched` |
+| Message provider delivery report [pilot] | Update message status | Finds the message by provider reference | Message → `Delivered` or `Failed` |
 
 ---
 
