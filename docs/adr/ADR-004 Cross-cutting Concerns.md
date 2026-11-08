@@ -1,6 +1,6 @@
 # ADR-004: Cross-cutting Concerns
 
-Nov 5, 2026 · @what's Parse Server
+Antonio Huang · 5 November 2026 · Accepted 9 November 2026 · [live version](https://claude.ai/artifact/85bugiUSpUYYKhJ3X7tP9t)
 
 **Decision:** every request passes the same layers in one fixed order: a central exception handler, then logging and tracing, rate limiting, sign-in, a venue access check and FluentValidation, and only then the business code. Every failure returns one error shape (Problem Details with an error code). The front end and back end share one contract, generated from the API's OpenAPI document.
 
@@ -8,10 +8,10 @@ Nov 5, 2026 · @what's Parse Server
 
 | Item | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Reservation demo, then pilot |
 | Builds on | ADR-001 (technology selection), ADR-002 (event-driven architecture), ADR-003 (data architecture) |
-| Related | ADR-005 (AWS hosting and deployment, to follow): network, WAF, secrets storage, log retention |
+| Related | ADR-005 (AWS hosting and deployment): network, WAF, secrets storage, log retention |
 
 These concerns touch every feature, so they are hard to add later. If each endpoint handled errors, checks and logging its own way, the code would drift within weeks, and the partner's team would inherit that drift. This ADR fixes one way to do each, so that Claude Code and any later developer follow the same pattern.
 
@@ -30,20 +30,20 @@ These concerns touch every feature, so they are hard to add later. If each endpo
 
 ## Where each concern sits
 
-&#91;embedded content: request pipeline · six layers inside one exception handler\]
+*[Diagram: request pipeline · six layers inside one exception handler. See the live version for the drawing.]*
 
 Cheap checks run first, so a bad or unauthorised request is turned away before it reaches the database. The handler is the only layer that changes data, and it writes the outbox event in the same transaction (ADR-002).
 
 ## Security
 
-Staff sign in through Amazon Cognito. Guests have no accounts; they use signed links. Every API call checks the caller's venue, and card details go only to Stripe.
+In the demo, the host app runs as a fixed demo host session; in the pilot, staff sign in through Amazon Cognito. Guests have no accounts; they use signed links. Every API call checks the caller's venue, and card details go only to Stripe.
 
 ### Who can do what
 
 | Caller | How they prove who they are | What they can do |
 | --- | --- | --- |
 | Guest | No account. The booking page is public; “manage my booking” links carry a signed token that expires after the booking | Create a booking, pay a deposit, confirm or cancel their own booking |
-| Host | Cognito sign-in (email and password, MFA optional in the demo, required for the pilot) | Floor plan, walk-ins, waitlist and messages for their venue |
+| Host | Demo: fixed demo host session, no sign-in. Pilot: Cognito sign-in (email and password, MFA required) | Floor plan, walk-ins, waitlist and messages for their venue |
 | Manager | Cognito, MFA required | Host actions plus layout editor, settings, refunds and reports for their venue |
 | Platform admin | Cognito, MFA required | Venue setup, replaying failed events (ADR-002); not used in day-to-day service |
 | POS and Stripe | Signed webhooks: the Stripe signature, and a shared secret or HMAC header for the POS | Send `BillClosed` and payment events only |
@@ -56,13 +56,13 @@ Staff sign in through Amazon Cognito. Guests have no accounts; they use signed l
 | ASP.NET Core Identity in PostgreSQL | Yes | Medium: we build and secure sign-in, reset and MFA screens | Fallback if Cognito limits block us |
 | Auth0, Clerk or Okta | No: user data held by a third party | Low | Rejected (CC7) |
 
-The host app uses the Cognito sign-in page with the authorisation code flow and PKCE. The access token is kept in memory, not in `localStorage`, and refreshed silently. The API validates the JWT on every request.
+In the pilot, the host app uses the Cognito sign-in page with the authorisation code flow and PKCE. The access token is kept in memory, not in `localStorage`, and refreshed silently. The API validates the JWT on every request. In the demo, the API issues a fixed host session for Golden Dragon instead, behind the same Host policy, so swapping in Cognito changes no endpoint.
 
 ### Rules
 
 1. **Venue check:** a `venue_ids` claim lists the venues a staff member works at. An authorisation policy compares it with the venue in the route. Every query filters by venue ID, and PostgreSQL row-level security can be added later as a second guard (ADR-003).
-2. **Roles:** Cognito groups map to `Host`, `Manager` and `PlatformAdmin` policies. Endpoints deny by default; each one names its policy.
-3. **SignalR:** the hub uses the same JWT, which the browser client sends as a query parameter. That query string is removed from all logs.
+2. **Roles:** Cognito groups (pilot) or the demo session's fixed role map to `Host`, `Manager` and `PlatformAdmin` policies. Endpoints deny by default; each one names its policy.
+3. **SignalR:** the hub uses the same credentials as the API (in the pilot, the same JWT), which the browser client sends as a query parameter. That query string is removed from all logs.
 4. **Payments:** Stripe Elements collects card details in Stripe's own frame, so our servers never see them (PCI DSS SAQ A). Webhook signatures are verified, and each Stripe event ID is processed once (ADR-002 inbox).
 5. **Rate limits:** ASP.NET Core rate limiting on public endpoints, such as 10 booking attempts a minute per IP address and 3 reminder resends per booking. AWS WAF in front of the API is covered in ADR-005.
 6. **Browser rules:** HTTPS only with HSTS; CORS limited to the app's own domains; a content security policy that allows only the app and Stripe; cookies, if any, `Secure`, `HttpOnly` and `SameSite=Lax`.
@@ -114,9 +114,9 @@ Use FluentValidation for request validation in the API, called by one endpoint f
 
 | Layer | Checks | Example | Tool |
 | --- | --- | --- | --- |
-| Front end | Shape and format, for instant feedback | Party size 1–20; phone number format; required name | zod schemas generated from OpenAPI, react-hook-form |
+| Front end | Shape and format, for instant feedback | Party size 1–8 online; phone number format; required name | zod schemas generated from OpenAPI, react-hook-form |
 | API request | Shape, format and simple cross-field rules; the first server-side guard | `endsAt` after `startsAt`; booking not in the past; notes ≤ 500 characters | **FluentValidation** |
-| Domain and database | Rules that need current state or a lock | Table free for that time; pacing limit; deposit required for parties of 8+ | Domain code in the command handler; PostgreSQL exclusion constraint (ADR-003) |
+| Domain and database | Rules that need current state or a lock | Table free for that time; pacing limit; deposit required for parties of 6+ | Domain code in the command handler; PostgreSQL exclusion constraint (ADR-003) |
 
 A rule lives in exactly one server layer. Validators do not query the database for availability, because the answer can change before the save; that check runs inside the transaction, under the lock.
 
@@ -211,7 +211,7 @@ Write structured JSON logs through .NET's `ILogger`, with traces and metrics thr
 | `timestamp`, `level`, `message` (template) | `Booking {BookingId} seated at {TableId}` | `ILogger` |
 | `traceId`, `spanId` | W3C trace context | OpenTelemetry |
 | `correlationId` | Same as the event envelope (ADR-002) | Request, copied into events |
-| `venueId`, `userId` (Cognito sub), `role` | IDs only | Auth claims |
+| `venueId`, `userId` (Cognito sub in the pilot; the fixed demo host in the demo), `role` | IDs only | Auth claims |
 | `service`, `environment`, `version` | `api`, `demo`, git SHA | Start-up config |
 
 ### What is never logged
@@ -255,7 +255,7 @@ The React error boundary and the generated client send errors to a small `/api/v
 
 | Concern | Choice |
 | --- | --- |
-| Staff sign-in | Amazon Cognito user pool, authorisation code flow with PKCE, JWT validated by the API |
+| Staff sign-in | Demo: fixed demo host session. Pilot: Amazon Cognito user pool, authorisation code flow with PKCE, JWT validated by the API |
 | Guest access | No accounts; signed, expiring links to manage a booking |
 | Authorisation | Role policies (`Host`, `Manager`, `PlatformAdmin`), venue claim checked on every request, deny by default |
 | Payments security | Stripe Elements (SAQ A), verified webhooks, events processed once |
@@ -276,7 +276,7 @@ The React error boundary and the generated client send errors to a small `/api/v
 
 **Costs and risks**
 
-- Cognito adds set-up time, about one day, and its sign-in page needs styling and Chinese text.
+- Cognito adds set-up time in the pilot, about one day, and its sign-in page needs styling and Chinese text.
 - Generated clients add a build step; the generator must run whenever the API changes.
 - FluentValidation rules must be mirrored into OpenAPI for the front end; a small transformer or a few hand-written zod rules cover this.
 - Two kinds of failure, results and exceptions, need a short coding guide so they are used consistently.

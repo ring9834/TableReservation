@@ -1,6 +1,6 @@
 # ADR-002: Event-driven Architecture
 
-Nov 5, 2026 · @what's Parse Server
+Antonio Huang · 5 November 2026 · Accepted 9 November 2026 · [live version](https://claude.ai/artifact/1cCJp3NJhwEDWs5KvLfGqT)
 
 **Decision:** each state change in the reservation system writes a domain event to an outbox table, in the same PostgreSQL transaction as the change. A background worker then delivers the event to the live screens, guest messages, the POS adapter and the audit log. A message broker is not needed for the demo. It can be added later without changing the event contracts.
 
@@ -8,12 +8,12 @@ Nov 5, 2026 · @what's Parse Server
 
 | Item | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Reservation demo, then pilot |
 | Builds on | Demo requirements (steps 1–6, QA-1–QA-8) |
-| Related | ADR-001 (technology selection), ADR-003 (data architecture: outbox, inbox and POS message tables), ADR-004 (cross-cutting concerns), ADR-005 (AWS hosting, to follow) |
+| Related | ADR-001 (technology selection), ADR-003 (data architecture: outbox, inbox and POS message tables), ADR-004 (cross-cutting concerns), ADR-005 (AWS hosting and deployment) |
 
-The demo has six steps, and each step triggers work in other parts of the system. A paid booking must appear on the host's floor plan, send a confirmation text and, after seating, open a table in the POS. If the API made these calls directly, a slow text provider or an unreachable POS would block or break the booking. The requirements already name the events (`BookingCreated`, `TableSeated`, `WaitlistNotified` and others). This ADR sets out how they are defined, stored, delivered and changed over time.
+The demo has six steps, and each step triggers work in other parts of the system. A paid booking must appear on the host's floor plan, send a confirmation text and, after seating, open a table in the POS. If the API made these calls directly, a slow text provider or an unreachable POS would block or break the booking. The requirements already name the events, using the catalogue names below (`BookingCreated`, `BookingSeated`, `WaitlistNotified` and others). This ADR sets out how they are defined, stored, delivered and changed over time.
 
 ## Decision drivers
 
@@ -45,7 +45,7 @@ Option C still needs an outbox, but option D does too: without one, a crash betw
 
 We will use option C. A command handler changes the booking, table or waitlist and adds the event to the outbox, both in one transaction. Either both are saved or neither is. A hosted `BackgroundService` in the same .NET process reads committed outbox rows in order and passes each one to its consumers.
 
-&#91;embedded content: event flow · one transaction, one worker, four consumers, one inbox\]
+*[Diagram: event flow · one transaction, one worker, four consumers, one inbox. See the live version for the drawing.]*
 
 The API only writes to the database, so a down text provider or POS cannot slow or undo a booking. Inbound POS messages are saved to the inbox first, so a repeated `BillClosed` is applied once.
 
@@ -73,12 +73,13 @@ The system uses three kinds of message, and only domain events are stored in the
 | `BookingCancelled` | The guest or host cancels, or the payment hold expires | bookingId, reason, cancelledBy | Floor plan, refund rule, notifications, audit |
 | `DepositRefunded` | A refund succeeds under the cancellation rule | bookingId, refundId, amountCents | Notifications, POS (if deposit was applied), audit |
 | `BookingSeated` | A party sits at a table, booked or walk-in | bookingId, tableIds, source (`booking` or `walkIn`), seatedAt | Floor plan, POS (`OpenTable`, `ApplyDeposit`), audit |
-| `BookingCompleted` | The POS reports the bill closed | bookingId, billTotalCents, closedAt | Guest history, audit |
+| `BookingCompleted` | The POS reports the bill closed, or the host clears the table before any bill arrives | bookingId, source (billClosed or clearedByHost), posBillId?, billTotalCents?, closedAt | Guest history, audit |
+| `BookingBillAttached` | A POS bill arrives after the host cleared the table and is matched within 30 minutes, or a manager matches it by hand | bookingId, posBillId, billTotalCents, posMessageId, matchedBy (lateMatch or manual), attachedAt | Guest history, POS log, audit |
 | `TableCleared` | A host marks a table free | tableId, clearedAt | Floor plan, waitlist, audit |
 | `WaitlistJoined` | A walk-in party joins the waitlist | waitlistEntryId, partySize, quotedMinutes | Floor plan, audit |
 | `WaitlistNotified` | The host sends “table ready” | waitlistEntryId, tableId | Notifications, audit |
 | `WaitlistEnded` | The entry is seated, leaves or is removed | waitlistEntryId, outcome | Floor plan, audit |
-| `MessageSent` | A text or email is accepted by the provider | messageId, purpose (`confirmation`, `reminder`, `tableReady`), channel, to (masked) | Message log, audit |
+| `MessageSent` | A text or email is accepted by the provider | messageId, purpose (`confirmation`, `reminder`, `tableReady`, cancellation, refund), channel, to (masked) | Message log, audit |
 
 ### Names changed from the demo requirements
 
@@ -88,7 +89,7 @@ The system uses three kinds of message, and only domain events are stored in the
 | `ConfirmationSent`, `ReminderSent`, `MessageSent` | `MessageSent` with `purpose` | One message log and one handler for all channels |
 | (none) | `BookingCompleted` | The status diagram ends in Completed, so the change needs its own event |
 
-The demo requirements doc should be updated to these names once this ADR is accepted.
+The demo requirements doc now uses these names (9 November 2026).
 
 ## Event envelope
 
@@ -102,7 +103,7 @@ Every domain event uses the same envelope, so the worker, the audit log and any 
 | `occurredAt` | timestamp (UTC) | When the change was committed |
 | `venueId` | UUID | Every event belongs to one venue (ADR-003 DM rules) |
 | `aggregateType`, `aggregateId` | string, UUID | The record that changed, e.g. `Booking` and its ID; sets the delivery order |
-| `sequence` | integer | Increases by 1 per aggregate; consumers can spot gaps |
+| `sequence` | integer | Increases by 1 per aggregate, from the aggregate's own LastEventSequence counter (not the row version); consumers can spot gaps |
 | `correlationId` | UUID | Shared by everything caused by one guest or staff action; set from the request's trace context (ADR-004) |
 | `causationId` | UUID or null | The event or command that caused this one |
 | `actor` | object | `{ type: guest \| staff \| system \| pos, id, role }`; no names or phone numbers |
@@ -170,7 +171,7 @@ Events can gain fields freely, but they never lose or change one within a versio
 
 SignalR pushes a small notice and the screen fetches the new state. The push never carries the full floor plan.
 
-- **Groups:** each host screen joins the group `venue:{venueId}` after sign-in. The hub uses the same Cognito token as the API and checks the venue claim (ADR-004).
+- **Groups:** each host screen joins the group `venue:{venueId}` after sign-in. The hub uses the same credentials as the API (the fixed demo host session in the demo, a Cognito token in the pilot) and checks the venue claim (ADR-004).
 - **Messages:** `floorPlanChanged`, `waitlistChanged` and `messageLogChanged`, each with the IDs that changed and the event's `sequence`.
 - **Refetch:** the screen calls the API for the changed tables or entries. The API is the only source of truth, so a lost push costs one refresh, not wrong data.
 - **Reconnect:** after a network drop, the screen reconnects automatically and fetches the whole floor plan once. This is the demo's offline behaviour (ADR-003 option A).

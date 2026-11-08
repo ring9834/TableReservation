@@ -1911,6 +1911,7 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | BR-06, BR-07        | §8.2, §8.3                                                   |
 | BR-08–BR-10         | §3.2, §11.3, §11.4                                           |
 | BR-11, BR-12        | §2.3                                                         |
+| BR-13               | §7.1, §9.2                                                   |
 | QA-1, QA-2          | §5.2, §15                                                    |
 | QA-5                | §5.3, §6.2, §6.4, §10.5                                      |
 | QA-6                | §17 (reset, clock)                                           |

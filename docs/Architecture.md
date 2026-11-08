@@ -3,9 +3,9 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Draft for the demo build (2–3 weeks) |
+| **Status** | Frozen (v1.0) for the demo build (2–3 weeks); ADRs accepted |
 | **Owner** | Antonio Huang |
-| **Last updated** | 5 November 2026 |
+| **Last updated** | 9 November 2026 |
 | **Decisions** | ADR-001 to ADR-005 (see [Decision records](#13-decision-records)) |
 
 This file is the entry point for anyone working on the code, including Claude Code. It summarises **what** the system is and **how** its parts fit together. The ADRs record **why** each choice was made. Where this file and an ADR disagree, the ADR wins; fix this file.
@@ -66,14 +66,14 @@ flowchart LR
 | Layer | Choice | ADR |
 | --- | --- | --- |
 | Guest page and host app | Next.js (React, TypeScript), static export, installable as a PWA | 001 |
-| Floor plan | SVG drawn by React components; `react-zoom-pan-pinch`; `@use-gesture/react` for the layout editor | 001 |
-| Languages | English and Simplified Chinese through a Next.js i18n library | 001 |
+| Floor plan | SVG drawn by React components; `react-zoom-pan-pinch`; `@use-gesture/react` for the layout editor (pilot; the demo uses a seeded layout) | 001 |
+| Languages | English and Simplified Chinese through `react-i18next` (works with the static export) | 001 |
 | API | ASP.NET Core Web API, C#, Entity Framework Core (Npgsql) | 001 |
 | Real-time | SignalR in the API; `@microsoft/signalr` in the browser | 001, 002 |
 | Database | PostgreSQL on Amazon RDS | 003 |
 | Events | Domain events behind `IEventPublisher`; transactional outbox and inbox; background worker | 002 |
 | Integrations | `IPosAdapter` (mock in the demo), `IPaymentProvider` (Stripe) | 001, 002 |
-| Staff sign-in | Amazon Cognito user pool, code flow with PKCE | 004 |
+| Staff sign-in | Demo: a fixed demo host session (no sign-in). Pilot: Amazon Cognito user pool, code flow with PKCE | 004 |
 | Contracts | ASP.NET Core OpenAPI document; `orval` generates the TypeScript client, query hooks and zod schemas | 004 |
 | Validation | FluentValidation through one endpoint filter | 004 |
 | Errors | Central `IExceptionHandler` and Problem Details with stable error codes | 004 |
@@ -92,9 +92,9 @@ Exact package versions are pinned at project start and recorded in the repositor
 
 | Container | Responsibility | Runs on (demo) |
 | --- | --- | --- |
-| **Front end** (`web/`) | Guest booking page, manage-booking page, host app (floor plan, waitlist, messages, POS log, layout editor) | Static files on S3, served by CloudFront |
+| **Front end** (`web/`) | Guest booking page, manage-booking page, host app (floor plan, waitlist, messages, POS log; layout editor in the pilot) | Static files on S3, served by CloudFront |
 | **API** (`src/Api`) | HTTP endpoints, SignalR hub, command handlers, Stripe and POS webhooks | One Lightsail container |
-| **Outbox worker** | Delivers outbox events to SignalR, notifications, the POS adapter and the audit log | Hosted service in the same API container |
+| **Background workers** | `OutboxDispatcher` delivers outbox events to SignalR, notifications, the POS queue and the audit log. `PosDeliveryWorker` sends queued POS messages in venue order. `MessageDeliveryWorker` sends queued texts and emails with retries and expiry | Hosted services in the same API container |
 | **Database** | Bookings, tables, guests, payments, waitlist, messages, outbox, inbox, POS messages, audit log | RDS PostgreSQL, one zone |
 
 ### 5.2 Feature modules (vertical slices)
@@ -104,11 +104,11 @@ Each feature folder holds its own endpoints, requests, validators, handlers and 
 | Feature | Owns |
 | --- | --- |
 | `Bookings` | Create, hold, confirm, cancel, seat, complete; availability search |
-| `Tables` | Areas, tables, layout versions, table status |
+| `Tables` | Areas, tables, layout versions (seeded in the demo), table status |
 | `Waitlist` | Join, quote, notify, end |
 | `Payments` | Deposits, refunds, Stripe webhooks (`IPaymentProvider`) |
-| `Messaging` | Confirmations, reminders, "table ready"; message log; on-screen phone panel |
-| `Pos` | `IPosAdapter`, mock adapter, POS message log, `BillClosed` inbox handler |
+| `Messaging` | Confirmations, reminders, "table ready"; messages queued in PostgreSQL and sent by `MessageDeliveryWorker`; message log; on-screen phone panel |
+| `Pos` | `IPosAdapter`, mock adapter, `pos_messages` queue and log, `BillClosed` inbox handler, late bill matching |
 | `Guests` | Guest profiles, matched by phone number |
 | `Venues` | Venue settings (JSONB), opening hours, rules, staff membership |
 | `Admin` | Failed events, replay, demo reset |
@@ -154,9 +154,11 @@ flowchart LR
     end
     outbox --> worker[Outbox worker<br/>in order, retried]
     worker --> hub[SignalR hub<br/>venue group]
-    worker --> notify[Notifications]
+    worker --> notify[(Message queue)]
+    notify --> mw[MessageDeliveryWorker<br/>SMS, email]
     worker --> audit[Audit log]
-    worker --> posA[POS adapter]
+    worker --> posQ[(POS messages<br/>queue and log)]
+    posQ --> posA[PosDeliveryWorker<br/>POS adapter]
     posA -->|OpenTable, ApplyDeposit| pos[POS]
     pos -->|BillClosed| inbox[(Inbox row<br/>skips repeats)]
     inbox --> h2[Handler] --> tx
@@ -166,13 +168,14 @@ flowchart LR
 
 - Each state change and its event are saved in **one transaction**. Nothing is sent from inside the request.
 - Delivery is **at least once**; every consumer is **idempotent** (it records `(consumer, eventId)` in the inbox).
-- Events for one aggregate are delivered in `sequence` order; rows are claimed with `FOR UPDATE SKIP LOCKED`.
+- Events for one aggregate are delivered in `sequence` order; rows are claimed with `FOR UPDATE SKIP LOCKED`. Each aggregate keeps its own counter (`LastEventSequence`) for this; the row version (`xmin`) is only for concurrency.
+- Each consumer runs in a savepoint inside the dispatcher's transaction, so one failing consumer does not undo the others.
 - Retries back off (5 s, 30 s, 2 min, 10 min, then every 30 min for 24 h), after which the row is marked `failed` and shown to platform admins.
 - Payloads carry IDs, not personal details.
 
 ### 6.3 Real-time host screens
 
-- Each host screen joins the SignalR group `venue:{venueId}` after sign-in.
+- Each host screen joins the SignalR group `venue:{venueId}` after sign-in (in the demo, the fixed demo host session).
 - The server pushes small notices (`floorPlanChanged`, `waitlistChanged`, `messageLogChanged`) with the changed IDs and `sequence`.
 - The screen refetches what changed from the API. The API is the only source of truth.
 - After a dropped connection the screen reconnects and refetches the whole floor plan once (the demo's offline behaviour).
@@ -187,12 +190,13 @@ flowchart LR
 | `BookingCancelled` | The guest or host cancels, or the hold expires |
 | `DepositRefunded` | A refund succeeds under the cancellation rule |
 | `BookingSeated` | A party sits down; `source` is `booking` or `walkIn` |
-| `BookingCompleted` | The POS reports the bill closed |
+| `BookingCompleted` | The POS reports the bill closed (`source: billClosed`, with `posBillId`), or the host clears the table first (`source: clearedByHost`) |
+| `BookingBillAttached` | A POS bill arrives after the host cleared the table and is matched within 30 minutes, or a manager matches it by hand |
 | `TableCleared` | A host marks a table free |
 | `WaitlistJoined` | A walk-in joins the waitlist |
 | `WaitlistNotified` | The host sends "table ready" |
 | `WaitlistEnded` | The entry is seated, leaves or is removed |
-| `MessageSent` | A text or email is accepted; `purpose` is `confirmation`, `reminder` or `tableReady` |
+| `MessageSent` | A text or email is accepted; `purpose` is `confirmation`, `reminder`, `tableReady`, `cancellation` or `refund` |
 
 ### 6.5 Event envelope
 
@@ -230,11 +234,14 @@ erDiagram
     GUEST ||--o{ WAITLIST_ENTRY : joins
     TABLE ||--o{ BOOKING : "is booked for"
     BOOKING ||--o{ PAYMENT : has
+    BOOKING ||--o| BOOKING_BILL : "closed by"
     BOOKING ||--o{ MESSAGE : triggers
     WAITLIST_ENTRY ||--o{ MESSAGE : triggers
 ```
 
-Integration records sit beside these, written in the same transaction as each change: **outbox events**, **inbox entries**, **POS messages** and the **audit log**.
+Integration records sit beside these, written in the same transaction as each change: **outbox events**, **inbox entries**, **POS messages** (`pos_messages`, queue and log in one table), **queued messages** and the **audit log**.
+
+Each booking also keeps a copy of the venue's **terms** (deposit, cancellation window, turn time) taken when it is made, so later changes to venue settings never change what a guest agreed to. POS bills are kept in `booking_bills`, keyed by the POS bill ID, with a unique index on `booking_id` (one bill per booking now; split bills later only drop the index).
 
 ### 7.2 Data rules
 
@@ -246,10 +253,12 @@ Integration records sit beside these, written in the same transaction as each ch
 | DM-04 | Times are stored in UTC and shown in the venue's time zone (`Pacific/Auckland`) |
 | DM-05 | Phone numbers are stored in E.164 (`+64…`) and are the guest match key |
 | DM-06 | Statuses are fixed lists stored as text |
-| DM-07 | Every record has a row version for optimistic concurrency |
+| DM-07 | Every record has a row version (`xmin`) used only for optimistic concurrency; event order comes from each record's own event counter |
 | DM-08 | Venue settings and message payloads are JSONB |
 | DM-09 | Every change to bookings, deposits and refunds goes to the audit log |
 | DM-10 | Schema changes only through EF Core migrations; a seed script loads and resets the demo data |
+| DM-11 | Each booking keeps a copy of the venue's terms taken at booking time |
+| DM-12 | POS bills live in `booking_bills`, at most one per booking for now |
 
 ### 7.3 Preventing double bookings
 
@@ -274,6 +283,7 @@ stateDiagram-v2
     Upcoming --> Seated: host seats
     Upcoming --> Cancelled: guest or host cancels
     Seated --> Completed: BillClosed or table cleared
+    Completed --> Completed: late bill attached (within 30 min)
     Completed --> [*]
     Cancelled --> [*]
 ```
@@ -294,7 +304,7 @@ flowchart LR
     subgraph api [API]
         eh[Central exception handler] --> log[Logging and tracing]
         log --> rl[Rate limiting]
-        rl --> auth[Sign-in<br/>Cognito JWT]
+        rl --> auth[Sign-in<br/>demo host session;<br/>Cognito JWT in the pilot]
         auth --> venue[Venue and role check]
         venue --> val[FluentValidation]
         val --> handler[Handler<br/>rules under a lock]
@@ -307,10 +317,10 @@ Every failure leaves as **Problem Details** with a stable `code` and a `traceId`
 
 | Caller | Proves identity with | Can |
 | --- | --- | --- |
-| Guest | Nothing (public page) or a signed, expiring manage-booking link | Book, pay, confirm or cancel their own booking |
-| Host | Cognito | Floor plan, walk-ins, waitlist, messages for their venue |
-| Manager | Cognito with MFA | Host actions plus layout, settings, refunds |
-| Platform admin | Cognito with MFA | Venue set-up, failed events, replay |
+| Guest | Nothing (public page) or a signed, expiring link (`GuestLinkSigner`, HMAC-SHA256, key in Secrets Manager); opening a link only shows the page, the action is a POST | Book, pay, confirm or cancel their own booking |
+| Host | Demo: fixed demo host session. Pilot: Cognito | Floor plan, walk-ins, waitlist, messages for their venue |
+| Manager | Cognito with MFA (pilot) | Host actions plus layout, settings, refunds |
+| Platform admin | Cognito with MFA (pilot) | Venue set-up, failed events, replay |
 | Stripe, POS | Signed webhooks | Payment events; `BillClosed` |
 
 - A `venue_ids` claim is checked against the route on every request; endpoints deny by default.
@@ -440,11 +450,12 @@ The demo reset (Admin) reloads the Golden Dragon seed data.
 | Item | Status |
 | --- | --- |
 | How the POS sends `BillClosed` (webhook, polling or export) and whether it accepts idempotency keys | Ask the partner |
-| Whether the partner already uses Cognito or another identity service for POS staff | Ask the partner |
+| Whether the partner already uses Cognito or another identity service for POS staff (affects the pilot only) | Ask the partner |
+| Whether the POS can return the booking ID it received, and whether it supports split bills | Ask the partner; late matching (30 min) and `booking_bills` cover both for now |
+| Reminder timing rules (BR-13) | Proposed in Design §7.1; partner to confirm |
 | AWS accounts and region for the pilot; whether Auckland has every service needed | Ask the partner; check the AWS regional services list |
 | Whether Lightsail keeps SignalR WebSocket connections open (SignalR falls back to SSE or long polling) | Check in week 1 |
 | Recovery targets and log retention for the pilot | Proposed in ADR-005; partner to confirm |
-| The demo requirements doc still uses older event names (`TableSeated`, `WalkInSeated`, `ConfirmationSent`, `ReminderSent`) | Update to the ADR-002 catalogue |
 
 ---
 
@@ -458,7 +469,7 @@ The demo reset (Admin) reloads the Golden Dragon seed data.
 | [ADR-004](https://claude.ai/artifact/85bugiUSpUYYKhJ3X7tP9t) | Cross-cutting Concerns | Security, contracts, validation, error handling, logging |
 | [ADR-005](https://claude.ai/artifact/Cyq95yBMujMRR8Rzk27EtK) | AWS Hosting and Deployment | Region, compute, network, CI/CD, monitoring, cost |
 
-When the repository exists, export each ADR to `docs/adr/ADR-00N-<title>.md` and point these links there.
+All five ADRs are **Accepted** (9 November 2026). Markdown copies are in [`adr/`](adr/); the links above are the live versions.
 
 ---
 

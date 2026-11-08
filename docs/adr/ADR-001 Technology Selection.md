@@ -1,6 +1,6 @@
 # ADR-001: Technology Selection for the Reservation Demo
 
-Nov 5, 2026 · @what's Parse Server
+Antonio Huang · 5 November 2026 · Accepted 9 November 2026 · [live version](https://claude.ai/artifact/8uJxSk1a8d3h25LxTA1Z1K)
 
 Decision: build the demo with a Next.js (React) front end, an ASP.NET Core API with SignalR, and PostgreSQL, with events published through an outbox; the same stack carries forward into the pilot.
 
@@ -8,7 +8,7 @@ Decision: build the demo with a Next.js (React) front end, an ASP.NET Core API w
 
 | Item | Detail |
 | --- | --- |
-| Status | Proposed |
+| Status | Accepted |
 | Decision owner | Antonio Huang |
 | Applies to | The demo, and the pilot that follows unless a revisit trigger fires |
 | Inputs | Reservation System Demo — Requirements Analysis (steps 1–6, quality attributes QA-1 to QA-8, constraints); business requirements and delivery proposal |
@@ -70,7 +70,7 @@ Both frameworks can deliver the demo well: they offer file-based routing, server
 
 ## Floor plan
 
-**Outcome:** draw the floor plan as SVG from React components, with `react-zoom-pan-pinch` for zoom and pan and `@use-gesture/react` for dragging tables in the layout editor. Each table is a real page element, so it can be tapped, read by screen readers, translated and tested like any other part of the UI.
+**Outcome:** draw the floor plan as SVG from React components, with `react-zoom-pan-pinch` for zoom and pan and `@use-gesture/react` for dragging tables in the layout editor, which comes in the pilot; the demo uses a seeded Golden Dragon layout. Each table is a real page element, so it can be tapped, read by screen readers, translated and tested like any other part of the UI.
 
 ### What the floor plan must do
 
@@ -79,8 +79,8 @@ Both frameworks can deliver the demo well: they offer file-based routing, server
 | Show 20–80 tables per area, with live status (free, booked soon, seated, needs clearing) | Demo steps 2–3, QA-1 |
 | Large tap targets on a tablet or phone; tap a table to seat, clear or view a booking | D5, D11 |
 | Zoom and pan on small screens; fit to screen on a tablet | D5 |
-| Layout editor: add, drag, rotate and resize tables; round or rectangular shapes; seats; areas such as Main hall and Private room | Demo step 2 |
-| Select two or more tables to combine them for a large party | Demo step 3 |
+| Layout editor: add, drag, rotate and resize tables; round or rectangular shapes; seats; areas such as Main hall and Private room | Pilot (the demo uses a seeded layout) |
+| Select two or more tables to combine them for a large party | Pilot (the demo seats a large party at one table) |
 | Labels and status words in English and Chinese; status not shown by colour alone | D4, QA-7 |
 | Testable with Playwright, like the rest of the host app | Test stack (Playwright) |
 
@@ -99,7 +99,7 @@ Both frameworks can deliver the demo well: they offer file-based routing, server
 
 - **Coordinates:** each area has a fixed grid, e.g. 1,000 × 700 units. A table stores `x`, `y`, `rotation`, `shape`, `width`, `height`, `minSeats` and `maxSeats` in PostgreSQL (ADR-003). The `viewBox` scales the grid to any screen, so the layout never depends on device size.
 - **Service view:** tables are coloured by status, with a text or icon badge as well (time seated, guest name, “due 19:30”). A tap opens a side panel. Pinch and pan come from `react-zoom-pan-pinch`.
-- **Layout editor:** a separate mode. Dragging and rotating use `@use-gesture/react`, with snap to a 10-unit grid. Changes save as one layout version, so service screens never show a half-edited room.
+- **Layout editor:** a separate mode, built in the pilot. Dragging and rotating use `@use-gesture/react`, with snap to a 10-unit grid. Changes save as one layout version, so service screens never show a half-edited room.
 - **Live updates:** a `floorPlanChanged` push (ADR-002) refetches only the changed tables. React then redraws just those `<g>` elements.
 - **Background:** an optional photo or drawing of the room behind the tables, stored in Amazon S3 so it stays in AWS (D10).
 - **Accessibility:** each table has `role="button"`, an `aria-label` such as “Table 12, 4 seats, seated 18:05”, and keyboard focus. Arrow keys move a selected table in the editor.
@@ -111,14 +111,14 @@ SVG handles a few hundred elements on a tablet without strain, well above one ve
 | Layer | Technology |
 | --- | --- |
 | Guest page and host app | Next.js (React) with TypeScript, mostly client-side pages |
-| Floor plan | SVG drawn by React components; `react-zoom-pan-pinch` for zoom and pan; `@use-gesture/react` for the layout editor |
-| Languages | English and Chinese (Simplified) through a Next.js i18n library, with all text in translation files |
+| Floor plan | SVG drawn by React components; `react-zoom-pan-pinch` for zoom and pan; `@use-gesture/react` for the layout editor (pilot) |
+| Languages | English and Chinese (Simplified) through react-i18next (works with the static export), with all text in translation files |
 | API | ASP.NET Core Web API, C#, Entity Framework Core |
 | Real-time | SignalR in the API, `@microsoft/signalr` client in the browser |
 | Data | PostgreSQL (ADR-003) |
 | Events | Domain events, `IEventPublisher`, PostgreSQL outbox, background worker (ADR-002) |
 | Integrations | `IPosAdapter` and `IPaymentProvider` interfaces; mock POS adapter; Stripe test mode |
-| Staff sign-in | Amazon Cognito user pool (ADR-004) |
+| Staff sign-in | Demo: a fixed demo host session; pilot: Amazon Cognito user pool (ADR-004) |
 | Contracts | ASP.NET Core OpenAPI document; `orval` generates the TypeScript client and zod schemas (ADR-004) |
 | Validation and errors | FluentValidation; central `IExceptionHandler` with Problem Details (ADR-004) |
 | Logging and tracing | `ILogger` and OpenTelemetry to Amazon CloudWatch and AWS X-Ray (ADR-004) |

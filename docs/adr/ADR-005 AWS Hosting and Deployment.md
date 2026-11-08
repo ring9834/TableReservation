@@ -1,6 +1,6 @@
 # ADR-005: AWS Hosting and Deployment
 
-Nov 5, 2026 · @what's Parse Server
+Antonio Huang · 5 November 2026 · Accepted 9 November 2026 · [live version](https://claude.ai/artifact/Cyq95yBMujMRR8Rzk27EtK)
 
 **Decision:** for the demo, run the API as one container on Amazon Lightsail, with Amazon RDS for PostgreSQL and the front end as static files on Amazon S3 behind Amazon CloudFront. For the pilot, the same container image moves to Amazon ECS on Fargate in the partner's own AWS account. Everything is defined in AWS CDK (C#) and deployed by GitHub Actions. All data stays in AWS.
 
@@ -8,7 +8,7 @@ Nov 5, 2026 · @what's Parse Server
 
 | Item | Value |
 | --- | --- |
-| Status | Proposed; region and account to confirm with the partner |
+| Status | Accepted for the demo; pilot region and account to confirm with the partner |
 | Scope | Reservation demo, then pilot |
 | Builds on | ADR-001 (technology selection), ADR-002 (event-driven architecture), ADR-003 (data architecture), ADR-004 (cross-cutting concerns) |
 
@@ -75,7 +75,7 @@ A static export rules out Next.js server features (server actions, server-side r
 
 ## Target architecture
 
-&#91;embedded content: demo and pilot set-ups on AWS\]
+*[Diagram: demo and pilot set-ups on AWS. See the live version for the drawing.]*
 
 The front end and the API image are the same in both set-ups. The pilot puts the API behind a load balancer, splits out the worker, and moves the database and tasks into private subnets across two zones.
 
@@ -192,7 +192,7 @@ These are my rough estimates for planning, to be checked in the AWS Pricing Calc
 | WAF | — | 12 |
 | CloudFront, S3, Route 53, ECR | 2 | 5 |
 | Secrets Manager, CloudWatch, X-Ray | 4 | 15 |
-| Cognito | 0 at demo user numbers | Small at pilot staff numbers |
+| Cognito | 0 (not used; fixed demo host session) | Small at pilot staff numbers |
 | **Total, approximately** | **35** | **220** |
 
 The text-message provider, Stripe fees and the domain name are paid separately, and are not included.

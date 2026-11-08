@@ -3,9 +3,9 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Agreed scope for the demo build (2–3 weeks) |
+| **Status** | Agreed and frozen (v1.0) for the demo build (2–3 weeks) |
 | **Owner** | Antonio Huang |
-| **Last updated** | 5 November 2026 |
+| **Last updated** | 9 November 2026 |
 | **Related** | [`Architecture.md`](Architecture.md); ADR-001 to ADR-005 |
 
 The demo proves six capabilities in a 20-minute story set at one sample restaurant, built within 2–3 weeks. These requirements drive the target architecture, and they double as the test checklist for the build.
@@ -215,6 +215,7 @@ All values are settings for the sample venue, stored as configuration rather tha
 | BR-10 | Notified party timeout | Flag after 10 minutes if not seated |
 | BR-11 | Money and time | Money stored as whole cents in NZD, GST-inclusive; times stored in UTC, shown in Pacific/Auckland |
 | BR-12 | Phone numbers | NZ mobile numbers validated and stored in international format (+64…) |
+| BR-13 | Reminder timing | Reminder sent 24 hours before the booking. No reminder for a booking made less than 24 hours ahead (its confirmation carries the manage-booking link) or starting within 2 hours. Opening a Confirm or Cancel link less than 2 hours before the booking shows "cancelling now keeps your deposit" before the guest can cancel |
 
 ---
 
@@ -348,3 +349,4 @@ About 20 minutes, followed by questions. The same script is the end-to-end test,
 | Date | Change |
 | --- | --- |
 | 5 Nov 2026 | Exported from the requirements analysis doc. Event names aligned with the ADR-002 catalogue: `TableSeated` and `WalkInSeated` → `BookingSeated` (with `source`); `ConfirmationSent` and `ReminderSent` → `MessageSent` (with `purpose`); `BookingCompleted` added. Answered open questions marked as decided. |
+| 9 Nov 2026 | Added BR-13 (reminder timing and the late-cancellation warning), matching Design §7.1. Status set to frozen (v1.0). |

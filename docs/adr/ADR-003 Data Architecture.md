@@ -1,6 +1,6 @@
 # ADR-003: Data Architecture for the Reservation System
 
-Nov 5, 2026 · @what's Parse Server
+Antonio Huang · 5 November 2026 · Accepted 9 November 2026 · [live version](https://claude.ai/artifact/Bs3MghWHR2kpw2S5oZxfM4)
 
 Decision: store all data in one PostgreSQL database on Amazon RDS, shared by all venues and separated by venue ID; prevent double bookings in the database itself; and give the host app a small offline cache in the browser rather than a full local database.
 
@@ -8,11 +8,11 @@ Decision: store all data in one PostgreSQL database on Amazon RDS, shared by all
 
 | Item | Detail |
 | --- | --- |
-| Status | Proposed |
+| Status | Accepted |
 | Decision owner | Antonio Huang |
 | Applies to | The demo and the pilot; production unless a revisit trigger fires |
 | Builds on | ADR-001 (technology selection); ADR-002 (event-driven architecture) |
-| Related | ADR-004 (cross-cutting concerns); ADR-005 (AWS hosting and deployment), to follow |
+| Related | ADR-004 (cross-cutting concerns); ADR-005 (AWS hosting and deployment) |
 | Inputs | Demo requirements analysis (sections 7–9); business requirements N-02, N-04, N-10–N-12, F-74–F-76 |
 
 ADR-001 chose PostgreSQL as part of the overall stack. This record explains that choice against the main alternatives and sets the rules for how data is modelled, protected, kept and made available when a host's connection drops. These rules shape the database schema, which is the hardest part of the system to change later.
@@ -55,7 +55,7 @@ Bookings, tables, guests and payments are strongly related and must change toget
 
 ## Data model and modelling rules
 
-&#91;embedded content: core records · 10 entities\]
+*[Diagram: core records · 10 entities. See the live version for the drawing.]*
 
 The record list and key fields are in the demo requirements analysis (section 8). The rules below apply to every table.
 
@@ -67,10 +67,12 @@ The record list and key fields are in the demo requirements analysis (section 8)
 | DM-04 | Times are stored in UTC and shown in the venue's time zone | Correct across daylight saving changes |
 | DM-05 | Phone numbers are stored in international format (+64…) and used as the guest match key | Matching guests with POS VIP members (G-06) |
 | DM-06 | Statuses (booking, waitlist, payment, message) are fixed lists, stored as text | Readable in reports and safe to extend |
-| DM-07 | Every record has a row version for optimistic concurrency | Two hosts editing the same booking cannot overwrite each other silently |
+| DM-07 | Every record has a row version (PostgreSQL xmin) used only for optimistic concurrency; event order comes from each record's own event counter (ADR-002) | Two hosts editing the same booking cannot overwrite each other silently |
 | DM-08 | Venue settings and message payloads use JSONB columns | Rules and payloads change without schema changes (DD4) |
 | DM-09 | Every change to bookings, deposits and refunds is written to an audit log with user and time | Disputes and chargebacks (N-20) |
 | DM-10 | The schema changes only through EF Core migrations kept in the repository; a seed script loads the demo data and resets it | Repeatable setup and the demo reset button |
+| DM-11 | Each booking keeps a copy of the venue's terms (deposit, cancellation window, turn time) taken when it is made | A later change to venue settings never changes what a guest agreed to (refunds stay fair) |
+| DM-12 | POS bills are kept in a booking\_bills table keyed by the POS bill ID, with at most one bill per booking for now (unique index on booking ID) | Late and duplicate bills are matched safely; split bills later only drop the unique index |
 
 ## Preventing double bookings
 
@@ -186,8 +188,8 @@ Application logs and traces hold no personal data (ADR-004), so they fall outsid
 
 - [ ] Confirm retention periods with the partner and a privacy adviser.
 - [ ] Ask whether the partner's POS uses a local server at venues, and whether integration should go through it.
-- [ ] Define the event catalogue and payload formats in ADR-002 (event-driven architecture).
-- [ ] Choose instance sizes, backups and the AWS region in ADR-005 (hosting and deployment).
+- [x] Define the event catalogue and payload formats in ADR-002 (event-driven architecture).
+- [x] Choose instance sizes, backups and the AWS region in ADR-005 (hosting and deployment).
 
 ## When to revisit this decision
 
