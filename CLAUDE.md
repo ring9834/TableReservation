@@ -1,0 +1,75 @@
+# CLAUDE.md
+
+Guidance for Claude Code in this repository. Keep this file short; details live in `docs/`.
+
+## What this is
+
+A restaurant reservation demo (fictional venue **Golden Dragon**, Auckland, 14 tables, English and Chinese) that will later connect to a partner's POS. Guests book and pay deposits online; hosts run the floor on a tablet; a mock POS receives `OpenTable` / `ApplyDeposit` and sends `BillClosed`.
+
+## Source of truth (read before changing anything)
+
+| Question | Read |
+| --- | --- |
+| What must the demo do? Acceptance criteria, business rules BR-01–BR-13 | `docs/Requirements.md` |
+| How do the parts fit together? | `docs/Architecture.md` |
+| Exact classes, states, events, schema, API, sequences | `docs/Design.md` |
+| Why a choice was made | `docs/adr/ADR-001` … `ADR-005` |
+| What to build next | `docs/BUILD-PLAN.md` |
+
+Order of authority: **ADR > Design.md > Architecture.md**. If code and docs disagree, stop and tell me; do not silently change the docs or the design.
+
+## Stack
+
+- **API:** .NET 10, ASP.NET Core minimal APIs, EF Core + Npgsql, SignalR. PostgreSQL 16+.
+- **Web:** Next.js (React, TypeScript), `output: 'export'` (static, no server features), PWA, TanStack Query, `orval` client from OpenAPI, zod, react-hook-form, react-i18next.
+- **Tests:** xUnit, Testcontainers (real PostgreSQL), Playwright.
+- **Infra (later):** AWS CDK in C#, GitHub Actions with OIDC. Lightsail container + RDS for the demo.
+
+## Layout
+
+```
+src/Api            endpoints (vertical slices by feature), pipeline, SignalR hub
+src/Domain         aggregates, value objects, policies, domain events (no EF, no ASP.NET)
+src/Contracts      event envelope and event types
+src/Infrastructure EF Core, outbox/inbox, workers, Stripe, mock POS, message senders
+web/               Next.js app: guest, host, presenter screens
+tests/             Unit, Integration, E2E
+infra/             CDK stacks
+```
+
+## Commands
+
+```bash
+docker compose up -d                     # PostgreSQL (and later the mock POS)
+dotnet build
+dotnet test                              # unit + integration (Docker must be running)
+dotnet run --project src/Api
+cd web && npm run generate:api && npm run dev
+cd web && npx playwright test
+```
+
+Keep this section in step with the real scripts when they change.
+
+## Rules that must not be broken
+
+1. **Never name the partner or its products** in code, comments, commit messages or docs. Use "the POS" or "the partner".
+2. **All data stays in AWS.** No third-party SaaS that stores data (no Sentry, Datadog, Auth0).
+3. **One transaction per command:** state change + outbox rows together. Nothing is sent from inside a request.
+4. **Domain events are raised only inside aggregates** via `Raise(...)`, which stamps `LastEventSequence`. `Version` (xmin) is for concurrency only.
+5. **Every event consumer is idempotent** (inbox row per consumer + event ID, inside a savepoint in the dispatcher's transaction). Tests send each event twice.
+6. **Double booking is prevented by the database** (exclusion constraint). Do not replace it with app-only checks.
+7. **Expected failures return `Result<T>` / `Error`**, mapped to Problem Details with a stable `code`. Exceptions are for the unexpected, handled once in the central `IExceptionHandler`.
+8. **Validation:** FluentValidation via one endpoint filter. No MediatR, no AutoMapper, no `FluentValidation.AspNetCore` auto-validation.
+9. **Never log personal data** (names, full phone numbers, emails, booking notes, tokens, request bodies).
+10. **Time through `TimeProvider`**, stored in UTC, shown in `Pacific/Auckland`. Money in integer cents NZD.
+11. **Secrets** come from .NET user secrets locally and Secrets Manager in AWS. Never commit them; never read `.env*` files.
+12. **Staff sign-in in the demo is a fixed demo host session.** Cognito is a pilot feature; don't add it.
+13. **Out of scope for the demo:** floor-plan editor, combining tables, split bills, real SMS, real POS, reports, multiple venues.
+
+## How to work
+
+- Work one milestone of `docs/BUILD-PLAN.md` at a time. Start in plan mode; show the plan before editing.
+- Write the tests with the code. A milestone is done only when `dotnet build`, `dotnet test` and the web lint/type-check pass.
+- Small commits, Conventional Commits (`feat(bookings): …`, `fix(pos): …`, `test(outbox): …`, `docs: …`).
+- When a design detail is missing or ambiguous, ask instead of inventing. Note any agreed change in `docs/Design.md` in the same commit.
+- Prefer the libraries already listed. Ask before adding a new package.
