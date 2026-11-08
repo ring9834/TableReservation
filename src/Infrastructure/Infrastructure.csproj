@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- EF Core, outbox/inbox, workers, Stripe, mock POS, message senders. -->
+  <PropertyGroup>
+    <AssemblyName>Reservation.Infrastructure</AssemblyName>
+    <RootNamespace>Reservation.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Domain\Domain.csproj" />
+    <ProjectReference Include="..\Contracts\Contracts.csproj" />
+  </ItemGroup>
+</Project>

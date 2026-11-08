@@ -1,0 +1,22 @@
+# Local development only. The mock POS runs inside the API, so this is PostgreSQL alone.
+# The password below is for this throwaway local container; the API reads its connection
+# string from .NET user secrets (see CLAUDE.md).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: reservations
+      POSTGRES_USER: reservations
+      POSTGRES_PASSWORD: local_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservations -d reservations"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

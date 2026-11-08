@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Aggregates, value objects, policies and domain events. No EF Core, no ASP.NET Core. -->
+  <PropertyGroup>
+    <AssemblyName>Reservation.Domain</AssemblyName>
+    <RootNamespace>Reservation.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

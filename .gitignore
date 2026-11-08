@@ -1,0 +1,33 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+TestResults/
+*.trx
+coverage*/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+
+# Secrets (never commit; use .NET user secrets or Secrets Manager)
+.env
+.env.*
+secrets.json
+*.pfx
+*.pem
+appsettings.*.local.json
+
+# IDE and OS
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
