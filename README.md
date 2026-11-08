@@ -5,7 +5,7 @@ A reservation, waitlist and floor-plan system for restaurants, designed to conne
 | | |
 | --- | --- |
 | **Phase** | Design frozen (v1.0, 9 November 2026) — demo build next |
-| **Next milestone** | Build the working demo (2–3 weeks), then a 20-minute walkthrough with the partner |
+| **Next milestone** | Build the working demo (3–4 weeks, about 17 working days), then a 20-minute walkthrough with the partner |
 | **Owner** | Antonio Huang |
 | **Last updated** | 9 November 2026 |
 
@@ -47,7 +47,7 @@ One dinner service at a fictional restaurant, **Golden Dragon** (Auckland, 14 ta
 5. Guests get a reminder they can confirm or cancel with one tap; deposits are refunded by rule.
 6. A POS log shows exactly what the system sends to and receives from the POS, including delivery while the POS is offline.
 
-Out of scope for the demo: real SMS and POS connections, staff sign-in, the floor-plan editor, split bills, reports and multiple venues.
+Out of scope for the demo: real SMS and POS connections, staff sign-in (the demo uses a passcode page), the floor-plan editor, split bills, reports and multiple venues.
 
 ---
 
@@ -58,13 +58,13 @@ Out of scope for the demo: real SMS and POS connections, staff sign-in, the floo
 | [`docs/Requirements.md`](docs/Requirements.md) | Demo scope, acceptance criteria, business rules BR-01–BR-13, quality targets QA-1–QA-8, demo script | Frozen (v1.0) |
 | [`docs/Architecture.md`](docs/Architecture.md) | One-page architecture: context, stack, events, data, cross-cutting concerns, deployment | Frozen (v1.0) |
 | [`docs/Design.md`](docs/Design.md) | Detailed design: domain model, state machines, events, outbox, POS, messaging, payments, schema, API, jobs | Frozen (v1.0) |
-| [ADR-001](docs/adr/ADR-001-Technology-Selection.md) ([live](https://claude.ai/artifact/8uJxSk1a8d3h25LxTA1Z1K)) | Technology selection (Next.js vs Nuxt, .NET, PostgreSQL, SignalR, PWA, floor plan) | Accepted |
-| [ADR-002](docs/adr/ADR-002-Event-driven-Architecture.md) ([live](https://claude.ai/artifact/1cCJp3NJhwEDWs5KvLfGqT)) | Event-driven architecture (outbox, worker, event catalogue, delivery rules) | Accepted |
-| [ADR-003](docs/adr/ADR-003-Data-Architecture.md) ([live](https://claude.ai/artifact/Bs3MghWHR2kpw2S5oZxfM4)) | Data architecture (PostgreSQL vs SQL Server, double booking, offline, privacy) | Accepted |
-| [ADR-004](docs/adr/ADR-004-Cross-cutting-Concerns.md) ([live](https://claude.ai/artifact/85bugiUSpUYYKhJ3X7tP9t)) | Cross-cutting concerns (security, contracts, FluentValidation, error handling, logging) | Accepted |
-| [ADR-005](docs/adr/ADR-005-AWS-Hosting-and-Deployment.md) ([live](https://claude.ai/artifact/Cyq95yBMujMRR8Rzk27EtK)) | AWS hosting and deployment (Lightsail demo, ECS pilot, CDK, GitHub Actions) | Accepted |
+| [ADR-001](docs/adr/ADR-001%20Technology%20Selection.md) | Technology selection (Next.js vs Nuxt, .NET, PostgreSQL, SignalR, PWA, floor plan) | Accepted |
+| [ADR-002](docs/adr/ADR-002%20Event-driven%20Architecture.md) | Event-driven architecture (outbox, worker, event catalogue, delivery rules) | Accepted |
+| [ADR-003](docs/adr/ADR-003%20Data%20Architecture.md) | Data architecture (PostgreSQL vs SQL Server, double booking, offline, privacy) | Accepted |
+| [ADR-004](docs/adr/ADR-004%20Cross-cutting%20Concerns.md) | Cross-cutting concerns (security, contracts, FluentValidation, error handling, logging) | Accepted |
+| [ADR-005](docs/adr/ADR-005%20AWS%20Hosting%20and%20Deployment.md) | AWS hosting and deployment (Lightsail demo, ECS pilot, CDK, GitHub Actions) | Accepted |
 
-The `docs/adr/` files are the frozen v1.0 copies; the live links are where later revisions are drafted.
+The `docs/adr/` files are the authoritative versions; revisions are made there.
 
 ### Design changes before the freeze (5–8 November 2026)
 
@@ -109,11 +109,11 @@ All data stays in AWS. Exact versions will be pinned when the code starts.
 │  ├─ Api/                    ← endpoints, features (vertical slices), pipeline, SignalR hub
 │  ├─ Domain/                 ← aggregates, value objects, policies, domain events
 │  ├─ Contracts/              ← event envelope and event types
-│  └─ Infrastructure/         ← EF Core, outbox/inbox, workers, Stripe, mock POS, message senders
+│  └─ Infrastructure/         ← EF Core, outbox/inbox, workers, Stripe, mock POS (in-process), message senders
 ├─ web/                       ← Next.js app (guest, host, presenter screens)
 ├─ tests/                     ← Unit, Integration (Testcontainers), E2E (Playwright)
 ├─ infra/                     ← AWS CDK stacks
-└─ docker-compose.yml         ← local PostgreSQL, API, mock POS
+└─ docker-compose.yml         ← local PostgreSQL
 ```
 
 ## Getting started
@@ -121,7 +121,7 @@ All data stays in AWS. Exact versions will be pinned when the code starts.
 There is no code yet. Once the demo build starts, this section will cover:
 
 - prerequisites (.NET SDK, Node.js, Docker)
-- `docker compose up` for PostgreSQL and the mock POS
+- `docker compose up` for PostgreSQL (the mock POS runs inside the API)
 - running the API and the Next.js app
 - resetting the Golden Dragon demo data
 

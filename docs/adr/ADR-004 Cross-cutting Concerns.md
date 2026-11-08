@@ -36,14 +36,15 @@ Cheap checks run first, so a bad or unauthorised request is turned away before i
 
 ## Security
 
-In the demo, the host app runs as a fixed demo host session; in the pilot, staff sign in through Amazon Cognito. Guests have no accounts; they use signed links. Every API call checks the caller's venue, and card details go only to Stripe.
+In the demo, host and presenter screens open a fixed demo session after a passcode at `/demo-login`; in the pilot, staff sign in through Amazon Cognito. Guests have no accounts; they use signed links. Every API call checks the caller's venue, and card details go only to Stripe.
 
 ### Who can do what
 
 | Caller | How they prove who they are | What they can do |
 | --- | --- | --- |
 | Guest | No account. The booking page is public; “manage my booking” links carry a signed token that expires after the booking | Create a booking, pay a deposit, confirm or cancel their own booking |
-| Host | Demo: fixed demo host session, no sign-in. Pilot: Cognito sign-in (email and password, MFA required) | Floor plan, walk-ins, waitlist and messages for their venue |
+| Host | Demo: host passcode at `/demo-login` → fixed demo session with role `Host`. Pilot: Cognito sign-in (email and password, MFA required) | Floor plan, walk-ins, waitlist and messages for their venue |
+| Presenter (demo only) | Presenter passcode at `/demo-login` → fixed demo session with role `Presenter` | Host actions plus the `/demo/*` controls (reset, clock, POS online/offline, send reminders) and the message and POS logs. Not mapped in the pilot |
 | Manager | Cognito, MFA required | Host actions plus layout editor, settings, refunds and reports for their venue |
 | Platform admin | Cognito, MFA required | Venue setup, replaying failed events (ADR-002); not used in day-to-day service |
 | POS and Stripe | Signed webhooks: the Stripe signature, and a shared secret or HMAC header for the POS | Send `BillClosed` and payment events only |
@@ -56,16 +57,16 @@ In the demo, the host app runs as a fixed demo host session; in the pilot, staff
 | ASP.NET Core Identity in PostgreSQL | Yes | Medium: we build and secure sign-in, reset and MFA screens | Fallback if Cognito limits block us |
 | Auth0, Clerk or Okta | No: user data held by a third party | Low | Rejected (CC7) |
 
-In the pilot, the host app uses the Cognito sign-in page with the authorisation code flow and PKCE. The access token is kept in memory, not in `localStorage`, and refreshed silently. The API validates the JWT on every request. In the demo, the API issues a fixed host session for Golden Dragon instead, behind the same Host policy, so swapping in Cognito changes no endpoint.
+In the pilot, the host app uses the Cognito sign-in page with the authorisation code flow and PKCE. The access token is kept in memory, not in `localStorage`, and refreshed silently. The API validates the JWT on every request. In the demo, the API issues a fixed session for Golden Dragon instead, behind the same Host policy, so swapping in Cognito changes no endpoint. The host and presenter screens start at a `/demo-login` page that takes a passcode. The API compares it in constant time with `HostPasscode` or `PresenterPasscode` (user secrets locally, Secrets Manager in AWS) and issues the session as an `HttpOnly`, `Secure`, `SameSite=Strict` cookie with role `Host` or `Presenter`, valid for 12 hours. Guest pages stay public.
 
 ### Rules
 
 1. **Venue check:** a `venue_ids` claim lists the venues a staff member works at. An authorisation policy compares it with the venue in the route. Every query filters by venue ID, and PostgreSQL row-level security can be added later as a second guard (ADR-003).
-2. **Roles:** Cognito groups (pilot) or the demo session's fixed role map to `Host`, `Manager` and `PlatformAdmin` policies. Endpoints deny by default; each one names its policy.
+2. **Roles:** Cognito groups (pilot) or the demo session's fixed role map to `Host`, `Manager` and `PlatformAdmin` policies. The demo adds a `Presenter` role and policy; a `Presenter` also satisfies the `Host` policy. Endpoints deny by default; each one names its policy.
 3. **SignalR:** the hub uses the same credentials as the API (in the pilot, the same JWT), which the browser client sends as a query parameter. That query string is removed from all logs.
 4. **Payments:** Stripe Elements collects card details in Stripe's own frame, so our servers never see them (PCI DSS SAQ A). Webhook signatures are verified, and each Stripe event ID is processed once (ADR-002 inbox).
-5. **Rate limits:** ASP.NET Core rate limiting on public endpoints, such as 10 booking attempts a minute per IP address and 3 reminder resends per booking. AWS WAF in front of the API is covered in ADR-005.
-6. **Browser rules:** HTTPS only with HSTS; CORS limited to the app's own domains; a content security policy that allows only the app and Stripe; cookies, if any, `Secure`, `HttpOnly` and `SameSite=Lax`.
+5. **Rate limits:** ASP.NET Core rate limiting on public endpoints, such as 10 booking attempts a minute per IP address, 3 reminder resends per booking and 5 `/demo-login` attempts a minute per IP address. AWS WAF in front of the API is covered in ADR-005.
+6. **Browser rules:** HTTPS only with HSTS; CORS limited to the app's own domains; a content security policy that allows only the app and Stripe; cookies, if any, `Secure`, `HttpOnly` and `SameSite=Lax` (the demo session cookie uses `SameSite=Strict`).
 7. **Secrets:** no secrets in code or images. They come from AWS Secrets Manager at start-up (ADR-005). Local development uses .NET user secrets.
 8. **Dependencies:** Dependabot, `dotnet list package --vulnerable` and `npm audit` run in CI; a high-severity finding fails the build.
 9. **Personal data:** collect only name, phone, email (optional) and booking notes. Phone numbers are stored in E.164 format and masked in screens that do not need them (ADR-003 retention rules).
@@ -172,13 +173,14 @@ Yes, use one central exception handler: ASP.NET Core's `IExceptionHandler` with 
 | HTTP | Code | When |
 | --- | --- | --- |
 | 400 | `validation_failed` | FluentValidation failed; `errors` lists the fields |
-| 401 | `not_signed_in` | Missing or expired token |
+| 401 | `not_signed_in` | Missing or expired token or demo session |
 | 403 | `forbidden` | Wrong role, or a venue the user does not work at |
 | 404 | `not_found` | Record missing or in another venue (the API never says which) |
 | 409 | `slot_taken` | Exclusion constraint or pacing check failed (PostgreSQL error `23P01` mapped centrally) |
 | 409 | `version_conflict` | Row version changed since it was read |
 | 409 | `hold_expired` | The 10-minute payment hold ended before payment |
-| 422 | `rule_broken` | Another business rule, with a more specific `code` where useful (e.g. `deposit_required`) |
+| 409 | `invalid_transition` | The record is not in a state that allows the action (e.g. confirming a booking that is already seated), usually because someone else just changed it |
+| 422 | `rule_broken` | Another business rule broken by valid input, with a more specific `code` where useful (e.g. `deposit_required`) |
 | 429 | `too_many_requests` | Rate limit hit; `Retry-After` header set |
 | 502 | `payment_provider_error` | Stripe unreachable or returned an error |
 | 500 | `unexpected` | Anything else; details only in the logs |
@@ -189,7 +191,7 @@ Yes, use one central exception handler: ASP.NET Core's `IExceptionHandler` with 
 - Responses never contain stack traces, SQL or internal names, in any environment except local development.
 - Known infrastructure exceptions are mapped centrally: concurrency → `version_conflict`, `23P01` → `slot_taken`, operation cancelled → no response logged as an error.
 - The background worker (ADR-002) uses the same logging but its own retry and `failed` status, not HTTP responses.
-- **Front end:** the generated client turns Problem Details into a typed error. One handler shows a toast or a field message for the `code`. `401` sends the user to sign in, and `409 slot_taken` offers the next free times. A React error boundary catches rendering errors and reports them (see Logging).
+- **Front end:** the generated client turns Problem Details into a typed error. One handler shows a toast or a field message for the `code`. `401` sends the user to sign in (`/demo-login` in the demo), `409 slot_taken` offers the next free times, and `409 invalid_transition` refetches the record and shows "This booking has just changed". A React error boundary catches rendering errors and reports them (see Logging).
 
 ## Logging, tracing and monitoring
 
@@ -255,9 +257,9 @@ The React error boundary and the generated client send errors to a small `/api/v
 
 | Concern | Choice |
 | --- | --- |
-| Staff sign-in | Demo: fixed demo host session. Pilot: Amazon Cognito user pool, authorisation code flow with PKCE, JWT validated by the API |
+| Staff sign-in | Demo: passcode at `/demo-login` → fixed demo session cookie (role `Host` or `Presenter`). Pilot: Amazon Cognito user pool, authorisation code flow with PKCE, JWT validated by the API |
 | Guest access | No accounts; signed, expiring links to manage a booking |
-| Authorisation | Role policies (`Host`, `Manager`, `PlatformAdmin`), venue claim checked on every request, deny by default |
+| Authorisation | Role policies (`Host`, `Manager`, `PlatformAdmin`; `Presenter` in the demo only), venue claim checked on every request, deny by default |
 | Payments security | Stripe Elements (SAQ A), verified webhooks, events processed once |
 | Contracts | ASP.NET Core OpenAPI document → `orval` TypeScript client, query hooks and zod schemas; `oasdiff` in CI |
 | Validation | FluentValidation through one endpoint filter; business rules in handlers; database constraints last |

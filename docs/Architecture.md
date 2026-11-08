@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Frozen (v1.0) for the demo build (2–3 weeks); ADRs accepted |
+| **Status** | Frozen (v1.0) for the demo build (3–4 weeks, about 17 working days); ADRs accepted |
 | **Owner** | Antonio Huang |
 | **Last updated** | 9 November 2026 |
 | **Decisions** | ADR-001 to ADR-005 (see [Decision records](#13-decision-records)) |
@@ -16,14 +16,14 @@ This file is the entry point for anyone working on the code, including Claude Co
 
 A venue (sample data: **Golden Dragon**) takes bookings online, runs its floor on a tablet and passes seated tables to its POS. The demo covers six steps:
 
-| Step | What happens | Main events |
+| Step | What happens | Main events and POS messages |
 | --- | --- | --- |
 | 1. Guest booking | Guest picks a time, pays a deposit by card (Stripe test mode), gets a confirmation | `BookingCreated`, `DepositCaptured`, `MessageSent` |
 | 2. Live floor plan | Host sees every table's status update within 2 seconds on all screens | `BookingSeated`, `TableCleared` |
 | 3. Walk-in and waitlist | Host seats a walk-in or adds the party to the waitlist with a quoted wait | `WaitlistJoined`, `BookingSeated` (`source: walkIn`) |
 | 4. "Table ready" text | Host notifies the party; the message appears in an on-screen phone panel | `WaitlistNotified`, `MessageSent` |
 | 5. Reminder confirm or cancel | Guest confirms or cancels from a reminder; the cancellation rule decides any refund | `BookingConfirmed`, `BookingCancelled`, `DepositRefunded` |
-| 6. POS message log | Seating opens a table in the (mock) POS and applies the deposit; the POS reports the bill closed | `OpenTable`, `ApplyDeposit`, `BillClosed` → `BookingCompleted` |
+| 6. POS message log | Seating opens a table in the (mock) POS and applies the deposit; the POS reports the bill closed | POS messages `OpenTable`, `ApplyDeposit` (out) and `BillClosed` (in), which leads to the event `BookingCompleted` |
 
 **Out of scope for the demo:** a real POS connection, real text messages, Alipay and WeChat Pay, a full offline mode, more than one venue in use, and reports.
 
@@ -39,7 +39,7 @@ A venue (sample data: **Golden Dragon**) takes bookings online, runs its floor o
 | Bookings never blocked by side tasks | A slow text provider or POS never fails a booking | Side tasks run after commit, from the outbox |
 | Two languages | English and Simplified Chinese on every screen and message | Translation files; the API returns codes, not sentences |
 | Privacy | Minimum personal data, never in logs; data stays in AWS | §8, §9 |
-| Low cost, fast delivery | About USD 35 a month; built by one developer in 2–3 weeks | §11 |
+| Low cost, fast delivery | About USD 35 a month; built by one developer in 3–4 weeks (about 17 working days) | §11 |
 
 ---
 
@@ -73,7 +73,7 @@ flowchart LR
 | Database | PostgreSQL on Amazon RDS | 003 |
 | Events | Domain events behind `IEventPublisher`; transactional outbox and inbox; background worker | 002 |
 | Integrations | `IPosAdapter` (mock in the demo), `IPaymentProvider` (Stripe) | 001, 002 |
-| Staff sign-in | Demo: a fixed demo host session (no sign-in). Pilot: Amazon Cognito user pool, code flow with PKCE | 004 |
+| Staff sign-in | Demo: a passcode at `/demo-login` issues a fixed demo session cookie (role `Host` or `Presenter`). Pilot: Amazon Cognito user pool, code flow with PKCE | 004 |
 | Contracts | ASP.NET Core OpenAPI document; `orval` generates the TypeScript client, query hooks and zod schemas | 004 |
 | Validation | FluentValidation through one endpoint filter | 004 |
 | Errors | Central `IExceptionHandler` and Problem Details with stable error codes | 004 |
@@ -135,7 +135,7 @@ Each feature folder holds its own endpoints, requests, validators, handlers and 
 │  ├─ Integration/              ← Testcontainers
 │  └─ E2E/                      ← Playwright demo script
 ├─ infra/                       ← AWS CDK (C#) stacks
-├─ docker-compose.yml           ← local PostgreSQL, API, mock POS
+├─ docker-compose.yml           ← local PostgreSQL (the mock POS runs inside the API)
 └─ .github/workflows/
 ```
 
@@ -175,7 +175,7 @@ flowchart LR
 
 ### 6.3 Real-time host screens
 
-- Each host screen joins the SignalR group `venue:{venueId}` after sign-in (in the demo, the fixed demo host session).
+- Each host screen joins the SignalR group `venue:{venueId}` after sign-in (in the demo, the demo session from `/demo-login`).
 - The server pushes small notices (`floorPlanChanged`, `waitlistChanged`, `messageLogChanged`) with the changed IDs and `sequence`.
 - The screen refetches what changed from the API. The API is the only source of truth.
 - After a dropped connection the screen reconnects and refetches the whole floor plan once (the demo's offline behaviour).
@@ -304,7 +304,7 @@ flowchart LR
     subgraph api [API]
         eh[Central exception handler] --> log[Logging and tracing]
         log --> rl[Rate limiting]
-        rl --> auth[Sign-in<br/>demo host session;<br/>Cognito JWT in the pilot]
+        rl --> auth[Sign-in<br/>demo session cookie;<br/>Cognito JWT in the pilot]
         auth --> venue[Venue and role check]
         venue --> val[FluentValidation]
         val --> handler[Handler<br/>rules under a lock]
@@ -318,12 +318,14 @@ Every failure leaves as **Problem Details** with a stable `code` and a `traceId`
 | Caller | Proves identity with | Can |
 | --- | --- | --- |
 | Guest | Nothing (public page) or a signed, expiring link (`GuestLinkSigner`, HMAC-SHA256, key in Secrets Manager); opening a link only shows the page, the action is a POST | Book, pay, confirm or cancel their own booking |
-| Host | Demo: fixed demo host session. Pilot: Cognito | Floor plan, walk-ins, waitlist, messages for their venue |
+| Host | Demo: passcode at `/demo-login` → demo session cookie with role `Host`. Pilot: Cognito | Floor plan, walk-ins, waitlist, messages for their venue |
+| Presenter (demo only) | Passcode at `/demo-login` → demo session cookie with role `Presenter` | Host actions plus `/demo/*` (reset, clock, POS online/offline, reminders) and the message and POS logs |
 | Manager | Cognito with MFA (pilot) | Host actions plus layout, settings, refunds |
 | Platform admin | Cognito with MFA (pilot) | Venue set-up, failed events, replay |
 | Stripe, POS | Signed webhooks | Payment events; `BillClosed` |
 
 - A `venue_ids` claim is checked against the route on every request; endpoints deny by default.
+- Demo passcodes (`HostPasscode`, `PresenterPasscode`) are secrets, compared in constant time. The session cookie is `HttpOnly`, `Secure`, `SameSite=Strict` and valid for 12 hours; `/demo-login` is limited to 5 attempts a minute per IP address. Guest pages stay public.
 - Card details never reach our servers (Stripe Elements, PCI DSS SAQ A).
 - Secrets come from AWS Secrets Manager. Locally, .NET user secrets. Never in code.
 - HTTPS and HSTS; CORS limited to our domains; a content security policy that allows only the app and Stripe.
@@ -351,8 +353,8 @@ Every failure leaves as **Problem Details** with a stable `code` and a `traceId`
 | 401 | `not_signed_in` |
 | 403 | `forbidden` |
 | 404 | `not_found` |
-| 409 | `slot_taken`, `version_conflict`, `hold_expired` |
-| 422 | `rule_broken` (or a specific code such as `deposit_required`) |
+| 409 | `slot_taken`, `version_conflict`, `hold_expired`, `invalid_transition` (the record is not in a state that allows the action) |
+| 422 | `rule_broken` for a business rule broken by valid input (or a specific code such as `deposit_required`) |
 | 429 | `too_many_requests` |
 | 502 | `payment_provider_error` |
 | 500 | `unexpected` |
@@ -411,7 +413,7 @@ Migrations follow **expand, then contract**, so a rollback is just redeploying t
 
 | Environment | Where | Deployed |
 | --- | --- | --- |
-| Local | Docker Compose (PostgreSQL, API, mock POS); `next dev` | On save |
+| Local | Docker Compose (PostgreSQL); API with `dotnet run` (mock POS in-process); `next dev` | On save |
 | Demo | Demo AWS account, Sydney | Every merge to `main` |
 | Pilot staging / production | Partner account | Staging on merge; production by manual approval |
 
@@ -433,13 +435,13 @@ Every consumer test sends each event **twice** to prove idempotency.
 ## 11. Running the demo locally
 
 ```bash
-docker compose up -d          # PostgreSQL, API, mock POS
-dotnet ef database update     # or run the migration bundle
-dotnet run --project src/Api  # API on https://localhost:5001
+docker compose up -d          # PostgreSQL only; the mock POS runs inside the API
+dotnet run --project src/Api  # API on https://localhost:5001; in Development it applies migrations and the seed at start-up
+                              # (Database:MigrateOnStartup=true, Development only). Manual alternative: dotnet ef database update
 cd web && npm install && npm run generate:api && npm run dev
 ```
 
-The demo reset (Admin) reloads the Golden Dragon seed data.
+The demo reset (Admin) reloads the Golden Dragon seed data. CI and AWS never migrate at start-up; they run the EF Core migration bundle (§9.1, ADR-005).
 
 > These commands are placeholders until the repository is created; keep them in step with the real scripts.
 
@@ -463,13 +465,13 @@ The demo reset (Admin) reloads the Golden Dragon seed data.
 
 | ADR | Title | Covers |
 | --- | --- | --- |
-| [ADR-001](https://claude.ai/artifact/8uJxSk1a8d3h25LxTA1Z1K) | Technology Selection for the Reservation Demo | Next.js vs Nuxt, .NET, PostgreSQL, SignalR, PWA, floor plan |
-| [ADR-002](https://claude.ai/artifact/1cCJp3NJhwEDWs5KvLfGqT) | Event-driven Architecture | Outbox, worker, event catalogue, envelope, delivery, versioning |
-| [ADR-003](https://claude.ai/artifact/Bs3MghWHR2kpw2S5oZxfM4) | Data Architecture for the Reservation System | PostgreSQL vs SQL Server, data model, double booking, offline, privacy |
-| [ADR-004](https://claude.ai/artifact/85bugiUSpUYYKhJ3X7tP9t) | Cross-cutting Concerns | Security, contracts, validation, error handling, logging |
-| [ADR-005](https://claude.ai/artifact/Cyq95yBMujMRR8Rzk27EtK) | AWS Hosting and Deployment | Region, compute, network, CI/CD, monitoring, cost |
+| [ADR-001](adr/ADR-001%20Technology%20Selection.md) | Technology Selection for the Reservation Demo | Next.js vs Nuxt, .NET, PostgreSQL, SignalR, PWA, floor plan |
+| [ADR-002](adr/ADR-002%20Event-driven%20Architecture.md) | Event-driven Architecture | Outbox, worker, event catalogue, envelope, delivery, versioning |
+| [ADR-003](adr/ADR-003%20Data%20Architecture.md) | Data Architecture for the Reservation System | PostgreSQL vs SQL Server, data model, double booking, offline, privacy |
+| [ADR-004](adr/ADR-004%20Cross-cutting%20Concerns.md) | Cross-cutting Concerns | Security, contracts, validation, error handling, logging |
+| [ADR-005](adr/ADR-005%20AWS%20Hosting%20and%20Deployment.md) | AWS Hosting and Deployment | Region, compute, network, CI/CD, monitoring, cost |
 
-All five ADRs are **Accepted** (9 November 2026). Markdown copies are in [`adr/`](adr/); the links above are the live versions.
+All five ADRs are **Accepted** (9 November 2026). The files in [`adr/`](adr/) are the authoritative versions; change them there.
 
 ---
 

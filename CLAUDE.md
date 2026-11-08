@@ -4,7 +4,7 @@ Guidance for Claude Code in this repository. Keep this file short; details live 
 
 ## What this is
 
-A restaurant reservation demo (fictional venue **Golden Dragon**, Auckland, 14 tables, English and Chinese) that will later connect to a partner's POS. Guests book and pay deposits online; hosts run the floor on a tablet; a mock POS receives `OpenTable` / `ApplyDeposit` and sends `BillClosed`.
+A restaurant reservation demo (fictional venue **Golden Dragon**, Auckland, 14 tables, English and Chinese) that will later connect to a partner's POS. Guests book and pay deposits online; hosts run the floor on a tablet; an in-process mock POS receives `OpenTable` / `ApplyDeposit` and sends `BillClosed`.
 
 ## Source of truth (read before changing anything)
 
@@ -16,7 +16,7 @@ A restaurant reservation demo (fictional venue **Golden Dragon**, Auckland, 14 t
 | Why a choice was made | `docs/adr/ADR-001` … `ADR-005` |
 | What to build next | `docs/BUILD-PLAN.md` |
 
-Order of authority: **ADR > Design.md > Architecture.md**. If code and docs disagree, stop and tell me; do not silently change the docs or the design.
+The files in this repository are the source of truth for every document, ADRs included (`docs/adr/` is authoritative; there are no external "live" copies). Order of authority: **ADR > Design.md > Architecture.md**. If code and docs disagree, stop and tell me; do not silently change the docs or the design.
 
 ## Stack
 
@@ -40,10 +40,11 @@ infra/             CDK stacks
 ## Commands
 
 ```bash
-docker compose up -d                     # PostgreSQL (and later the mock POS)
+docker compose up -d                     # PostgreSQL only (the mock POS runs inside the API)
 dotnet build
 dotnet test                              # unit + integration (Docker must be running)
-dotnet run --project src/Api
+dotnet run --project src/Api             # Development: applies migrations and seed at start-up (Database:MigrateOnStartup)
+dotnet ef database update --project src/Infrastructure --startup-project src/Api   # manual alternative
 cd web && npm run generate:api && npm run dev
 cd web && npx playwright test
 ```
@@ -53,7 +54,7 @@ Keep this section in step with the real scripts when they change.
 ## Rules that must not be broken
 
 1. **Never name the partner or its products** in code, comments, commit messages or docs. Use "the POS" or "the partner".
-2. **All data stays in AWS.** No third-party SaaS that stores data (no Sentry, Datadog, Auth0).
+2. **All data stays in AWS.** No third-party SaaS that stores data (no Sentry, Datadog, Auth0). Accepted exception: Stripe holds card and payment data (PCI scope stays with Stripe; we store only payment references). In the pilot, SMS and email go through AWS services.
 3. **One transaction per command:** state change + outbox rows together. Nothing is sent from inside a request.
 4. **Domain events are raised only inside aggregates** via `Raise(...)`, which stamps `LastEventSequence`. `Version` (xmin) is for concurrency only.
 5. **Every event consumer is idempotent** (inbox row per consumer + event ID, inside a savepoint in the dispatcher's transaction). Tests send each event twice.
@@ -63,8 +64,8 @@ Keep this section in step with the real scripts when they change.
 9. **Never log personal data** (names, full phone numbers, emails, booking notes, tokens, request bodies).
 10. **Time through `TimeProvider`**, stored in UTC, shown in `Pacific/Auckland`. Money in integer cents NZD.
 11. **Secrets** come from .NET user secrets locally and Secrets Manager in AWS. Never commit them; never read `.env*` files.
-12. **Staff sign-in in the demo is a fixed demo host session.** Cognito is a pilot feature; don't add it.
-13. **Out of scope for the demo:** floor-plan editor, combining tables, split bills, real SMS, real POS, reports, multiple venues.
+12. **Staff access in the demo is a fixed demo session** issued by `/demo-login` for a passcode, as a cookie with role `Host` or `Presenter` (Design §17). Cognito is a pilot feature; don't add it.
+13. **Out of scope for the demo:** see `docs/Requirements.md` §11, which is the full list. Don't build anything on it.
 
 ## How to work
 

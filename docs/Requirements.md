@@ -3,12 +3,12 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Agreed and frozen (v1.0) for the demo build (2–3 weeks) |
+| **Status** | Agreed and frozen (v1.0) for the demo build (3–4 weeks) |
 | **Owner** | Antonio Huang |
 | **Last updated** | 9 November 2026 |
 | **Related** | [`Architecture.md`](Architecture.md); ADR-001 to ADR-005 |
 
-The demo proves six capabilities in a 20-minute story set at one sample restaurant, built within 2–3 weeks. These requirements drive the target architecture, and they double as the test checklist for the build.
+The demo proves six capabilities in a 20-minute story set at one sample restaurant, built within 3–4 weeks. These requirements drive the target architecture, and they double as the test checklist for the build.
 
 Event names follow the catalogue in ADR-002 (event-driven architecture). Requirement IDs in brackets (e.g. F-01) refer to the business requirements document.
 
@@ -277,7 +277,7 @@ These are the main drivers for the architecture decisions. Each quality attribut
 
 ### Constraints
 
-- **Time:** ready within 2–3 weeks; one developer using Claude Code.
+- **Time:** ready within 3–4 weeks (about 17 working days); one developer using Claude Code.
 - **Cost:** near-zero running cost; free or low-cost hosting tiers only (about USD 35 a month on AWS, ADR-005).
 - **Payments:** Stripe test mode only; no real money or card data.
 - **Integrations:** SMS and POS are simulated; no access to the partner's systems.

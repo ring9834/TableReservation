@@ -5,7 +5,7 @@
 | **System**       | Restaurant and catering reservation system, demo build                                         |
 | **Status**       | Draft for the demo build                                                                       |
 | **Owner**        | Antonio Huang                                                                                  |
-| **Last updated** | 8 November 2026                                                                                |
+| **Last updated** | 9 November 2026                                                                                |
 | **Inputs**       | [`Requirements.md`](Requirements.md), [`Architecture.md`](Architecture.md), ADR-001 to ADR-005 |
 
 This file turns the requirements and ADRs into buildable design: classes and their relationships, state machines, events, sequences, database tables, endpoints and background jobs. It is written for the developer and for Claude Code.
@@ -27,6 +27,7 @@ Changes made on **8 November** are **highlighted in yellow with an orange bar in
 | Refund decided once, at cancellation (8 Nov) | `Booking.Cancel` asks `RefundPolicy`; `BookingCancelled` carries the decision; the refund handler only acts on it | §8.1, §8.3 |
 | Reminder timing (8 Nov) | No reminder for bookings made under 24 h ahead or starting within 2 h; a warning before a late cancellation | §7.1, §9.2, §20 |
 | Front-end translation library (8 Nov) | react-i18next, which works with the static export | §18.1, §18.2, §20 |
+| Pre-build decisions D1–D12 (9 Nov) | `invalid_transition` (409) separate from `rule_broken` (422); demo login with `Host` and `Presenter` roles; payment after an expired hold; ADR-004 and translation rows in §20 resolved | §3.1, §8.1, §8.3, §9.2, §12, §14, §17, §18.1, §18.2, §20 |
 | Clean-up (8 Nov) | Schema aligned with §6.6 and §7.1, inbound POS fields, explanations tidied, API and traceability updated | §2.1–§2.4, §3.1, §3.3, §4.3, §6.1, §6.2, §6.5, §9.1, §13, §14, §19 |
 
 ## Contents
@@ -467,7 +468,9 @@ stateDiagram-v2
 | → `PendingPayment`             | `Create`         | Party within online limit; slot within service hours; deposit rule applies                                                 | `Terms` copied from venue settings (§2.6); `HoldExpiresAt = now + 10 min`; `Deposit.Status = Pending`; table assigned | `BookingCreated`                                            |
 | → `Booked`                     | `Create`         | As above, no deposit                                                                                                       | `Terms` copied (§2.6); table assigned                                                                                 | `BookingCreated`                                            |
 | → `Seated`                     | `CreateWalkIn`   | Table free now for the turn time                                                                                           | `Channel = WalkIn`; `Period = [now, now + turn)`; `SeatedAt = now`                                                  | `BookingCreated`, `BookingSeated` (`source: walkIn`)        |
-| `PendingPayment` → `Booked`    | `CaptureDeposit` | Status is `PendingPayment`; amount equals deposit due; hold not expired **or** table still free                            | `Deposit.Status = Captured`; `HoldExpiresAt = null`                                                                   | `DepositCaptured`                                           |
+| `PendingPayment` → `Booked`    | `CaptureDeposit` | Status is `PendingPayment`; amount equals deposit due; `now < HoldExpiresAt`, **or** the hold has expired but the expiry job has not run yet and the re-checked table is still free | `Deposit.Status = Captured`; `HoldExpiresAt = null`                                                                   | `DepositCaptured`                                           |
+| `PendingPayment` → `Cancelled` | `CaptureDeposit` | Status is `PendingPayment`; the hold has expired (expiry job not run yet) and the re-checked table is taken | `Deposit.Status = Captured`, then `Cancel(HoldExpired)`: table released, refund decision `full` (§8.3)                | `BookingCancelled` (`reason: HoldExpired`) (+ `DepositRefunded` later, from Stripe) |
+| `Cancelled` (no change)        | `CaptureDeposit` | Status is `Cancelled` with reason `HoldExpired` (the expiry job already ran)                                               | None. Returns `Error hold_expired`; `CaptureDepositHandler` refunds the payment (§8.1)                                | —                                                           |
 | `PendingPayment` → `Cancelled` | `ExpireHold`     | `now ≥ HoldExpiresAt`                                                                                                      | `Deposit.Status = Released`; table released                                                                           | `BookingCancelled` (`reason: HoldExpired`)                  |
 | `Booked` → `Confirmed`         | `Confirm`        | Status `Booked`; `now < Period.Start`                                                                                      | Reminder response recorded                                                                                            | `BookingConfirmed`                                          |
 | → `Seated`                     | `Seat`           | Status `Booked` or `Confirmed`; tables free from `now` to `now + turn`                                                     | `Period = [now, now + turn)`; `SeatedAt = now`; tables reassigned if host chose others                                | `BookingSeated` (`source: booking`)                         |
@@ -475,7 +478,7 @@ stateDiagram-v2
 | `Seated` → `Completed`         | `Complete`       | Status `Seated`                                                                                                            | Bill added to `Bills` if from POS                                                                                     | `BookingCompleted`, `TableCleared`                          |
 | `Completed` → `Completed`      | `AttachLateBill` | Completed by `ClearedByHost`; `Bills` empty; `closedAt − CompletedAt ≤ LateBillMatchMinutes` (or matched by a manager) | Bill added to `Bills`                                                                                                 | `BookingBillAttached`                                       |
 
-Any transition not in the table returns `Error.Conflict("invalid_transition")` → HTTP `409` with code `rule_broken`. Calling a method that leads to the current state (for example a second `Confirm`) is a no-op that returns success and raises nothing, so repeated taps and retried requests are safe.
+Any transition not in the table returns `Error.Conflict("invalid_transition")` → HTTP `409` with code `invalid_transition`. The front end refetches the record and shows "This booking has just changed". `422 rule_broken` is kept for business rules broken by valid input (e.g. `deposit_required`). Calling a method that leads to the current state (for example a second `Confirm`) is a no-op that returns success and raises nothing, so repeated taps and retried requests are safe.
 
 **Active statuses** (hold a table in the exclusion constraint): `PendingPayment`, `Booked`, `Confirmed`, `Seated`.
 
@@ -1282,7 +1285,7 @@ It shows how the system works with Stripe in both directions: Stripe telling us 
 | Class                 | Role                                                                                                                                                                           |
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | StripeWebhookEndpoint | Receives Stripe webhooks, verifies them, de-duplicates with the inbox, and routes each to a handler                                                                            |
-| CaptureDepositHandler | Marks the deposit captured. If the 10-minute hold had already expired and the table is gone, it cancels the booking and refunds (§12).                                         |
+| CaptureDepositHandler | Calls `booking.CaptureDeposit(...)`. Booking still `PendingPayment` after the hold expired: the table is re-checked; free → captured as normal, taken → `Cancel(HoldExpired)` with a full refund through `RefundOnCancelHandler`. Booking already `Cancelled(HoldExpired)`: the booking returns `hold_expired`, and the handler calls `IPaymentProvider.Refund(...)` with idempotency key = `paymentIntentId`, writes an audit entry and records the inbox row, with no booking state change. Stripe's later `charge.refunded` for that payment changes nothing on the booking. The guest page shows "time no longer available, refunded" (§12). |
 | RecordRefundHandler   | Records a refund that Stripe has confirmed                                                                                                                                     |
 | IPaymentProvider      | The single seam to the payment provider: create a deposit, refund, parse webhooks                                                                                              |
 | StripePaymentProvider | The Stripe implementation; holds the Stripe client and webhook secret (from Secrets Manager)                                                                                   |
@@ -1305,6 +1308,7 @@ It shows how the system works with Stripe in both directions: Stripe telling us 
 | Guest                 | \< 2 h before start | No refund (deposit kept)    |
 | Host                  | Any time            | Full refund                 |
 | System (hold expired) | Before payment      | Not applicable (`Released`) |
+| System (hold expired) | Payment arrived after the hold expired and the table is taken | Full refund (§3.1, §12) |
 
 The hours and refund amounts come from `booking.Terms.Cancellation` (§2.6), so a later change to the venue's rule does not affect this booking.
 
@@ -1390,19 +1394,19 @@ No mediator library is used, which also avoids MediatR's commercial licence (202
 | **Feature** | **Command**                                                         | **Aggregate method(s)**                                                | **Main errors**                                          |
 |-------------|---------------------------------------------------------------------|------------------------------------------------------------------------|----------------------------------------------------------|
 | Bookings    | `CreateOnlineBooking`                                               | `Booking.Create`; Stripe intent if deposit due                         | `slot_taken`, `party_too_large`, `outside_service_hours` |
-| Bookings    | `ConfirmBooking` (guest link)                                       | `Confirm`                                                              | `invalid_link`, `rule_broken`                            |
-| Bookings    | `CancelBooking` (guest link or host)                                | `Cancel`                                                               | `invalid_link`, `rule_broken`                            |
+| Bookings    | `ConfirmBooking` (guest link)                                       | `Confirm`                                                              | `invalid_link`, `invalid_transition`                     |
+| Bookings    | `CancelBooking` (guest link or host)                                | `Cancel`                                                               | `invalid_link`, `invalid_transition`                     |
 | Bookings    | `SeatBooking`                                                       | `Seat`                                                                 | `slot_taken`, `version_conflict`                         |
 | Bookings    | `SeatWalkIn`                                                        | `Booking.CreateWalkIn` (+ `WaitlistEntry.MarkSeated` if from waitlist) | `slot_taken`                                             |
 | Bookings    | `ClearTable`                                                        | `Complete(ClearedByHost)`                                              | `not_found` (no seated booking)                          |
 | Bookings    | `CloseBill` (POS inbound)                                           | `Complete(BillClosed, bill)` or `AttachLateBill` (§6.5)                | (idempotent); no match → POS message `Unmatched`         |
 | Bookings    | `MatchPosBill` (manager)                                            | `AttachLateBill` (`matchedBy: manual`)                                 | `rule_broken` (booking already has a bill)               |
 | Bookings    | `DismissPosBill` (manager)                                          | — (POS message → `Dismissed`)                                          | —                                                        |
-| Payments    | `CaptureDeposit` (Stripe inbound)                                   | `CaptureDeposit`                                                       | `hold_expired` → automatic refund                        |
+| Payments    | `CaptureDeposit` (Stripe inbound)                                   | `CaptureDeposit`                                                       | `hold_expired` → refund by the handler, no state change (§8.1) |
 | Payments    | `RecordRefund` (Stripe inbound)                                     | `RecordRefund`                                                         | (idempotent)                                             |
 | Waitlist    | `JoinWaitlist`                                                      | `WaitlistEntry.Join`                                                   | `validation_failed`                                      |
-| Waitlist    | `NotifyWaitlistEntry`                                               | `Notify`                                                               | `rule_broken`                                            |
-| Waitlist    | `EndWaitlistEntry`                                                  | `WalkAway` / `Remove`                                                  | `rule_broken`                                            |
+| Waitlist    | `NotifyWaitlistEntry`                                               | `Notify`                                                               | `invalid_transition`                                     |
+| Waitlist    | `EndWaitlistEntry`                                                  | `WalkAway` / `Remove`                                                  | `invalid_transition`                                     |
 | Messaging   | `SendRemindersNow` (presenter)                                      | `RecordReminder` on each unconfirmed booking tonight starting 2 h or more from now (§7.1) | —                                                        |
 | Demo        | `ResetDemo`, `SetDemoClock`, `SetMockPosOnline`, `SimulateBillPaid` | —                                                                      | —                                                        |
 
@@ -1607,7 +1611,7 @@ When a table frees: the first `Waiting` or `Notified` entry, by `JoinedAt`, whos
 | Two bookings for one table at one time       | `EXCLUDE USING gist (table_id WITH =, period WITH &&) WHERE (active)` on `table_assignments`                | `23P01` → `409 slot_taken`                      |
 | Pacing exceeded by two simultaneous bookings | `pg_advisory_xact_lock(hash(venue_id, slot_start))` before counting covers in the create transaction        | `409 slot_taken`                                |
 | Two hosts change one booking                 | `xmin`-based row version on every aggregate (EF Core concurrency token)                                     | `409 version_conflict`                          |
-| Deposit paid after hold expired              | `CaptureDeposit` re-checks the table; if taken, booking is cancelled and the payment refunded automatically | Guest sees "time no longer available, refunded" |
+| Deposit paid after hold expired              | Booking still `PendingPayment` (expiry job not run yet): `CaptureDeposit` re-checks the table; free → captured as normal, taken → `Cancel(HoldExpired)` and refund. Booking already `Cancelled(HoldExpired)`: `CaptureDeposit` returns `hold_expired`; the handler refunds through `IPaymentProvider` with idempotency key = `paymentIntentId`, writes an audit entry and records the inbox row; no booking state change | Guest sees "time no longer available, refunded" |
 | Duplicate Stripe or POS webhooks             | Inbox unique key `(consumer, message_id)`                                                                   | `200`, no-op                                    |
 | Duplicate event handling                     | `IdempotentHandlerDecorator` + inbox                                                                        | —                                               |
 | Outbox order across workers                  | `FOR UPDATE SKIP LOCKED` + skip aggregates with earlier pending rows                                        | —                                               |
@@ -1762,6 +1766,7 @@ Base path `/api/v1`. Venue-scoped routes are `/api/v1/venues/{venueId}/…`. All
 
 | **Method** | **Path**                                                                     | **Caller**           | **Command / query**                                                                         |
 |------------|------------------------------------------------------------------------------|----------------------|---------------------------------------------------------------------------------------------|
+| POST       | `/demo-login` `{passcode}`                                                   | Public (demo only)   | Issues the demo session cookie with role `Host` or `Presenter` (§17); 5 attempts a minute per IP |
 | GET        | `/venues/{venueId}/availability?date&partySize&time`                         | Guest                | `GetAvailability`                                                                           |
 | POST       | `/venues/{venueId}/bookings`                                                 | Guest                | `CreateOnlineBooking` → `201 {bookingId, reference, status, clientSecret?, holdExpiresAt?}` |
 | GET        | `/venues/{venueId}/bookings/{id}/status`                                     | Guest                | Status poll while paying                                                                    |
@@ -1793,7 +1798,9 @@ Base path `/api/v1`. Venue-scoped routes are `/api/v1/venues/{venueId}/…`. All
 | POST       | `/demo/pos/bill-paid` `{tableId, totalCents}`                                | Presenter / host     | `SimulateBillPaid`                                                                          |
 | POST       | `/demo/reminders/send-now`                                                   | Presenter            | `SendRemindersNow`                                                                          |
 
-`/demo/*` endpoints exist only when `Demo:Enabled = true` and are never mapped in the pilot.
+`/demo-login` and `/demo/*` endpoints exist only when `Demo:Enabled = true` and are never mapped in the pilot.
+
+**Callers:** Guest routes are public. Host routes need the `Host` policy, which a `Presenter` also satisfies. Presenter routes (`/demo/*`, the message log and the POS log) need the `Presenter` policy. `/demo/pos/bill-paid` is the one `/demo/*` route a host may also call, because the host app's "Bill paid" button uses it. In the demo, "Presenter / manager" means `Presenter`.
 
 ## 15. Real-time contract (SignalR)
 
@@ -1833,9 +1840,9 @@ All jobs use TimeProvider, so DemoClock moves them too. In the demo they run in 
 | `MockPosAdapter`                         | Online/offline switch; accepts messages; simulates `BillClosed`                                                              | Step 6, QA-5                    |
 | `PhonePanelSender`                       | Shows texts on the presenter screen                                                                                          | Steps 1, 4, 5                   |
 | Presenter controls                       | Reset, clock, POS online/offline, "Send reminders now"                                                                       | Demo script                     |
-| Demo host session **\[pilot: Cognito\]** | The host app opens signed in as a fixed demo host for Golden Dragon; the authorisation policies still run with that identity | Out of scope: staff logins      |
+| Demo login and session **\[pilot: Cognito\]** | Host and presenter screens start at `/demo-login`, which takes a passcode. The API compares it in constant time with `HostPasscode` and `PresenterPasscode` (user secrets locally, Secrets Manager in AWS) and issues a fixed Golden Dragon session as an `HttpOnly`, `Secure`, `SameSite=Strict` cookie with role `Host` or `Presenter`, valid for 12 hours. Rate limit: 5 attempts a minute per IP. Guest pages stay public | Out of scope: staff logins      |
 
-The demo host session keeps the ADR-004 pipeline intact: an `IUserContext` returns a fixed `Staff/Host` actor with `venue_ids = [GoldenDragon]`. Turning on Cognito in the pilot replaces only this provider.
+The demo session keeps the ADR-004 pipeline intact: an `IUserContext` reads the cookie and returns a fixed `Staff` actor with role `Host` or `Presenter` and `venue_ids = [GoldenDragon]`. `Presenter` is a demo-only role: host permissions plus `/demo/*` and the message and POS logs. Turning on Cognito in the pilot replaces only this provider and drops the `Presenter` role.
 
 ## 18. Front-end design
 
@@ -1852,8 +1859,9 @@ web/src/
 │  ├─ floor-plan/       ← FloorPlan (SVG), TableShape, TableDetailsPanel, ArrivingSoonBadge
 │  ├─ bookings/         ← TonightList, SeatDialog
 │  ├─ waitlist/         ← WaitlistPanel, JoinWaitlistDialog, NotifyButton
-│  └─ presenter/        ← PhonePanel, PosLog, DemoControls
-└─ app/                 ← Next.js routes: /book, /manage, /host, /presenter
+│  ├─ presenter/        ← PhonePanel, PosLog, DemoControls
+│  └─ demo-login/       ← passcode form; goes to /host or /presenter by role
+└─ app/                 ← Next.js routes: /book, /manage, /demo-login, /host, /presenter
 ```
 
 ### 18.2 State
@@ -1861,7 +1869,7 @@ web/src/
 - **Server state** lives only in the TanStack Query cache, filled by generated hooks. There is no separate client store for bookings or tables.
 - **Real-time:** a notice invalidates the matching queries; the hooks refetch. The API stays the only source of truth (ADR-002).
 - **UI state** (selected table, open dialog, language) is React state or URL search params.
-- **Errors:** the generated client turns Problem Details into a typed error; one `useApiError` hook maps `code` to a translated toast or field message (ADR-004).
+- **Errors:** the generated client turns Problem Details into a typed error; one `useApiError` hook maps `code` to a translated toast or field message (ADR-004). On `409 invalid_transition` it refetches the record and shows "This booking has just changed"; on `401` the host and presenter screens go to `/demo-login`.
 - **Languages:** react-i18next, which runs fully in the browser and so works with the static export (ADR-005). English is the default; the English / 中文 switch changes language instantly without a reload (AC1.8, QA-7), and the choice is stored in the browser and sent with the booking so messages go out in the guest's language. Dates and money use the browser's `Intl` APIs in the venue's time zone and NZD.
 
 ### 18.3 Floor plan components
@@ -1920,13 +1928,14 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 
 | **Item**                                                                                    | **Proposed handling**                                                                                                                                                                                         |
 |---------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Staff sign-in in the demo (Requirements say out of scope; ADR-004 uses Cognito)             | Demo host session (§17); Cognito in the pilot. Update ADR-004 and `Architecture.md` to say so                                                                                                                 |
+| Staff sign-in in the demo (Requirements say out of scope; ADR-004 uses Cognito)             | **Resolved 9 Nov 2026.** Demo login and session (§17); Cognito in the pilot. ADR-004 and `Architecture.md` updated                                                                                                                 |
 | Layout editor and combining tables (ADR-001 lists them; Requirements put them out of scope) | Seams kept: `FloorPosition` stored, `TableAssignment` supports several tables. Not built for the demo                                                                                                         |
-| ADR-004 validation examples (deposit for 8+, party 1–20)                                    | Should read deposit for 6+ (BR-06) and online party 1–8 (BR-04)                                                                                                                                               |
+| ADR-004 validation examples (deposit for 8+, party 1–20)                                    | **Resolved 9 Nov 2026.** Should read deposit for 6+ (BR-06) and online party 1–8 (BR-04)                                                                                                                                               |
 | Seating a late party whose turn now overlaps the next booking                               | Seat fails with `slot_taken`; host picks another table. Revisit with real venues                                                                                                                              |
 | `BillClosed` for a table with no seated booking                                             | Resolved: late-match rule (§6.5); still unmatched → manager matches or dismisses. Ask the partner whether the POS can return `bookingId`                                                                      |
 | SMS provider for NZ numbers \[pilot\]                                                       | AWS End User Messaging SMS behind `IMessageSender` (§7.1). Before the pilot, confirm NZ mobile delivery, sender ID or number type, and opt-out handling                                                       |
 | Split bills for one table                                                                   | Not built; one bill per booking, keyed by POS bill ID, stored in `booking_bills` (§6.6). Ask the partner whether their POS supports split bills per table, and whether venues use virtual tables to fake them |
-| Front-end translation library | react-i18next (§18.2), chosen because Next.js's built-in i18n routing does not work with a static export. Record the choice in ADR-001 |
+| Front-end translation library | **Resolved 9 Nov 2026.** react-i18next (§18.2), chosen because Next.js's built-in i18n routing does not work with a static export. Recorded in ADR-001 |
+| Demo session cookie across origins (`SameSite=Strict`) | The browser sends the cookie only when the front end (CloudFront) and the API (Lightsail) are on the same site, e.g. CloudFront routes `/api/*` and `/hubs/*` to the API, or both sit under one parent domain. Decide before M12 |
 | Reminder timing rules | Proposed in §7.1 (no reminder for bookings made under 24 h ahead or starting within 2 h; warning before a late cancellation). Confirm with the partner |
 | Language for guests who switch mid-booking                                                  | Guest's `Language` is the language active when they submit                                                                                                                                                    |
