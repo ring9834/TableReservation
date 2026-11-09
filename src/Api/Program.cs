@@ -14,8 +14,10 @@ var connectionString = builder.Configuration.GetConnectionString("Reservations")
             "ConnectionStrings:Reservations is not set. Locally, set it with dotnet user-secrets (see CLAUDE.md)."));
 
 builder.Services.AddInfrastructure(connectionString);
+builder.Services.AddSingleton<OutboxHealthCheck>();
 builder.Services.AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database", tags: [HealthTags.Ready]);
+    .AddCheck<DatabaseHealthCheck>("database", tags: [HealthTags.Ready])
+    .AddCheck<OutboxHealthCheck>("outbox", tags: [HealthTags.Ready]);
 
 var app = builder.Build();
 
@@ -26,7 +28,7 @@ if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Databas
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync(app.Lifetime.ApplicationStopping);
 }
 
-// Live: the process is up. Ready: its dependencies answer (database now; outbox lag in M3).
+// Live: the process is up. Ready: its dependencies answer (database, and outbox lag: Degraded still returns 200).
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains(HealthTags.Ready) });
 

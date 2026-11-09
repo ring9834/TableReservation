@@ -87,4 +87,25 @@ public sealed class ConcurrencyTests(PostgresFixture postgres)
         await using var check = database.Context();
         Assert.Equal(BookingStatus.Confirmed, (await check.Bookings.SingleAsync(b => b.Reference == reference, Ct)).Status);
     }
+
+    [Fact]
+    public async Task Other_unique_violations_stay_plain_update_errors()
+    {
+        await using var database = await TestDatabase.CreateAsync(postgres);
+        await using var db = database.Context();
+        var venue = await db.Venues.SingleAsync(Ct);
+        var tomorrow = GoldenDragon.At(DemoTime.Tonight.AddDays(1), new TimeOnly(19, 0));
+
+        // Seed booking #1's reference again: ux on (venue_id, reference), not the outbox key.
+        db.Bookings.Add(Booking.Create(
+            venue, null, BookingReference.Parse(GoldenDragon.Bookings[0].Reference).Value, BookingChannel.Phone, PartySize.Of(2),
+            tomorrow, [GoldenDragon.TableId("T1")], null, null, DemoTime.Now).Value);
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));
+
+        Assert.IsNotType<DbUpdateConcurrencyException>(error);
+        var postgresError = Assert.IsType<PostgresException>(error.InnerException);
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, postgresError.SqlState);
+        Assert.Equal("ix_bookings_venue_id_reference", postgresError.ConstraintName);
+    }
 }

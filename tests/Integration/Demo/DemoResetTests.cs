@@ -19,6 +19,17 @@ public sealed class DemoResetTests(PostgresFixture postgres)
     {
         await using var database = await TestDatabase.CreateAsync(postgres);
         await AddDemoActivityAsync(database);
+        await using (var harness = EventHarness.Create(database))
+        {
+            Assert.True(await harness.DispatchAllAsync() > 0);
+        }
+
+        await using (var before = database.Context())
+        {
+            Assert.True(await before.Outbox.AnyAsync(Ct));
+            Assert.True(await before.Inbox.CountAsync(Ct) > 1);
+            Assert.True(await before.Audit.AnyAsync(Ct));
+        }
 
         await database.ResetAsync(DemoTime.Now);
 
@@ -36,6 +47,7 @@ public sealed class DemoResetTests(PostgresFixture postgres)
         Assert.Equal(0, await db.Messages.CountAsync(Ct));
         Assert.Equal(0, await db.Inbox.CountAsync(Ct));
         Assert.Equal(0, await db.Outbox.CountAsync(Ct));
+        Assert.Equal(0, await db.Audit.CountAsync(Ct));
         Assert.Equal(1, await db.Venues.IgnoreQueryFilters().CountAsync(Ct));
     }
 

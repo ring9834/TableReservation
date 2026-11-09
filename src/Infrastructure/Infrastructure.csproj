@@ -5,6 +5,10 @@
     <RootNamespace>Reservation.Infrastructure</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- BackgroundService, options and logging for the workers; the shared framework, not a NuGet package. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
   </ItemGroup>

@@ -120,12 +120,56 @@ Record any schema detail §13 left open in Design.md in the same change set.
 
 ### M3 Event infrastructure
 ```
-Implement docs/Design.md §5: OutboxSaveChangesInterceptor, OutboxDispatcher
-(FOR UPDATE SKIP LOCKED, per-aggregate order, backoff, failed status),
-inbox with IdempotentHandlerDecorator using a savepoint inside the dispatcher's transaction,
-and the event envelope from src/Contracts.
-Integration tests: event saved in the same transaction as the change; rollback leaves no event;
-each handler run twice has one effect; a failing handler does not undo the others; order is kept per aggregate.
+Start milestone M3 (event infrastructure). Implement docs/Design.md §5 in src/Infrastructure,
+using the outbox, inbox and audit tables M2 created. Domain stays unchanged.
+
+Writing side:
+- OutboxSaveChangesInterceptor collects RaisedEvents from every tracked AggregateRoot, wraps each
+  in the src/Contracts envelope (ADR-002) using the sequence stamped by Raise(), takes
+  correlationId, causationId and actor from IRequestContext, adds the outbox rows to the same
+  transaction, then clears the aggregates' events.
+- IRequestContext: a simple implementation for now (new correlationId per scope; actor = system or
+  the fixed demo host); M4 fills it from the HTTP request and trace context.
+- After a successful commit, signal the dispatcher through an in-process channel so most events
+  go out within 100–300 ms.
+
+Two clocks:
+- Business time: the default TimeProvider (replaced by DemoClock in M11). Used for occurredAt and
+  anything domain-related.
+- Infrastructure time: a keyed TimeProvider ("infrastructure"), registered as TimeProvider.System
+  and never replaced by DemoClock. Used by OutboxDispatcher (poll timeout, next_attempt_at,
+  dispatched_at, claim query "now"), OutboxRetryPolicy, OutboxSignal.WaitAsync, OutboxHousekeeping,
+  OutboxHealthCheck, outbox.created_at and inbox.processed_at.
+
+Dispatching side:
+- OutboxDispatcher as a BackgroundService: polls every 1 s or when signalled; claims a batch with
+  FOR UPDATE SKIP LOCKED; per aggregate, only the lowest undelivered sequence is eligible, so a
+  failing event holds back later events for that aggregate only.
+- For each event, every registered IEventHandler<T> runs inside its own savepoint in the
+  dispatcher's transaction, wrapped by IdempotentHandlerDecorator (inbox row (consumer, eventId)
+  written in the same savepoint). A failing handler rolls back its savepoint only.
+- The outbox row is marked delivered only when every handler has succeeded; otherwise attempts+1
+  and next_attempt_at by the ADR-002 backoff (5 s, 30 s, 2 min, 10 min, then every 30 min for 24 h),
+  then status failed, logged as an error. Use the infrastructure clock for all of this timing.
+- Housekeeping: delete delivered outbox rows older than 30 days (daily).
+- Add a test-only recording handler and an AuditHandler that writes one audit_log row per
+  event (unique on event_id), so M3 has a real consumer. Other consumers come in later milestones.
+- Add the outbox lag check to /health/ready (ADR-004).
+
+Integration tests (Testcontainers, TestClock for each clock):
+- Event saved in the same transaction as the state change; a rolled-back save leaves no outbox row.
+- Sequences in the outbox match LastEventSequence; a second save continues from it.
+- Delivering the same event twice has one effect per handler (inbox).
+- A failing handler doesn't undo the other handlers' work; its retry follows the backoff; after the
+  last retry the row is failed and later events for that aggregate stay pending, while other
+  aggregates still flow.
+- Business clock frozen, infrastructure clock advancing: a failing handler is retried on schedule
+  and polling still runs.
+- Two dispatchers running at once never deliver the same row twice and keep per-aggregate order.
+- Seed data produces no outbox rows; DemoReset empties outbox and inbox.
+- The interceptor logs no personal data (names, phone numbers) — check the captured log output.
+
+Record any detail §5 left open in Design.md in the same change set.
 ```
 
 ### M4 Booking API

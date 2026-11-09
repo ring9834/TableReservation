@@ -73,6 +73,7 @@ Keep this section in step with the real scripts when they change.
 11. **Secrets** come from .NET user secrets locally and Secrets Manager in AWS. Never commit them; never read `.env*` files.
 12. **Staff access in the demo is a fixed demo session** issued by `/demo-login` for a passcode, as a cookie with role `Host` or `Presenter` (Design §17). Cognito is a pilot feature; don't add it.
 13. **Out of scope for the demo:** see `docs/Requirements.md` §11, which is the full list. Don't build anything on it.
+14. **Two clocks:** workers use the infrastructure clock; the domain uses the business clock. The business clock is the default `TimeProvider` (`DemoClock` in the demo). The infrastructure clock is the keyed `TimeProvider` `"infrastructure"` (`Clocks.Infrastructure`), always the system clock: polling, retries, timers and worker bookkeeping times use it (Design §5.6).
 
 ## How to work
 
