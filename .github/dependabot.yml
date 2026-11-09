@@ -4,22 +4,43 @@ updates:
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Pacific/Auckland
+    open-pull-requests-limit: 3
     groups:
       nuget-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Pacific/Auckland
+    open-pull-requests-limit: 3
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Pacific/Auckland
+    open-pull-requests-limit: 3
     groups:
       actions-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
