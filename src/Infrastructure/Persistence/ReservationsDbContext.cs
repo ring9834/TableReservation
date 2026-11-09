@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Npgsql;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Domain.Guests;
@@ -22,6 +23,9 @@ public sealed class ReservationsDbContext(DbContextOptions<ReservationsDbContext
 {
     /// <summary>Name of the global venue query filter, for <c>IgnoreQueryFilters([VenueFilter])</c>.</summary>
     public const string VenueFilter = "Venue";
+
+    /// <summary>The outbox unique key on <c>(aggregate_id, sequence)</c>.</summary>
+    public const string OutboxSequenceKey = "ix_outbox_aggregate_id_sequence";
 
     public DbSet<Venue> Venues => Set<Venue>();
 
@@ -47,13 +51,27 @@ public sealed class ReservationsDbContext(DbContextOptions<ReservationsDbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         StampVenueIds();
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateEventSequence(ex))
+        {
+            throw StaleAggregate(ex);
+        }
     }
 
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         StampVenueIds();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateEventSequence(ex))
+        {
+            throw StaleAggregate(ex);
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -137,6 +155,18 @@ public sealed class ReservationsDbContext(DbContextOptions<ReservationsDbContext
             }
         }
     }
+
+    /// <summary>
+    /// A stale aggregate raises an event with a sequence another writer already used, and the outbox key
+    /// <c>(aggregate_id, sequence)</c> refuses it, possibly before the xmin check runs. Both mean the same
+    /// thing, so both surface as a concurrency error (→ 409 <c>version_conflict</c>), Design §5.6.
+    /// </summary>
+    private static bool IsDuplicateEventSequence(DbUpdateException ex) =>
+        ex is not DbUpdateConcurrencyException
+        && ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OutboxSequenceKey };
+
+    private static DbUpdateConcurrencyException StaleAggregate(DbUpdateException ex) =>
+        new("The aggregate was changed by someone else: its event sequence is already in the outbox.", ex);
 
     private static void Stamp(EntityEntry entry, VenueId venueId)
     {
