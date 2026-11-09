@@ -96,6 +96,7 @@ Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUI
 
 ### M12 Deploy and rehearse
 Also add a container image scan of the API image to the CI pipeline (ADR-005).
+Use the Route 53 demo domain for both (`app.<domain>` for the front end, `api.<domain>` for the API); the default cloudfront.net/amazonlightsail.com hostnames won't work with the demo session cookie (Design §17, §20).
 
 ## Definition of done (every milestone)
 

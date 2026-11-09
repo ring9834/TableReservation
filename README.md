@@ -118,12 +118,17 @@ All data stays in AWS. Exact versions will be pinned when the code starts.
 
 ## Getting started
 
-There is no code yet. Once the demo build starts, this section will cover:
+Prerequisites: .NET 10 SDK (pinned in `global.json`), Node.js 22, Docker Desktop.
 
-- prerequisites (.NET SDK, Node.js, Docker)
-- `docker compose up` for PostgreSQL (the mock POS runs inside the API)
-- running the API and the Next.js app
-- resetting the Golden Dragon demo data
+```bash
+docker compose up -d       # PostgreSQL 16 (the mock POS runs inside the API)
+dotnet user-secrets set ConnectionStrings:Reservations "Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=local_dev_only" --project src/Api
+dotnet test                # unit + integration (Testcontainers needs Docker running)
+dotnet run --project src/Api                 # https://localhost:5001/health/ready
+cd web && npm ci && npm run dev              # http://localhost:3000
+```
+
+Resetting the Golden Dragon demo data arrives with the seed (M2) and the presenter controls (M11).
 
 ---
 

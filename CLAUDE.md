@@ -41,13 +41,15 @@ infra/             CDK stacks
 
 ```bash
 docker compose up -d                     # PostgreSQL only (the mock POS runs inside the API)
-dotnet build
-dotnet test                              # unit + integration (Docker must be running)
-dotnet run --project src/Api             # Development: applies migrations and seed at start-up (Database:MigrateOnStartup)
-dotnet ef database update --project src/Infrastructure --startup-project src/Api   # manual alternative
-cd web && npm run generate:api && npm run dev
-cd web && npx playwright test
+dotnet user-secrets set ConnectionStrings:Reservations "Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=local_dev_only" --project src/Api   # once
+dotnet build                             # .NET 10 SDK pinned in global.json; warnings are errors
+dotnet test                              # unit + integration on Microsoft.Testing.Platform (Docker must be running)
+dotnet run --project src/Api             # https://localhost:5001; /health/live, /health/ready
+cd web && npm ci && npm run dev
+cd web && npm run lint && npm run typecheck && npm run format:check && npm run build   # what CI runs
 ```
+
+Coming later: from M2, `dotnet run` applies migrations and the seed at start-up in Development (`Database:MigrateOnStartup`), with `dotnet ef database update --project src/Infrastructure --startup-project src/Api` as the manual alternative. From M4, `npm run generate:api` (orval) and `npx playwright test`.
 
 Keep this section in step with the real scripts when they change.
 

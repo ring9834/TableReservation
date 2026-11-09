@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Event envelope and versioned event types. -->
+  <PropertyGroup>
+    <AssemblyName>Reservation.Contracts</AssemblyName>
+    <RootNamespace>Reservation.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>
