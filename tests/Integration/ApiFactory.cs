@@ -3,9 +3,15 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Reservation.Tests.Integration;
 
-/// <summary>Runs the real API in memory against the test container's database.</summary>
-public sealed class ApiFactory(string connectionString) : WebApplicationFactory<Program>
+/// <summary>
+/// Runs the real API in memory (Development environment) against the test container's database.
+/// Migrate-and-seed at start-up is off unless a test asks for it.
+/// </summary>
+public sealed class ApiFactory(string connectionString, bool migrateOnStartup = false) : WebApplicationFactory<Program>
 {
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         builder.UseSetting("ConnectionStrings:Reservations", connectionString);
+        builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
+    }
 }

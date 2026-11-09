@@ -72,14 +72,50 @@ Tests (tests/Unit):
 
 ### M2 Database and seed
 ```
-Implement docs/Design.md §13 with EF Core migrations in src/Infrastructure:
-all tables, the exclusion constraint for overlapping bookings, xmin concurrency,
-the unique index on booking_bills(booking_id), and the venue global query filter.
-Add the Golden Dragon seed (14 tables, 8 bookings tonight per Requirements §10) and a reset method.
-In Development only, apply migrations and the seed at start-up when Database:MigrateOnStartup=true;
-CI and AWS use the EF migration bundle (ADR-005).
-Integration tests (Testcontainers): two concurrent bookings for the last table, exactly one succeeds;
-a stale version update returns a concurrency failure.
+Start milestone M2 (database, migrations and seed). Implement docs/Design.md §12 and §13 in
+src/Infrastructure with EF Core + Npgsql. Domain stays free of EF Core.
+
+Schema and mapping:
+- Every table in §13, including outbox, inbox, pos_messages, messages and booking_bills (M3 adds
+  their behaviour; create the tables now). Include cancel_reason, refund_decision and
+  last_event_sequence.
+- snake_case names, timestamptz in UTC, money as bigint cents, enums stored as text (DM-06),
+  BookingTerms and venue settings as jsonb, strongly typed IDs and value objects through
+  converters or owned types.
+- xmin as the concurrency token on every aggregate (maps to Version).
+- The exclusion constraint on table_assignments (needs the btree_gist extension, created in the
+  migration), the unique index on booking_bills(booking_id), the unique index on
+  booking_bills(venue_id, pos_bill_id), and the global venue query filter.
+- Add private parameterless constructors to the aggregates for EF Core; no public setters.
+
+Migrations and start-up (D8):
+- Add a dotnet-tools.json with dotnet-ef pinned. One initial migration.
+- In Development only, the API applies migrations and the seed at start-up when
+  Database:MigrateOnStartup=true. Add `dotnet ef database update` to the CLAUDE.md commands.
+- CI: add a step that fails if the model has changes with no migration
+  (`dotnet ef migrations has-pending-model-changes`).
+
+Seed (Golden Dragon, Requirements §10):
+- One venue, its areas and 14 tables with floor positions, the BR-01 to BR-07 settings, and 11
+  bookings for "tonight" placed relative to the current time (TimeProvider), so the seed works on
+  any day. Bilingual guest names are fine; phone numbers must be fictional (+64 21 0xx xxxx style).
+- The seeder drives the domain with its own TimeProvider stepped through the evening: bookings
+  made the day before at 12:00 Auckland, deposits captured a minute later, seated bookings seated
+  at their start time. The seed must fit the six demo steps at 18:25 (Design §17 seed table).
+- A DemoReset service that truncates venue data and reseeds in one transaction (§17); no endpoint yet.
+
+Integration tests (Testcontainers):
+- Migrations apply to an empty database and the seed loads (14 tables, 11 bookings).
+- Two concurrent bookings for the last table at the same time: exactly one succeeds; the other
+  fails with 23P01.
+- A stale update fails with a concurrency error (xmin).
+- Round-trip: save and reload a Booking with terms, deposit, assignments, reminder and a bill;
+  everything (including LastEventSequence) comes back equal.
+- The venue filter hides another venue's bookings.
+- DemoReset leaves exactly the seed data.
+
+Ask before adding any package not already listed (e.g. EFCore.NamingConventions).
+Record any schema detail §13 left open in Design.md in the same change set.
 ```
 
 ### M3 Event infrastructure

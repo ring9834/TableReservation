@@ -51,6 +51,13 @@ public sealed class Message : AggregateRoot<MessageId>
 
     private readonly List<MessageAction> _actions;
 
+    /// <summary>For EF Core only.</summary>
+    private Message()
+    {
+        _actions = [];
+        Body = null!;
+    }
+
     private Message(
         MessageId id, VenueId venueId, GuestId guestId, MessagePurpose purpose, MessageChannel channel, Language language,
         string body, List<MessageAction> actions, Guid subjectId, DateTimeOffset createdAt, DateTimeOffset expiresAt)

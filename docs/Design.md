@@ -5,7 +5,7 @@
 | **System**       | Restaurant and catering reservation system, demo build                                         |
 | **Status**       | Draft for the demo build                                                                       |
 | **Owner**        | Antonio Huang                                                                                  |
-| **Last updated** | 9 November 2026                                                                                |
+| **Last updated** | 10 November 2026                                                                               |
 | **Inputs**       | [`Requirements.md`](Requirements.md), [`Architecture.md`](Architecture.md), ADR-001 to ADR-005 |
 
 This file turns the requirements and ADRs into buildable design: classes and their relationships, state machines, events, sequences, database tables, endpoints and background jobs. It is written for the developer and for Claude Code.
@@ -29,6 +29,7 @@ Changes made on **8 November** are **highlighted in yellow with an orange bar in
 | Front-end translation library (8 Nov) | react-i18next, which works with the static export | §18.1, §18.2, §20 |
 | Pre-build decisions D1–D12 (9 Nov) | `invalid_transition` (409) separate from `rule_broken` (422); demo login with `Host` and `Presenter` roles; payment after an expired hold; ADR-004 and translation rows in §20 resolved | §3.1, §8.1, §8.3, §9.2, §12, §14, §17, §18.1, §18.2, §20 |
 | Domain build clarifications (M1, 9 Nov) | Method signatures completed (`now` where a guard needs time, `tableStillFree` on `CaptureDeposit`, `policyShown` on `RecordReminder`, `matchedBy` and window on `AttachLateBill`); booking keeps its cancel reason and refund decision; late-match window counts either side of the clear; turn time for parties above the last rule; both reminder rules always apply | §2.2, §2.6, §3.1, §6.5, §7.1, §13 |
+| Database build details (M2, 10 Nov) | `guests.last_visit_at` added; `booking_bills` keyed by `(booking_id, pos_bill_id)` with bill IDs unique per venue; mapping notes for converters, JSON shapes, shadow `venue_id`, the named venue filter and constraint names; seed of 11 bookings built for the demo script with the DemoClock fixed at 18:25 | §13, §17 |
 | Clean-up (8 Nov) | Schema aligned with §6.6 and §7.1, inbound POS fields, explanations tidied, API and traceability updated | §2.1–§2.4, §3.1, §3.3, §4.3, §6.1, §6.2, §6.5, §9.1, §13, §14, §19 |
 
 ## Contents
@@ -1663,6 +1664,7 @@ CREATE TABLE guests (
   id uuid PRIMARY KEY, venue_id uuid NOT NULL REFERENCES venues(id),
   name text NOT NULL, mobile_e164 text NOT NULL, email text, language text NOT NULL,
   allergy_notes text, visit_count int NOT NULL DEFAULT 0, last_bill_cents bigint,
+  last_visit_at timestamptz,                         -- Guest.LastVisitAt (M2)
   last_event_sequence bigint NOT NULL DEFAULT 0,     -- events raised by this record (§2.2)
   UNIQUE (venue_id, mobile_e164)
 );
@@ -1691,8 +1693,9 @@ CREATE TABLE booking_bills (                         -- §6.6
   booking_id uuid NOT NULL REFERENCES bookings(id), venue_id uuid NOT NULL,
   pos_bill_id text NOT NULL, total_cents bigint NOT NULL, tip_cents bigint,
   closed_at timestamptz NOT NULL, pos_message_id uuid NOT NULL,
-  PRIMARY KEY (venue_id, pos_bill_id)
+  PRIMARY KEY (booking_id, pos_bill_id)               -- EF owned-collection key (M2, §13.1)
 );
+CREATE UNIQUE INDEX ux_booking_bills_venue_pos_bill ON booking_bills (venue_id, pos_bill_id);  -- bill IDs unique per venue
 CREATE UNIQUE INDEX ux_booking_bills_one_per_booking ON booking_bills (booking_id);  -- drop to allow split bills
 ```
 
@@ -1701,7 +1704,8 @@ CREATE TABLE table_assignments (
   booking_id uuid NOT NULL REFERENCES bookings(id), table_id uuid NOT NULL REFERENCES tables(id),
   venue_id uuid NOT NULL, period tstzrange NOT NULL, active boolean NOT NULL,
   PRIMARY KEY (booking_id, table_id),
-  EXCLUDE USING gist (table_id WITH =, period WITH &&) WHERE (active)
+  CONSTRAINT ex_table_assignments_no_overlap
+    EXCLUDE USING gist (table_id WITH =, period WITH &&) WHERE (active)
 );
 ```
 
@@ -1768,6 +1772,27 @@ CREATE TABLE audit_log (
   occurred_at timestamptz NOT NULL, summary jsonb NOT NULL
 );
 ```
+
+### 13.1 Mapping notes (M2)
+
+Details §13 left open, settled when the schema was built (`src/Infrastructure/Persistence`). The migration `Initial` creates every table above.
+
+| **Topic** | **Decision** |
+|-----------|--------------|
+| Names | snake_case through `EFCore.NamingConventions`; keys `pk_*`, foreign keys `fk_*`, indexes `ix_*` / `ux_*`, checks `ck_*` |
+| IDs and value objects | Strongly typed IDs are `uuid` through value converters. `PartySize` → `int`, `PersonName` → `text`, `PhoneNumber` → E.164 `text`, `BookingReference` → `text`, `TimeRange` → `tstzrange` `[start, end)` |
+| Money | Columns hold integer cents in the venue currency (NZD, DM-03); there is no currency column per amount. `Deposit` is owned in the `bookings` row |
+| Times | Every `DateTimeOffset` is written as UTC (`timestamptz`) |
+| Enums | Stored as their C# names (`PendingPayment`, `ClearedByHost`, `Zh`), so partial-index filters such as `status = 'Queued'` match |
+| `jsonb` columns | `venues.settings`, `bookings.terms`, `bookings.reminder`, `tables.position`, `messages.actions`: camelCase property names, enums as camelCase strings (`"full"`), computed properties left out. Matches the §2.6 example |
+| Shadow `venue_id` | `tables`, `table_assignments` and `booking_bills` have no `VenueId` in the domain; the context copies it from the venue or booking on save |
+| `booking_bills` key | EF can't key an owned collection on a value copied from its owner, so the primary key is `(booking_id, pos_bill_id)`; `ux_booking_bills_venue_pos_bill` keeps POS bill IDs unique per venue, as before |
+| Row version | `xmin` maps to `AggregateRoot.Version` on venues, guests, bookings, waitlist entries and messages. A stale save throws `DbUpdateConcurrencyException` (→ `409 version_conflict`) |
+| Defaults | The column defaults above stay in the database, but EF always writes the value it holds |
+| Raw SQL in the migration | `ex_table_assignments_no_overlap` and `ix_bookings_venue_day` (an expression index) are not expressible in the EF model, so the migration adds them with SQL |
+| Venue filter | EF named query filter `"Venue"` (`ReservationsDbContext.VenueFilter`) on venues, areas, tables, guests, bookings, waitlist entries, messages, POS messages and the audit log, reading `IVenueContext.VenueId`; `null` matches nothing. Outbox and inbox are not filtered (the workers serve every venue). In the demo `IVenueContext` is fixed to Golden Dragon (§17); M4 reads it from the demo session. Background jobs use `IgnoreQueryFilters([VenueFilter])` |
+| Outbox, inbox, POS messages, audit | Tables and plain persistence records exist from M2; their behaviour comes in M3 (outbox, inbox, audit) and M9 (POS) |
+| Migrations at start-up | Development only, when `Database:MigrateOnStartup=true`: migrate, then seed if there is no venue (D8). CI fails on model changes without a migration (`dotnet ef migrations has-pending-model-changes`) |
 
 ## 14. HTTP API
 
@@ -1843,13 +1868,41 @@ All jobs use TimeProvider, so DemoClock moves them too. In the demo they run in 
 
 | **Component**                            | **Purpose**                                                                                                                  | **Requirement**                 |
 |------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
-| `DemoClock : TimeProvider`               | Fixed or offset "now" (e.g. Tuesday 18:30), set from the presenter controls                                                  | Assumptions in Requirements §11 |
-| `DemoSeeder`                             | Loads Golden Dragon: 2 areas, 14 tables, 8 bookings for tonight, sample guests                                               | Constraints: Reset              |
+| `DemoClock : TimeProvider`               | DemoClock fixed at 18:25 after Reset, fixed mode, not offset; the presenter controls can move it. Steps 3 and 5 depend on 18:25 (seed table below) | Assumptions in Requirements §11 |
+| `DemoSeeder`                             | Loads Golden Dragon: 2 areas, 14 tables, 11 guests and 11 bookings for tonight (seed table below)                            | Constraints: Reset              |
 | `ResetDemo`                              | Truncates venue data, reseeds, resets clock and mock POS, broadcasts `demoReset`                                             | Demo script "Before starting"   |
 | `MockPosAdapter`                         | Online/offline switch; accepts messages; simulates `BillClosed`                                                              | Step 6, QA-5                    |
 | `PhonePanelSender`                       | Shows texts on the presenter screen                                                                                          | Steps 1, 4, 5                   |
 | Presenter controls                       | Reset, clock, POS online/offline, "Send reminders now"                                                                       | Demo script                     |
 | Demo login and session **\[pilot: Cognito\]** | Host and presenter screens start at `/demo-login`, which takes a passcode. The API compares it in constant time with `HostPasscode` and `PresenterPasscode` (user secrets locally, Secrets Manager in AWS) and issues a fixed Golden Dragon session as an `HttpOnly`, `Secure`, `SameSite=Strict` cookie with role `Host` or `Presenter`, valid for 12 hours. Rate limit: 5 attempts a minute per IP. Guest pages stay public | Out of scope: staff logins      |
+
+#### Golden Dragon seed (M2)
+
+"Tonight" is today's date in Pacific/Auckland, read from the injected `TimeProvider`. The seeder then drives the domain with its own clock stepped through the evening: every booking is made **the day before at 12:00**, deposits are captured **a minute later**, the confirmed booking is confirmed **today at 10:00**, and seated parties are seated **at their start time**. Stored times therefore look like a real evening whenever the seed runs. Seed events are cleared, so the seed writes no outbox rows. `DemoReset` truncates all venue data (including outbox, inbox and POS messages) and reseeds in one transaction.
+
+Tables: Main room T1–T3 (2 seats), T4–T6 (4), T7–T9 (6), T10 (8); Window W1–W2 (2), W3–W4 (4).
+
+| # | Start | Party | Channel | Status | Table | Used by |
+|---|---|---|---|---|---|---|
+| 1 | 17:30 | 4 | Phone | Seated 17:30 | T4 | Step 4: "Bill paid" frees T4 for the waiting party of 4 |
+| 2 | 17:30 | 5 | Phone | Seated 17:30 | T9 | Step 3: blocks T9 |
+| 3 | 17:45 | 3 | Online | Seated 17:45 | W3 | Step 3: blocks W3 |
+| 4 | 18:00 | 7 | Phone | Seated 18:00 | T10 | Step 3: blocks T10 until 20:00; step 1's party of 6 at 20:00 gets T10 |
+| 5 | 18:15 | 4 | Online | Seated 18:15 | W4 | Step 3: blocks W4 |
+| 6 | 18:45 | 4 | Online | Confirmed | T5 | Arriving soon; step 6: seated while the POS is offline (`OpenTable`) |
+| 7 | 19:00 | 6 | Online | Booked, deposit captured | T7 | 19:00 pacing full (12 covers) |
+| 8 | 19:00 | 6 | Phone | Booked | T8 | 19:00 pacing full |
+| 9 | 19:15 | 4 | Online | Booked | T6 | Step 3: blocks T6; too soon for a reminder |
+| 10 | 20:30 | 2 | Online | Booked | W1 | Step 5: reminder, guest confirms |
+| 11 | 20:30 | 6 | Online | Booked, deposit captured | T9 | Step 5: reminder, guest cancels in time → full refund |
+
+Checks at 18:25 (all covered by `GoldenDragonSeedTests`):
+
+- **Step 1:** the online party of 6 at 20:00 finds T10 free for 20:00–22:00 and pacing room (0 + 6 ≤ 12); the party of 2 at 19:30 finds T1.
+- **Step 3:** a walk-in of 2 fits for [18:25, 19:40); a walk-in of 4 fits nowhere for [18:25, 19:55), because every table of 4 or more seats is taken, so they join the waitlist.
+- **Step 4:** after "Bill paid" on T4, T4 is the only table that fits the waiting party of 4.
+- **Step 5:** only #10 and #11 pass `ReminderPolicy.CanSend` (made 32.5 h ahead, start 2 h 05 min away); cancelling #11 at 18:25 is in time, so the deposit is refunded in full. At 18:30 both would sit exactly on the 2-hour boundary and after 18:30 neither would get a reminder, which is why the clock is fixed at 18:25.
+- **Step 6:** seating #6 at 18:25 holds T5 for [18:25, 19:55) with nothing else on T5.
 
 The demo session keeps the ADR-004 pipeline intact: an `IUserContext` reads the cookie and returns a fixed `Staff` actor with role `Host` or `Presenter` and `venue_ids = [GoldenDragon]`. `Presenter` is a demo-only role: host permissions plus `/demo/*` and the message and POS logs. Turning on Cognito in the pilot replaces only this provider and drops the `Presenter` role.
 
