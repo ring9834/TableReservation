@@ -28,6 +28,7 @@ Changes made on **8 November** are **highlighted in yellow with an orange bar in
 | Reminder timing (8 Nov) | No reminder for bookings made under 24 h ahead or starting within 2 h; a warning before a late cancellation | §7.1, §9.2, §20 |
 | Front-end translation library (8 Nov) | react-i18next, which works with the static export | §18.1, §18.2, §20 |
 | Pre-build decisions D1–D12 (9 Nov) | `invalid_transition` (409) separate from `rule_broken` (422); demo login with `Host` and `Presenter` roles; payment after an expired hold; ADR-004 and translation rows in §20 resolved | §3.1, §8.1, §8.3, §9.2, §12, §14, §17, §18.1, §18.2, §20 |
+| Domain build clarifications (M1, 9 Nov) | Method signatures completed (`now` where a guard needs time, `tableStillFree` on `CaptureDeposit`, `policyShown` on `RecordReminder`, `matchedBy` and window on `AttachLateBill`); booking keeps its cancel reason and refund decision; late-match window counts either side of the clear; turn time for parties above the last rule; both reminder rules always apply | §2.2, §2.6, §3.1, §6.5, §7.1, §13 |
 | Clean-up (8 Nov) | Schema aligned with §6.6 and §7.1, inbound POS fields, explanations tidied, API and traceability updated | §2.1–§2.4, §3.1, §3.3, §4.3, §6.1, §6.2, §6.5, §9.1, §13, §14, §19 |
 
 ## Contents
@@ -218,20 +219,24 @@ classDiagram
         +DateTimeOffset? SeatedAt
         +DateTimeOffset? CompletedAt
         +CompletionSource? CompletedBy
+        +CancelReason? CancellationReason
+        +RefundDecision? CancellationRefund
+        +DateTimeOffset CreatedAt
         +IReadOnlyList~BookingBill~ Bills
         +Money? BillTotal
         +BookingTerms Terms
         +Create(...)$ Result~Booking~
         +CreateWalkIn(...)$ Result~Booking~
-        +CaptureDeposit(PaymentRef, Money) Result
+        +CaptureDeposit(string paymentIntentId, Money, bool tableStillFree, DateTimeOffset now) Result
         +ExpireHold(DateTimeOffset now) Result
-        +Confirm(Actor by) Result
+        +Confirm(Actor by, DateTimeOffset now) Result
         +Cancel(Actor by, CancelReason, DateTimeOffset now) Result~RefundDecision~
         +Seat(TableId[] tables, DateTimeOffset now, Actor by) Result
         +Complete(CompletionSource, BookingBill? bill, DateTimeOffset now) Result
-        +RecordRefund(RefundRef, Money) Result
-        +RecordReminder(DateTimeOffset sentAt) Result
-        +AttachLateBill(BookingBill bill) Result
+        +RecordRefund(string refundId, Money, DateTimeOffset now) Result
+        +RecordReminder(DateTimeOffset sentAt, string policyShown) Result
+        +AttachLateBill(BookingBill bill, BillMatchedBy matchedBy, int lateBillMatchMinutes, DateTimeOffset now) Result
+        +CancellingNowKeepsDeposit(DateTimeOffset now) bool
     }
     class Deposit {
         +Money Amount
@@ -280,6 +285,8 @@ We can see this in the database too. The deposit has no table of its own: it’s
 
 BillTotal is how much the guests spent, taken from the POS bill. It’s empty until a bill is matched to the booking. Having it on the booking means the guest’s visit history, average spend and later reports (revenue per cover, per channel) can use real amounts. An empty BillTotal also marks a booking that hasn’t received its bill yet, which is how the late-match rule knows a cleared booking can still take a late bill.
 
+Domain methods take `now` as a value; handlers read it from `TimeProvider`, so the domain never reads the clock itself. `CaptureDeposit` cannot see other bookings, so `CaptureDepositHandler` re-checks the table and passes the answer as `tableStillFree`; it only matters once the hold has expired. `CancellationReason` and `CancellationRefund` keep why the booking was cancelled and the refund decision made at that moment: the first drives the `hold_expired` rule (§3.1), the second is returned again if `Cancel` is repeated.
+
 CompletedBy records how the booking reached Completed: either BillClosed (the POS reported the bill paid) or ClearedByHost (a host tapped “Clear”). The late-match rule needs this, because it only attaches a late bill to bookings cleared by a host. A booking completed by BillClosed already has its bill. It also helps reports and checks: lots of ClearedByHost at a venue suggests the POS link isn’t working, or staff are skipping the POS.
 
 #### Guest, waitlist entry and message aggregates
@@ -309,7 +316,7 @@ classDiagram
         +DateTimeOffset? NotifiedAt
         +WaitlistStatus Status
         +IsOverdue(DateTimeOffset now, int timeoutMin) bool
-        +Join(...)$ WaitlistEntry
+        +Join(...)$ Result~WaitlistEntry~
         +Notify(TableId table, DateTimeOffset now) Result
         +MarkSeated(BookingId booking, DateTimeOffset now) Result
         +WalkAway(DateTimeOffset now) Result
@@ -331,10 +338,10 @@ classDiagram
         +DateTimeOffset ExpiresAt
         +string? ProviderRef
         +string? LastError
-        +MarkSent(string providerRef, DateTimeOffset at)
-        +MarkDelivered(DateTimeOffset at)
-        +ScheduleRetry(string error, DateTimeOffset now)
-        +MarkFailed(string reason)
+        +MarkSent(string providerRef, string toMasked, DateTimeOffset at) Result
+        +MarkDelivered(DateTimeOffset at) Result
+        +ScheduleRetry(string error, DateTimeOffset now) Result
+        +MarkFailed(string reason) Result
     }
 ```
 
@@ -423,6 +430,7 @@ Rules:
 - The confirmation and reminder messages render the cancellation wording from `booking.Terms`; `ReminderRecord.PolicyShown` stores the exact text the guest saw.
 - If a venue needs to change terms for existing bookings (rare, e.g. a goodwill refund), a manager cancels with a host refund (§8.3) rather than editing the terms.
 - Pacing, slots and service hours are **not** copied: they apply when a booking is made or seated, not afterwards.
+- `TurnMinutes` for a party larger than every `TurnTimeRule` (a phone booking or walk-in of 9–20) uses the rule with the largest party size (120 minutes at Golden Dragon).
 
 Stored as `bookings.terms jsonb` (§13), mapped with `OwnsOne(b => b.Terms, t => t.ToJson())`. Example:
 
@@ -465,7 +473,7 @@ stateDiagram-v2
 
 | **Transition**                 | **Method**       | **Guards**                                                                                                                 | **Effects**                                                                                                           | **Events raised**                                           |
 |--------------------------------|------------------|----------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------|
-| → `PendingPayment`             | `Create`         | Party within online limit; slot within service hours; deposit rule applies                                                 | `Terms` copied from venue settings (§2.6); `HoldExpiresAt = now + 10 min`; `Deposit.Status = Pending`; table assigned | `BookingCreated`                                            |
+| → `PendingPayment`             | `Create`         | Online booking; party within online limit; slot within service hours; deposit rule applies (phone bookings never take a deposit) | `Terms` copied from venue settings (§2.6); `HoldExpiresAt = now + 10 min`; `Deposit.Status = Pending`; table assigned | `BookingCreated`                                            |
 | → `Booked`                     | `Create`         | As above, no deposit                                                                                                       | `Terms` copied (§2.6); table assigned                                                                                 | `BookingCreated`                                            |
 | → `Seated`                     | `CreateWalkIn`   | Table free now for the turn time                                                                                           | `Channel = WalkIn`; `Period = [now, now + turn)`; `SeatedAt = now`                                                  | `BookingCreated`, `BookingSeated` (`source: walkIn`)        |
 | `PendingPayment` → `Booked`    | `CaptureDeposit` | Status is `PendingPayment`; amount equals deposit due; `now < HoldExpiresAt`, **or** the hold has expired but the expiry job has not run yet and the re-checked table is still free | `Deposit.Status = Captured`; `HoldExpiresAt = null`                                                                   | `DepositCaptured`                                           |
@@ -476,7 +484,7 @@ stateDiagram-v2
 | → `Seated`                     | `Seat`           | Status `Booked` or `Confirmed`; tables free from `now` to `now + turn`                                                     | `Period = [now, now + turn)`; `SeatedAt = now`; tables reassigned if host chose others                                | `BookingSeated` (`source: booking`)                         |
 | → `Cancelled`                  | `Cancel`         | Status `PendingPayment`, `Booked` or `Confirmed`                                                                           | Table released; refund decision (§8.3)                                                                                | `BookingCancelled` (+ `DepositRefunded` later, from Stripe) |
 | `Seated` → `Completed`         | `Complete`       | Status `Seated`                                                                                                            | Bill added to `Bills` if from POS                                                                                     | `BookingCompleted`, `TableCleared`                          |
-| `Completed` → `Completed`      | `AttachLateBill` | Completed by `ClearedByHost`; `Bills` empty; `closedAt − CompletedAt ≤ LateBillMatchMinutes` (or matched by a manager) | Bill added to `Bills`                                                                                                 | `BookingBillAttached`                                       |
+| `Completed` → `Completed`      | `AttachLateBill` | Completed by `ClearedByHost`; `Bills` empty; `matchedBy = Manual` or `closedAt` within `LateBillMatchMinutes` of `CompletedAt`, before or after, otherwise `outside_late_match_window`. The same `posBillId` again is a no-op; a different bill returns `second_bill` | Bill added to `Bills`                                                                                                 | `BookingBillAttached`                                       |
 
 Any transition not in the table returns `Error.Conflict("invalid_transition")` → HTTP `409` with code `invalid_transition`. The front end refetches the record and shows "This booking has just changed". `422 rule_broken` is kept for business rules broken by valid input (e.g. `deposit_required`). Calling a method that leads to the current state (for example a second `Confirm`) is a no-op that returns success and raises nothing, so repeated taps and retried requests are safe.
 
@@ -1063,7 +1071,7 @@ flowchart TB
 |----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 | 1        | The message carries a `bookingId` (the POS echoes the one sent in `OpenTable`)                                                                              | Exact match: complete it if `Seated`, attach the bill if it was cleared by the host without one |
 | 2        | A booking is `Seated` at that table                                                                                                                         | Normal path: `Complete(BillClosed, bill)`                                                       |
-| 3        | Exactly one booking at that table was completed by `ClearedByHost`, has no bill total, and was cleared within `LateBillMatchMinutes` (30) before `closedAt` | Late match: `AttachLateBill` raises `BookingBillAttached`                                       |
+| 3        | Exactly one booking at that table was completed by `ClearedByHost`, has no bill total, and was cleared within `LateBillMatchMinutes` (30) of `closedAt`, before or after (a bill closed before the clear arrives late when the POS was offline) | Late match: `AttachLateBill` raises `BookingBillAttached`                                       |
 | 4        | None of the above, or more than one candidate                                                                                                               | The inbound POS message is stored as `Unmatched`; no booking changes                            |
 
 #### Rules
@@ -1219,7 +1227,7 @@ loop:
 | Idempotency                | Each send passes the message ID as the provider's idempotency or client reference, so a retry after a timeout does not send twice                                                                   |
 | Visibility                 | Every status change pushes `messageLogChanged`; failed messages show in the message log with the reason, and a `TableReady` failure is flagged on the waitlist entry so the host can call the guest |
 | Delivery reports \[pilot\] | The SMS and email providers report delivery to `/webhooks/messages`; the endpoint verifies the signature, uses the inbox (§5.5) and moves the row to `Delivered` or `Failed`                        |
-| Reminder timing            | A reminder is sent 24 h before the booking (AC5.1). No reminder for a booking made less than 24 h ahead (its confirmation carries the manage-booking link instead), and none when the booking starts within 2 h. `SendRemindersNow` in the demo applies the same 2-hour rule |
+| Reminder timing            | A reminder is sent 24 h before the booking (AC5.1). No reminder for a booking made less than 24 h ahead (its confirmation carries the manage-booking link instead), and none when the booking starts within 2 h. `SendRemindersNow` in the demo applies the same 2-hour rule. Both rules are checked by `ReminderPolicy.CanSend` inside `Booking.RecordReminder`, for scheduled and `SendRemindersNow` reminders alike (a booking made under 24 h ahead never gets one) |
 | Late cancellation warning  | If a guest opens a Confirm or Cancel link inside the free-cancellation window (`booking.Terms`, §2.6), the page says "cancelling now keeps your deposit" before the guest taps Cancel |
 | Providers                  | Demo: `PhonePanelSender`. Pilot: AWS End User Messaging SMS and Amazon SES, keeping guest data in AWS (ADR-001 D10). Both sit behind `IMessageSender`                                               |
 
@@ -1298,7 +1306,7 @@ It shows how the system works with Stripe in both directions: Stripe telling us 
 
 ### 8.2 Deposit rule (BR-06)
 
-`DepositDue = partySize ≥ 6 ? partySize × NZD 20.00 : none`. Values come from `VenueSettings.Deposit` at the moment of booking and are kept in `booking.Terms.Deposit` (§2.6).
+`DepositDue = channel = Online and partySize ≥ 6 ? partySize × NZD 20.00 : none`. Phone bookings and walk-ins never take a deposit and never start as `PendingPayment` (see §20). Values come from `VenueSettings.Deposit` at the moment of booking and are kept in `booking.Terms.Deposit` (§2.6).
 
 ### 8.3 Refund rule (BR-07)
 
@@ -1671,6 +1679,7 @@ CREATE TABLE bookings (
   notes text, occasion text, reminder jsonb,
   terms jsonb NOT NULL,                              -- BookingTerms snapshot (§2.6)
   completion_source text,                            -- BillClosed / ClearedByHost (§6.5)
+  cancel_reason text, refund_decision text,          -- set on cancellation (§2.2, §8.3)
   last_event_sequence bigint NOT NULL DEFAULT 0,     -- events raised by this record (§2.2)
   created_at timestamptz NOT NULL, UNIQUE (venue_id, reference)
 );
@@ -1939,3 +1948,5 @@ Colour **and** a text badge show each `TableState` (ADR-001 accessibility); alle
 | Demo session cookie across origins (`SameSite=Strict`) | **Resolved 9 Nov 2026.** The front end and the API use subdomains of one demo domain (`app.<domain>`, `api.<domain>`), which counts as the same site, so the cookie is sent. Requests are still cross-origin, so the API's CORS policy allows `app.<domain>` with credentials (ADR-004). The default `cloudfront.net` and `amazonlightsail.com` hostnames are not used (BUILD-PLAN M12) |
 | Reminder timing rules | Proposed in §7.1 (no reminder for bookings made under 24 h ahead or starting within 2 h; warning before a late cancellation). Confirm with the partner |
 | Language for guests who switch mid-booking                                                  | Guest's `Language` is the language active when they submit                                                                                                                                                    |
+| Deposits for phone bookings (pilot) | Payment link with a longer hold, or a host waiver. Ask the partner. In the demo, deposits apply to online bookings only (§8.2) |
+| Late match when the POS sends `bookingId` | The demo applies the 30-minute window (§6.5 step 1); for the pilot, consider attaching regardless of timing because the ID is explicit |
