@@ -7,6 +7,16 @@ public sealed class Venue : AggregateRoot<VenueId>
 {
     private readonly List<Area> _areas;
 
+    /// <summary>For EF Core only.</summary>
+    private Venue()
+    {
+        _areas = [];
+        Name = null!;
+        TimeZone = null!;
+        Currency = null!;
+        Settings = null!;
+    }
+
     private Venue(VenueId id, string name, string timeZone, string currency, VenueSettings settings, List<Area> areas)
     {
         Id = id;
@@ -101,6 +111,13 @@ public sealed class Venue : AggregateRoot<VenueId>
 public sealed class Area
 {
     private readonly List<Table> _tables;
+
+    /// <summary>For EF Core only.</summary>
+    private Area()
+    {
+        _tables = [];
+        Name = null!;
+    }
 
     public Area(AreaId id, string name, int sortOrder, IEnumerable<Table> tables)
     {

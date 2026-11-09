@@ -44,12 +44,17 @@ docker compose up -d                     # PostgreSQL only (the mock POS runs in
 dotnet user-secrets set ConnectionStrings:Reservations "Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=local_dev_only" --project src/Api   # once
 dotnet build                             # .NET 10 SDK pinned in global.json; warnings are errors
 dotnet test                              # unit + integration on Microsoft.Testing.Platform (Docker must be running)
-dotnet run --project src/Api             # https://localhost:5001; /health/live, /health/ready
+dotnet run --project src/Api             # https://localhost:5001; /health/live, /health/ready; in Development applies migrations + seed (Database:MigrateOnStartup)
+dotnet tool restore                      # dotnet-ef, pinned in .config/dotnet-tools.json
+dotnet ef database update --project src/Infrastructure --startup-project src/Api        # manual alternative to MigrateOnStartup
+dotnet ef migrations add <Name> --project src/Infrastructure --startup-project src/Api --output-dir Persistence/Migrations
+dotnet ef migrations has-pending-model-changes --project src/Infrastructure --startup-project src/Api   # what CI runs
+dotnet run --project src/Api --Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command=Information   # log SQL when debugging (parameter values stay hidden; Warning by default)
 cd web && npm ci && npm run dev
 cd web && npm run lint && npm run typecheck && npm run format:check && npm run build   # what CI runs
 ```
 
-Coming later: from M2, `dotnet run` applies migrations and the seed at start-up in Development (`Database:MigrateOnStartup`), with `dotnet ef database update --project src/Infrastructure --startup-project src/Api` as the manual alternative. From M4, `npm run generate:api` (orval) and `npx playwright test`.
+Coming later: from M4, `npm run generate:api` (orval) and `npx playwright test`.
 
 Keep this section in step with the real scripts when they change.
 

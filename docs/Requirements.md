@@ -3,9 +3,9 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Agreed and frozen (v1.0) for the demo build (3–4 weeks) |
+| **Status** | Agreed and frozen (v1.1) for the demo build (3–4 weeks) |
 | **Owner** | Antonio Huang |
-| **Last updated** | 9 November 2026 |
+| **Last updated** | 10 November 2026 |
 | **Related** | [`Architecture.md`](Architecture.md); ADR-001 to ADR-005 |
 
 The demo proves six capabilities in a 20-minute story set at one sample restaurant, built within 3–4 weeks. These requirements drive the target architecture, and they double as the test checklist for the build.
@@ -292,7 +292,7 @@ These are the main drivers for the architecture decisions. Each quality attribut
 
 About 20 minutes, followed by questions. The same script is the end-to-end test, run three times before the meeting (QA-6).
 
-**Before starting:** press Reset; open the guest page on a phone, the host app on a tablet or laptop, and the presenter screen with the phone panel and POS log. The time is set to Tuesday evening, about 18:30, with 8 bookings already in the sample data.
+**Before starting:** press Reset; open the guest page on a phone, the host app on a tablet or laptop, and the presenter screen with the phone panel and POS log. The time is set to Tuesday evening, about 18:25, with 11 bookings already in the sample data.
 
 | # | Time | What you do | What he sees | Step |
 | --- | --- | --- | --- | --- |
@@ -329,7 +329,7 @@ About 20 minutes, followed by questions. The same script is the end-to-end test,
 ### Assumptions
 
 - One sample venue is enough to show every capability.
-- A demo clock setting lets the presenter fix the "current time" (e.g. Tuesday 18:30), so the script runs the same way on any day.
+- A demo clock setting lets the presenter fix the "current time" (e.g. Tuesday 18:25), so the script runs the same way on any day.
 - The demo is hosted on a low-cost cloud service with a public web address, so it opens on any phone.
 - The audience is the owner and possibly one technical person; no live testing by them is needed, although they may try the guest page.
 
@@ -350,3 +350,4 @@ About 20 minutes, followed by questions. The same script is the end-to-end test,
 | --- | --- |
 | 5 Nov 2026 | Exported from the requirements analysis doc. Event names aligned with the ADR-002 catalogue: `TableSeated` and `WalkInSeated` → `BookingSeated` (with `source`); `ConfirmationSent` and `ReminderSent` → `MessageSent` (with `purpose`); `BookingCompleted` added. Answered open questions marked as decided. |
 | 9 Nov 2026 | Added BR-13 (reminder timing and the late-cancellation warning), matching Design §7.1. Status set to frozen (v1.0). |
+| 10 Nov 2026 | v1.1. Demo script: 11 sample bookings (was 8) and the time about 18:25 (was 18:30), so every step works as scripted: all tables of 4+ seats are taken for the step-3 walk-in, and step 5's reminders and in-time refund don't sit on the 2-hour boundary (Design §17). |

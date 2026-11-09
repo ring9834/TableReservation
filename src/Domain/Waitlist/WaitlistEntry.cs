@@ -41,6 +41,11 @@ public sealed class WaitlistEntry : AggregateRoot<WaitlistEntryId>
 {
     public const int MaxQuotedWaitMinutes = 240;
 
+    /// <summary>For EF Core only.</summary>
+    private WaitlistEntry()
+    {
+    }
+
     private WaitlistEntry(WaitlistEntryId id, VenueId venueId, GuestId guestId, PartySize partySize, int quotedWaitMinutes, DateTimeOffset joinedAt)
     {
         Id = id;

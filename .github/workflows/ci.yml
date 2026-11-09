@@ -30,6 +30,12 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
+      # Fails when the EF model has changed without a migration (D8). Needs no database.
+      - name: Migrations up to date
+        run: |
+          dotnet tool restore
+          dotnet ef migrations has-pending-model-changes --project src/Infrastructure --startup-project src/Api --configuration Release --no-build
+
       # Integration tests start PostgreSQL with Testcontainers; the hosted runner has Docker.
       - name: Test
         run: dotnet test -c Release --no-build

@@ -5,6 +5,13 @@ namespace Reservation.Domain.Guests;
 /// <summary>Guest aggregate (Design §2.2). Shared by bookings and the waitlist; matched by mobile number.</summary>
 public sealed class Guest : AggregateRoot<GuestId>
 {
+    /// <summary>For EF Core only.</summary>
+    private Guest()
+    {
+        Name = null!;
+        Mobile = null!;
+    }
+
     private Guest(GuestId id, VenueId venueId, PersonName name, PhoneNumber mobile, string? email, Language language, string? allergyNotes)
     {
         Id = id;

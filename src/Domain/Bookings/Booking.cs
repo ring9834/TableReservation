@@ -13,6 +13,13 @@ public sealed class Booking : AggregateRoot<BookingId>
     private readonly List<TableAssignment> _tables = [];
     private readonly List<BookingBill> _bills = [];
 
+    /// <summary>For EF Core only.</summary>
+    private Booking()
+    {
+        Reference = null!;
+        Terms = null!;
+    }
+
     private Booking(
         BookingId id, VenueId venueId, GuestId? guestId, BookingReference reference, BookingChannel channel,
         PartySize partySize, TimeRange period, BookingTerms terms, string? notes, string? occasion, DateTimeOffset createdAt)
