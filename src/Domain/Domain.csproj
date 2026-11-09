@@ -4,4 +4,7 @@
     <AssemblyName>Reservation.Domain</AssemblyName>
     <RootNamespace>Reservation.Domain</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="libphonenumber-csharp" />
+  </ItemGroup>
 </Project>

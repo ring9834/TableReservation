@@ -3,6 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup Label="Runtime">
+    <PackageVersion Include="libphonenumber-csharp" Version="9.0.43" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
   <ItemGroup Label="Tests">

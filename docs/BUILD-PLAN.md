@@ -53,9 +53,21 @@ Do not add any feature code yet. Show me the plan first.
 Implement docs/Design.md §2, §3 and §4 in src/Domain only (no EF Core, no ASP.NET):
 AggregateRoot with Raise() and LastEventSequence, the value objects, Booking (incl. BookingTerms
 snapshot, BookingBills, AttachLateBill), Table, WaitlistEntry, Guest, the policies
-(DepositRule, RefundPolicy, late-match rule) and all domain events.
-Write unit tests for every transition in the §3 tables, including the rejected ones,
-and for BR-02, BR-04, BR-06, BR-07, BR-13. Use TimeProvider for time.
+(DepositRule, RefundPolicy, late-match rule) and all domain events. Use TimeProvider for time.
+
+Also:
+- Result<T>/Error live in src/Domain, with Error kinds that map to the ADR-004 codes. Invalid
+  transitions return Error.Conflict("invalid_transition"). A transition to the current state is a
+  no-op success that raises nothing (Design §3.1).
+- Include the D7 rule: CaptureDeposit on a Cancelled(HoldExpired) booking returns `hold_expired`.
+  On a PendingPayment booking past expiry, it captures if the table is free, and otherwise cancels
+  with a full refund decision.
+
+Tests (tests/Unit):
+- One test class per aggregate. Name tests after the rule, e.g. Seat_WhenCancelled_ReturnsInvalidTransition.
+- Cover every row of the §3 tables, including each rejected transition, and BR-02, BR-04, BR-06,
+  BR-07 and BR-13.
+- Check that each event is raised once, with LastEventSequence going up by exactly 1.
 ```
 
 ### M2 Database and seed
