@@ -86,7 +86,8 @@ public static class GoldenDragon
         Cancellation: new CancellationRule(2, RefundAmount.Full, RefundAmount.Full),
         NotifiedTimeoutMinutes: 10,
         PaymentHoldMinutes: 10,
-        LateBillMatchMinutes: 30);
+        LateBillMatchMinutes: 30,
+        BookingWindowDays: 30);
 
     public static TableId TableId(string name)
     {

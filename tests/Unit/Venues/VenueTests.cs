@@ -79,6 +79,34 @@ public class VenueTests
     }
 
     [Fact]
+    public void BookingWindowDays_DefaultsTo30_AC11()
+    {
+        Assert.Equal(30, TestData.Settings().BookingWindowDays);
+    }
+
+    [Theory]
+    [InlineData(-1, false)]
+    [InlineData(0, true)]
+    [InlineData(30, true)]
+    [InlineData(31, false)]
+    public void IsWithinBookingWindow_TodayToWindowDaysAhead_AC11(int daysFromToday, bool within)
+    {
+        var today = new DateOnly(2026, 11, 20);
+
+        Assert.Equal(within, TestData.Settings().IsWithinBookingWindow(today.AddDays(daysFromToday), today));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void Validate_BookingWindowNotPositive_ReturnsValidationFailed(int days)
+    {
+        var result = (TestData.Settings() with { BookingWindowDays = days }).Validate();
+
+        EventAssert.Failed(result, ErrorCodes.ValidationFailed, ErrorKind.Validation);
+    }
+
+    [Fact]
     public void IsBookableSlot_UsesVenueTimeAcrossDaylightSaving_BR01()
     {
         var settings = TestData.Settings();

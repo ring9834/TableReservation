@@ -18,7 +18,7 @@ public sealed class MigrationAndSeedTests(PostgresFixture postgres)
         await db.Database.MigrateAsync(Ct);
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync(Ct));
-        Assert.Single(await db.Database.GetAppliedMigrationsAsync(Ct));
+        Assert.Equal(db.Database.GetMigrations(), await db.Database.GetAppliedMigrationsAsync(Ct));
         Assert.Equal(1, await Scalar(database, "SELECT count(*) FROM pg_extension WHERE extname = 'btree_gist'"));
         Assert.Equal(1, await Scalar(database, "SELECT count(*) FROM pg_constraint WHERE conname = 'ex_table_assignments_no_overlap' AND contype = 'x'"));
         Assert.Equal(1, await Scalar(database, "SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_bookings_venue_day'"));

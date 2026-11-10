@@ -16,7 +16,8 @@ The six demo steps are never cut.
 | M1 | Domain model and unit tests | §2, §3, §4 | Rules and state machines are right before any I/O | 1.5 d |
 | M2 | Database, migrations and seed | §12, §13 | Schema, exclusion constraint, Golden Dragon data | 1 d |
 | M3 | Outbox, dispatcher, inbox | §5 | Events are saved with the change and delivered once | 1.5 d |
-| M4 | Booking and availability API | §9, §11, §14 | Step 1 without payment; `slot_taken`; first Playwright test and `oasdiff` in CI | 1.5 d |
+| M4a | Booking and availability API | §9, §11, §14 | Step 1 through the API without payment; `slot_taken`; idempotency; demo sign-in; OpenAPI document and `oasdiff` in CI | 1 d |
+| M4b | Guest booking page | §18 | Step 1 on the phone in English and Chinese, without payment; orval client; first Playwright test | 1 d |
 | M5 | Host app: floor plan + SignalR | §15, §18 | Step 2: booking appears within 2 s | 2 d |
 | M6 | Walk-ins and waitlist | §3.2, §11.3, §11.4 | Step 3 | 1 d |
 | M7 | Messaging and phone panel | §7, §7.1 | Step 4: "table ready" text | 1 d |
@@ -172,15 +173,74 @@ Integration tests (Testcontainers, TestClock for each clock):
 Record any detail §5 left open in Design.md in the same change set.
 ```
 
-### M4 Booking API
+### M4a Booking API
 ```
+Start milestone M4a (booking API; the web page is M4b). Split M4 in docs/BUILD-PLAN.md into
+M4a (this prompt) and M4b (guest booking page with orval, react-i18next and the first Playwright
+test), and keep the other milestones' numbers.
+
 Implement the Bookings and availability slice from docs/Design.md §9, §11 and §14:
-Result<T>/Error, ResultToHttp, Problem Details codes from ADR-004, FluentValidation endpoint filter,
-Idempotency-Key on create, /demo-login and the demo session cookie with Host and Presenter policies
-(Design §14, §17), OpenAPI document.
-Cover AC1.x without payment. Integration tests for every error code the endpoints can return.
-Then wire web/ to the API with orval and build the guest booking page in English and Chinese (react-i18next).
-Set up tests/E2E with Playwright (guest booking in both languages) and add `oasdiff` to CI.
+- Endpoints: availability search, create booking (online, guest, public) and phone booking (host),
+  tonight's bookings for the host, confirm and cancel by host. Seat, walk-ins, guest links and
+  payments come in later milestones; an online party of 6+ is created as PendingPayment with the
+  deposit due, and capture arrives in M8.
+- Pipeline in the ADR-004 order: central IExceptionHandler and Problem Details (code, traceId),
+  logging and tracing, rate limiting, demo session authentication, venue check, FluentValidation
+  endpoint filter, handler. Result<T> → HTTP through ResultToHttp: invalid_transition and
+  hold_expired 409, rule_broken 422 with the specific code, slot_taken 409 (23P01 and pacing),
+  version_conflict 409 (DbUpdateConcurrencyException), not_found 404, validation_failed 400.
+- Pacing under pg_advisory_xact_lock per venue and slot, inside the create transaction (§12).
+- Responses carry `version`; updates must send it back.
+- Idempotency-Key on create: follow the design if it says where keys are stored; otherwise propose
+  a table (24 h retention, infrastructure clock) in the plan.
+- Demo sign-in (D3): POST /demo-login with a passcode → HttpOnly, Secure, SameSite=Strict cookie
+  with role Host or Presenter, 12 h; constant-time compare; 5 attempts a minute per IP; passcodes
+  from configuration (user secrets locally). Policies Host, Presenter; endpoints deny by default.
+- Replace DemoVenueContext with a session-based IVenueContext (public guest endpoints take the
+  venue from the route) and fill IRequestContext from the HTTP request and trace context.
+- CORS: http://localhost:3000 in Development, app.<domain> later, with credentials.
+- OpenAPI with the built-in Microsoft.AspNetCore.OpenApi. Commit the generated document to
+  docs/api/openapi.json; CI fails if it differs from the build output, and runs oasdiff against
+  main to flag breaking changes (D12).
+
+Integration tests (WebApplicationFactory + Testcontainers):
+- Every error code each endpoint can return, with the Problem Details shape.
+- AC1.x without payment; BR-01, BR-04, BR-05 through the API.
+- Two simultaneous requests for the last table: one 201, one 409 slot_taken.
+- Same Idempotency-Key twice returns the first result and creates one booking.
+- Stale version → 409 version_conflict.
+- Demo sign-in: wrong passcode 401, rate limit 429, guest can't call host endpoints (401/403),
+  host can't call presenter endpoints (403).
+- A created booking produces an outbox row with the request's correlationId and actor.
+- Logs contain no names, phone numbers or request bodies.
+
+Ask before adding packages beyond FluentValidation. Record decisions §9/§14 left open in Design.md.
+```
+
+### M4b Guest booking page
+```
+Start milestone M4b (guest booking page). The M4a API is done; its contract is docs/api/openapi.json
+(Design §14, §14.1).
+
+- Generate the TypeScript client with orval from docs/api/openapi.json into web/src/api (TanStack
+  Query hooks and zod schemas). Add `npm run generate:api`; CI fails if the generated client is out
+  of date.
+- Add the FluentValidation → OpenAPI schema transformer (ADR-004 "How it is used" 4) so the zod
+  schemas carry the basic rules, or, if that costs too much, add those few rules to zod by hand.
+- Build /book (Design §18.1 features/booking: WhenStep, DetailsStep, Confirmation; PayStep comes in
+  M8) for AC1.1–AC1.4, AC1.6 (reference shown; the phone panel arrives in M7), AC1.7 and AC1.8:
+  react-i18next with en and zh-CN, the English / 中文 switch without a reload (§18.2), the language
+  sent with the booking, one useApiError that maps each Problem Details `code` to a translated
+  message, and 409 slot_taken offering the next free times. A party of 6+ ends on a "deposit
+  needed" placeholder until M8.
+- Local development: decide how the SameSite=Strict session cookie works across
+  http://localhost:3000 and https://localhost:5001 (Design §20). The guest page needs no session,
+  but M5 does.
+- Set up tests/E2E with Playwright: a guest books a table for 2 in English and in Chinese, and a
+  full time shows the 3 nearest times. Run it in CI against the API and PostgreSQL.
+
+Update the CLAUDE.md commands. Record design decisions in Design.md. Ask before adding packages
+beyond orval, react-i18next, i18next, @playwright/test and the libraries already listed.
 ```
 
 ### M5 onward
@@ -189,6 +249,7 @@ Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUI
 ### M12 Deploy and rehearse
 Also add a container image scan of the API image to the CI pipeline (ADR-005).
 Use the Route 53 demo domain for both (`app.<domain>` for the front end, `api.<domain>` for the API); the default cloudfront.net/amazonlightsail.com hostnames won't work with the demo session cookie (Design §17, §20).
+Also from Design §14.1 and §20: `ForwardedHeaders` trusting only the known proxy, so rate limits see the real client IP; `Demo:Enabled=true` with both passcodes from Secrets Manager in the demo environment; Data Protection keys that survive container restarts; `Cors:AllowedOrigins` set to `https://app.<domain>`; OpenTelemetry export to X-Ray.
 
 ## Definition of done (every milestone)
 

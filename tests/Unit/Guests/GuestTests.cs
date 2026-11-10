@@ -24,6 +24,25 @@ public class GuestTests
     }
 
     [Fact]
+    public void UseLanguage_ChangesOnlyTheLanguageAndRaisesNothing()
+    {
+        var guest = NewGuest();
+
+        guest.UseLanguage(Language.En);
+
+        Assert.Equal(Language.En, guest.Language);
+        Assert.Equal("Mei Lin", guest.Name.Value);
+        Assert.Equal("+64211234567", guest.Mobile.E164);
+        EventAssert.NoneRaised(guest, 0);
+    }
+
+    [Fact]
+    public void UseLanguage_UnknownLanguage_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => NewGuest().UseLanguage((Language)9));
+    }
+
+    [Fact]
     public void RecordVisit_CountsTheVisitAndKeepsTheLastBill_AC66()
     {
         var guest = NewGuest();

@@ -37,6 +37,7 @@ jobs:
           dotnet ef migrations has-pending-model-changes --project src/Infrastructure --startup-project src/Api --configuration Release --no-build
 
       # Integration tests start PostgreSQL with Testcontainers; the hosted runner has Docker.
+      # OpenApiDocumentTests fails here if docs/api/openapi.json differs from what the API serves (D12).
       - name: Test
         run: dotnet test -c Release --no-build
 
@@ -48,6 +49,36 @@ jobs:
             echo "::error::High or critical vulnerable NuGet package found"
             exit 1
           fi
+
+  # D12: flag breaking changes to the committed API contract against main (ADR-004 change rules).
+  api-contract:
+    name: API contract (oasdiff)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Contract on main
+        id: base
+        run: |
+          git fetch --depth=1 origin main
+          mkdir -p .oasdiff
+          if git show origin/main:docs/api/openapi.json > .oasdiff/openapi-main.json 2>/dev/null; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::docs/api/openapi.json is not on main yet; nothing to compare."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # review: false keeps the specs in CI (no upload to oasdiff.com; CLAUDE.md rule 2).
+      - name: Breaking changes against main
+        if: steps.base.outputs.found == 'true'
+        uses: oasdiff/oasdiff-action/breaking@9e56cf8b3aff7edb326d5767d3d23f96127e20c3 # v0.1.21
+        with:
+          base: .oasdiff/openapi-main.json
+          revision: docs/api/openapi.json
+          fail-on: ERR
+          review: 'false'
 
   web:
     name: Web lint, type-check and build

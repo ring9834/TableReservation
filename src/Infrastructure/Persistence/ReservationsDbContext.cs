@@ -8,6 +8,7 @@ using Reservation.Domain.Messaging;
 using Reservation.Domain.Venues;
 using Reservation.Domain.Waitlist;
 using Reservation.Infrastructure.Audit;
+using Reservation.Infrastructure.Idempotency;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence.Converters;
 using Reservation.Infrastructure.Pos;
@@ -44,6 +45,9 @@ public sealed class ReservationsDbContext(DbContextOptions<ReservationsDbContext
     public DbSet<PosMessage> PosMessages => Set<PosMessage>();
 
     public DbSet<AuditEntry> Audit => Set<AuditEntry>();
+
+    /// <summary>Not venue-filtered: the key already includes the venue.</summary>
+    public DbSet<IdempotencyRecord> IdempotencyKeys => Set<IdempotencyRecord>();
 
     /// <summary>Read per query by the venue filter; <c>null</c> matches no rows.</summary>
     private VenueId? CurrentVenueId => venueContext.VenueId;
