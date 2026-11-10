@@ -42,9 +42,12 @@ infra/             CDK stacks
 ```bash
 docker compose up -d                     # PostgreSQL only (the mock POS runs inside the API)
 dotnet user-secrets set ConnectionStrings:Reservations "Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=local_dev_only" --project src/Api   # once
+dotnet user-secrets set Demo:HostPasscode "<host passcode>" --project src/Api             # once; the API refuses to start in Development without both
+dotnet user-secrets set Demo:PresenterPasscode "<presenter passcode>" --project src/Api   # once; must differ from the host passcode
 dotnet build                             # .NET 10 SDK pinned in global.json; warnings are errors
 dotnet test                              # unit + integration on Microsoft.Testing.Platform (Docker must be running)
-dotnet run --project src/Api             # https://localhost:5001; /health/live, /health/ready; in Development applies migrations + seed (Database:MigrateOnStartup)
+dotnet run --project src/Api             # https://localhost:5001; /health/live, /health/ready, /openapi/v1.json; in Development applies migrations + seed (Database:MigrateOnStartup)
+UPDATE_OPENAPI=1 dotnet test --project tests/Integration -- --filter-class "Reservation.Tests.Integration.Api.OpenApiDocumentTests"   # after an intended API change: rewrite docs/api/openapi.json, then commit it
 dotnet tool restore                      # dotnet-ef, pinned in .config/dotnet-tools.json
 dotnet ef database update --project src/Infrastructure --startup-project src/Api        # manual alternative to MigrateOnStartup
 dotnet ef migrations add <Name> --project src/Infrastructure --startup-project src/Api --output-dir Persistence/Migrations
@@ -54,7 +57,7 @@ cd web && npm ci && npm run dev
 cd web && npm run lint && npm run typecheck && npm run format:check && npm run build   # what CI runs
 ```
 
-Coming later: from M4, `npm run generate:api` (orval) and `npx playwright test`.
+Coming later: from M4b, `npm run generate:api` (orval) and `npx playwright test`.
 
 Keep this section in step with the real scripts when they change.
 

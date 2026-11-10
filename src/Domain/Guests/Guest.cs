@@ -49,6 +49,20 @@ public sealed class Guest : AggregateRoot<GuestId>
         return new Guest(GuestId.New(now), venueId, name, mobile, NullIfBlank(email), language, NullIfBlank(allergyNotes));
     }
 
+    /// <summary>
+    /// The guest booked again in <paramref name="language"/>: messages follow the language active when they last
+    /// submitted (Design §20). Name, mobile and allergy notes are kept. No event.
+    /// </summary>
+    public void UseLanguage(Language language)
+    {
+        if (!Enum.IsDefined(language))
+        {
+            throw new ArgumentOutOfRangeException(nameof(language));
+        }
+
+        Language = language;
+    }
+
     /// <summary>A visit with a bill from the POS (AC6.6). The handler's inbox row makes this run once per event.</summary>
     public void RecordVisit(Money billTotal, DateTimeOffset at)
     {

@@ -37,6 +37,7 @@ public static class ErrorCodes
     // More specific rule_broken codes (422).
     public const string PartyTooLarge = "party_too_large";
     public const string OutsideServiceHours = "outside_service_hours";
+    public const string OutsideBookingWindow = "outside_booking_window";
     public const string DepositAmountMismatch = "deposit_amount_mismatch";
     public const string SecondBill = "second_bill";
     public const string OutsideLateMatchWindow = "outside_late_match_window";

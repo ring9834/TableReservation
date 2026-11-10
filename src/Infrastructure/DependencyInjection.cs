@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Reservation.Infrastructure.Audit;
 using Reservation.Infrastructure.Demo;
+using Reservation.Infrastructure.Idempotency;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
@@ -13,8 +14,8 @@ public static class DependencyInjection
 {
     /// <summary>
     /// The two clocks, the database (one <see cref="NpgsqlDataSource"/>, shared with the health checks), the EF Core
-    /// context with the outbox interceptor, the outbox workers and the audit consumer, the demo venue context and the
-    /// demo seed and reset. Needs <c>IConfiguration</c> for the <c>Outbox</c> options.
+    /// context with the outbox interceptor, the outbox workers and the audit consumer, the request venue context,
+    /// idempotency keys and the demo seed and reset. Needs <c>IConfiguration</c> for the <c>Outbox</c> options.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="connectionString">PostgreSQL connection string; ignored when a data source is already registered.</param>
@@ -34,8 +35,13 @@ public static class DependencyInjection
             configureDatabase?.Invoke(options);
         });
 
-        // The demo session is always Golden Dragon (Design §17); M4 reads it from the session instead.
-        services.AddSingleton<IVenueContext>(new FixedVenueContext(GoldenDragon.VenueId));
+        // Set per request from the route's venueId after the venue check (Design §14.1); empty elsewhere.
+        services.TryAddScoped<VenueContext>();
+        services.TryAddScoped<IVenueContext>(provider => provider.GetRequiredService<VenueContext>());
+
+        services.AddScoped<IdempotencyStore>();
+        services.AddSingleton<IdempotencyHousekeeping>();
+        services.AddHostedService(provider => provider.GetRequiredService<IdempotencyHousekeeping>());
 
         AddOutbox(services);
 

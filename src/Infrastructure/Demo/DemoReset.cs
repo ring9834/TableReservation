@@ -11,7 +11,7 @@ public sealed class DemoReset(ReservationsDbContext db, DemoSeeder seeder)
 {
     private const string TruncateAll =
         "TRUNCATE venues, areas, tables, guests, bookings, booking_bills, table_assignments, waitlist_entries, " +
-        "messages, outbox, inbox, pos_messages, audit_log RESTART IDENTITY CASCADE";
+        "messages, outbox, inbox, pos_messages, audit_log, idempotency_keys RESTART IDENTITY CASCADE";
 
     public async Task ResetAsync(CancellationToken cancellationToken)
     {

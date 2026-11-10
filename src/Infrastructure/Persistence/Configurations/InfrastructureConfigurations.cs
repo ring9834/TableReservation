@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Reservation.Infrastructure.Audit;
+using Reservation.Infrastructure.Idempotency;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Pos;
 
@@ -56,5 +57,16 @@ internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEn
         builder.Property(x => x.Actor).HasColumnType("jsonb");
         builder.Property(x => x.Summary).HasColumnType("jsonb");
         builder.HasIndex(x => x.EventId).IsUnique();
+    }
+}
+
+internal sealed class IdempotencyRecordConfiguration : IEntityTypeConfiguration<IdempotencyRecord>
+{
+    public void Configure(EntityTypeBuilder<IdempotencyRecord> builder)
+    {
+        builder.ToTable("idempotency_keys");
+        builder.HasKey(x => new { x.VenueId, x.Operation, x.Key });
+        builder.Property(x => x.Response).HasColumnType("jsonb");
+        builder.HasIndex(x => x.CreatedAt);
     }
 }

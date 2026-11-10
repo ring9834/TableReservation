@@ -29,7 +29,10 @@ public enum RefundAmount
 /// <summary>Cancellation rule (BR-07, Design §8.3).</summary>
 public sealed record CancellationRule(int FreeUntilHoursBefore, RefundAmount RefundWhenInTime, RefundAmount HostCancelRefund);
 
-/// <summary>A venue's rules (Design §2.2). Booking terms are copied from here at booking time (§2.6).</summary>
+/// <summary>
+/// A venue's rules (Design §2.2). Booking terms are copied from here at booking time (§2.6).
+/// <see cref="BookingWindowDays"/> (how far ahead a booking can be made) applies only when a booking is made and is not copied.
+/// </summary>
 public sealed record VenueSettings(
     int SlotMinutes,
     TimeOnly ServiceStart,
@@ -41,8 +44,12 @@ public sealed record VenueSettings(
     CancellationRule Cancellation,
     int NotifiedTimeoutMinutes,
     int PaymentHoldMinutes,
-    int LateBillMatchMinutes)
+    int LateBillMatchMinutes,
+    int BookingWindowDays = VenueSettings.DefaultBookingWindowDays)
 {
+    /// <summary>AC1.1: bookings from today to 30 days ahead, unless the venue says otherwise.</summary>
+    public const int DefaultBookingWindowDays = 30;
+
     public Result Validate()
     {
         if (SlotMinutes <= 0 || 60 % SlotMinutes != 0)
@@ -68,6 +75,11 @@ public sealed record VenueSettings(
         if (PacingCoversPerSlot <= 0 || NotifiedTimeoutMinutes <= 0 || PaymentHoldMinutes <= 0 || LateBillMatchMinutes < 0)
         {
             return Error.Validation("settings", "settings_invalid");
+        }
+
+        if (BookingWindowDays <= 0)
+        {
+            return Error.Validation("bookingWindowDays", "booking_window_invalid");
         }
 
         if (Deposit.MinPartySize < PartySize.Min || Deposit.PerGuestCents < 0 || Cancellation.FreeUntilHoursBefore < 0)
@@ -103,4 +115,11 @@ public sealed record VenueSettings(
         var sinceStart = time - ServiceStart;
         return sinceStart.Ticks % TimeSpan.FromMinutes(SlotMinutes).Ticks == 0;
     }
+
+    /// <summary>
+    /// The booking window (AC1.1): <paramref name="date"/> is between <paramref name="today"/> and
+    /// <see cref="BookingWindowDays"/> days after it, both in venue time.
+    /// </summary>
+    public bool IsWithinBookingWindow(DateOnly date, DateOnly today) =>
+        date >= today && date <= today.AddDays(BookingWindowDays);
 }

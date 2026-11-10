@@ -36,6 +36,7 @@ public sealed class EventHarness : IAsyncDisposable
         services.AddSingleton<TimeProvider>(BusinessClock);
         services.AddKeyedSingleton<TimeProvider>(Clocks.Infrastructure, InfrastructureClock);
         services.AddSingleton(database.DataSource);
+        services.AddSingleton<IVenueContext>(new FixedVenueContext(Infrastructure.Demo.GoldenDragon.VenueId));
         services.AddInfrastructure(database.ConnectionString, o => o.ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning)));
 
         services.AddSingleton(Recorder);
@@ -173,32 +174,43 @@ public sealed class FailingHandler<T>(EventRecorder recorder, ReservationsDbCont
 }
 
 /// <summary>Collects every log line (message, exception text and scope-free state) for scrubbing checks.</summary>
-public sealed class LogCapture : ILoggerProvider
+/// <summary>
+/// Captures every log line with its message, structured properties, exception and the values of every open scope
+/// (the API's request scope included), so tests can check that no personal data reaches the logs.
+/// </summary>
+public sealed class LogCapture : ILoggerProvider, ISupportExternalScope
 {
     private readonly ConcurrentQueue<LogLine> _lines = new();
+    private IExternalScopeProvider? _scopes;
 
     public IReadOnlyList<LogLine> Lines => [.. _lines];
 
-    public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, _lines);
+    public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, this);
+
+    public void SetScopeProvider(IExternalScopeProvider scopeProvider) => _scopes = scopeProvider;
 
     public void Dispose()
     {
     }
 
-    private sealed class CapturingLogger(string category, ConcurrentQueue<LogLine> lines) : ILogger
+    private static string Describe(object? state) => state is IEnumerable<KeyValuePair<string, object?>> pairs
+        ? string.Join(" ", pairs.Select(p => $"{p.Key}={p.Value}"))
+        : state?.ToString() ?? string.Empty;
+
+    private sealed class CapturingLogger(string category, LogCapture owner) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull => owner._scopes?.Push(state);
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             ArgumentNullException.ThrowIfNull(formatter);
-            var properties = state is IEnumerable<KeyValuePair<string, object?>> pairs
-                ? string.Join(" ", pairs.Select(p => $"{p.Key}={p.Value}"))
-                : string.Empty;
-            lines.Enqueue(new LogLine(category, logLevel, $"{formatter(state, exception)} {properties} {exception}"));
+            var scopes = new List<string>();
+            owner._scopes?.ForEachScope((scope, list) => list.Add(Describe(scope)), scopes);
+            owner._lines.Enqueue(new LogLine(
+                category, logLevel, $"{formatter(state, exception)} {Describe(state)} {string.Join(" | ", scopes)} {exception}"));
         }
     }
 }
