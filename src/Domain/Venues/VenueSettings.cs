@@ -32,6 +32,8 @@ public sealed record CancellationRule(int FreeUntilHoursBefore, RefundAmount Ref
 /// <summary>
 /// A venue's rules (Design §2.2). Booking terms are copied from here at booking time (§2.6).
 /// <see cref="BookingWindowDays"/> (how far ahead a booking can be made) applies only when a booking is made and is not copied.
+/// <see cref="ContactPhone"/> is the number guests are told to call (larger parties, BR-04); <c>null</c> in rows stored
+/// before it existed (M4b).
 /// </summary>
 public sealed record VenueSettings(
     int SlotMinutes,
@@ -45,7 +47,8 @@ public sealed record VenueSettings(
     int NotifiedTimeoutMinutes,
     int PaymentHoldMinutes,
     int LateBillMatchMinutes,
-    int BookingWindowDays = VenueSettings.DefaultBookingWindowDays)
+    int BookingWindowDays = VenueSettings.DefaultBookingWindowDays,
+    string? ContactPhone = null)
 {
     /// <summary>AC1.1: bookings from today to 30 days ahead, unless the venue says otherwise.</summary>
     public const int DefaultBookingWindowDays = 30;
@@ -80,6 +83,11 @@ public sealed record VenueSettings(
         if (BookingWindowDays <= 0)
         {
             return Error.Validation("bookingWindowDays", "booking_window_invalid");
+        }
+
+        if (ContactPhone is not null && !PhoneNumber.IsPossibleNz(ContactPhone))
+        {
+            return Error.Validation("contactPhone", "contact_phone_invalid");
         }
 
         if (Deposit.MinPartySize < PartySize.Min || Deposit.PerGuestCents < 0 || Cancellation.FreeUntilHoursBefore < 0)

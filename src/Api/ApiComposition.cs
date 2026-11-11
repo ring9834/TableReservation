@@ -51,13 +51,19 @@ internal static class ApiComposition
             .WithHeaders("Content-Type", IdempotencyKey.Header, RequestLoggingMiddleware.CorrelationHeader)
             .WithExposedHeaders(RequestLoggingMiddleware.CorrelationHeader)));
 
-        services.AddOpenApi(options => options.AddDocumentTransformer((document, _, _) =>
+        services.AddOpenApi(options =>
         {
-            document.Info.Title = "Reservation demo API";
-            document.Info.Version = "v1";
-            document.Servers?.Clear();
-            return Task.CompletedTask;
-        }));
+            options.AddDocumentTransformer((document, _, _) =>
+            {
+                document.Info.Title = "Reservation demo API";
+                document.Info.Version = "v1";
+                document.Servers?.Clear();
+                return Task.CompletedTask;
+            });
+
+            // Basic FluentValidation rules → schema limits, so the generated zod schemas match (ADR-004, Design §18.4).
+            options.AddSchemaTransformer<FluentValidationSchemaTransformer>();
+        });
 
         services.AddValidatorsFromAssemblyContaining<CreateBookingRequestValidator>(includeInternalTypes: true);
         services.AddFeatures(typeof(ApiComposition).Assembly);
@@ -74,6 +80,9 @@ internal static class ApiComposition
     {
         app.UseExceptionHandler();
         app.UseStatusCodePages();
+
+        // No UseHttpsRedirection: in AWS the proxy terminates TLS (M12), and the CI end-to-end job calls the API over
+        // plain HTTP (Design §18.4). HSTS is sent outside Development only.
         if (!app.Environment.IsDevelopment())
         {
             app.UseHsts();

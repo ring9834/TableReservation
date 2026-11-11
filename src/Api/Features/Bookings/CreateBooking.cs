@@ -66,8 +66,13 @@ internal sealed class CreateBookingRequestValidator : AbstractValidator<CreateBo
     {
         RuleFor(x => x.StartsAt).NotEqual(default(DateTimeOffset)).WithErrorCode("starts_at_required");
         RuleFor(x => x.PartySize).InclusiveBetween(PartySize.Min, PartySize.Max).WithErrorCode("party_size_out_of_range");
-        RuleFor(x => x.Name).Must(name => PersonName.Create(name).IsSuccess).WithErrorCode("name_length");
-        RuleFor(x => x.Mobile).Custom((mobile, context) =>
+        // NotEmpty and MaximumLength show the limits in OpenAPI (and so in zod); Must keeps the trimmed check (PersonName).
+        RuleFor(x => x.Name).Cascade(CascadeMode.Stop)
+            .NotEmpty().WithErrorCode("name_length")
+            .MaximumLength(PersonName.MaxLength).WithErrorCode("name_length")
+            .Must(name => PersonName.Create(name).IsSuccess).WithErrorCode("name_length");
+        // NotEmpty puts minLength 1 in OpenAPI (so zod requires it); the NZ mobile check itself stays server-only.
+        RuleFor(x => x.Mobile).Cascade(CascadeMode.Stop).NotEmpty().WithErrorCode("mobile_invalid").Custom((mobile, context) =>
         {
             var parsed = PhoneNumber.Create(mobile);
             if (parsed.IsFailure)

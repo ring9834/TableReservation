@@ -1,5 +1,8 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Reservation.Infrastructure.Demo;
 using Reservation.Tests.Integration.Support;
 
 namespace Reservation.Tests.Integration.Persistence;
@@ -39,6 +42,35 @@ public sealed class MigrationAndSeedTests(PostgresFixture postgres)
         Assert.Equal(11, await db.Bookings.CountAsync(Ct));
         Assert.Equal(11, await db.Guests.CountAsync(Ct));
         Assert.Equal(0, await db.Outbox.CountAsync(Ct));
+    }
+
+    [Fact]
+    public async Task Venue_contact_phone_is_seeded_backfilled_and_optional_in_old_rows()
+    {
+        await using var database = await TestDatabase.CreateAsync(postgres);
+        await using (var db = database.Context())
+        {
+            Assert.Equal(GoldenDragon.ContactPhone, (await db.Venues.SingleAsync(Ct)).Settings.ContactPhone);
+        }
+
+        // Back to before AddVenueContactPhone: the key is gone, and the row still reads (as null).
+        await using (var db = database.Context())
+        {
+            await db.GetService<IMigrator>().MigrateAsync("20261110110438_AddIdempotencyKeys", cancellationToken: Ct);
+        }
+
+        Assert.Equal(0, await Scalar(database, "SELECT count(*) FROM venues WHERE settings ? 'contactPhone'"));
+        await using (var db = database.Context())
+        {
+            Assert.Null((await db.Venues.AsNoTracking().SingleAsync(Ct)).Settings.ContactPhone);
+            await db.Database.MigrateAsync(Ct);
+        }
+
+        // The migration fills it in again for Golden Dragon.
+        await using (var db = database.Context())
+        {
+            Assert.Equal(GoldenDragon.ContactPhone, (await db.Venues.AsNoTracking().SingleAsync(Ct)).Settings.ContactPhone);
+        }
     }
 
     [Fact]

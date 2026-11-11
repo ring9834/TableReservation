@@ -53,11 +53,12 @@ dotnet ef database update --project src/Infrastructure --startup-project src/Api
 dotnet ef migrations add <Name> --project src/Infrastructure --startup-project src/Api --output-dir Persistence/Migrations
 dotnet ef migrations has-pending-model-changes --project src/Infrastructure --startup-project src/Api   # what CI runs
 dotnet run --project src/Api --Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command=Information   # log SQL when debugging (parameter values stay hidden; Warning by default)
-cd web && npm ci && npm run dev
-cd web && npm run lint && npm run typecheck && npm run format:check && npm run build   # what CI runs
+cd web && npm ci && npm run dev         # https://localhost:3000 (next dev --experimental-https; self-signed certificate in web/certificates/)
+cd web && npm run generate:api           # after an API change: regenerate src/api (orval) from docs/api/openapi.json, then commit it
+cd web && npm run lint && npm run typecheck && npm run format:check && npm test && npm run build   # what CI runs (plus "generate:api leaves src/api unchanged")
+cd tests/E2E && npm ci && npx playwright install chromium   # once
+cd tests/E2E && npx playwright test      # API and web must be running; E2E_BASE_URL defaults to https://localhost:3000
 ```
-
-Coming later: from M4b, `npm run generate:api` (orval) and `npx playwright test`.
 
 Keep this section in step with the real scripts when they change.
 
