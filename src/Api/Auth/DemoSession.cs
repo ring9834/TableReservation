@@ -108,6 +108,11 @@ internal static class DemoSession
         return new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme, SubjectClaim, RoleClaim));
     }
 
+    /// <summary>The venues in the <c>venue_ids</c> claims; empty for an anonymous caller.</summary>
+    public static IReadOnlyList<VenueId> VenueIds(ClaimsPrincipal? user) =>
+        user?.FindAll(VenueClaim).Select(c => Guid.TryParse(c.Value, out var id) ? new VenueId(id) : (VenueId?)null)
+            .OfType<VenueId>().ToList() ?? [];
+
     private static async Task WriteProblemAsync(HttpContext context, int status, string code)
     {
         context.Response.StatusCode = status;
@@ -163,7 +168,5 @@ internal sealed class HttpUserContext(IHttpContextAccessor accessor) : IUserCont
         ? Actor.ForStaff(User!.FindFirst(DemoSession.SubjectClaim)!.Value, User.FindFirst(DemoSession.RoleClaim)!.Value)
         : Actor.ForGuest(null);
 
-    public IReadOnlyList<VenueId> VenueIds =>
-        User?.FindAll(DemoSession.VenueClaim).Select(c => Guid.TryParse(c.Value, out var id) ? new VenueId(id) : (VenueId?)null)
-            .OfType<VenueId>().ToList() ?? [];
+    public IReadOnlyList<VenueId> VenueIds => DemoSession.VenueIds(User);
 }

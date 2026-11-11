@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -10,8 +11,8 @@ namespace Reservation.Tests.Integration.Api;
 
 /// <summary>
 /// Test-only routes under <c>/api/v1/test</c>, added through DI by the tests that need them; never part of the API
-/// or its OpenAPI document. They reach responses no M4a route can: a Presenter-only route, <c>hold_expired</c>, and an
-/// unexpected exception.
+/// or its OpenAPI document. They reach responses no M4a route can: a Presenter-only route, <c>hold_expired</c>, an
+/// unexpected exception, and a Host session for another venue.
 /// </summary>
 internal sealed class TestEndpoints : IEndpoint
 {
@@ -25,6 +26,16 @@ internal sealed class TestEndpoints : IEndpoint
         test.MapGet("/venues/{venueId:guid}/presenter-only", () => TypedResults.NoContent()).RequireAuthorization(Policies.Presenter);
         test.MapGet("/hold-expired", () => ResultToHttp.ToProblem(Error.Conflict(ErrorCodes.HoldExpired))).AllowAnonymous();
         test.MapGet("/boom", Boom).AllowAnonymous();
+        test.MapPost("/sign-in/other-venue", (Delegate)SignInOtherVenueAsync).AllowAnonymous();
+    }
+
+    /// <summary>A Host session for a venue other than Golden Dragon, which <c>/demo-login</c> never issues.</summary>
+    public static readonly VenueId OtherVenueId = new(Guid.Parse("0193a7d0-0000-7000-8000-0000000000ff"));
+
+    private static async Task<IResult> SignInOtherVenueAsync(HttpContext http)
+    {
+        await http.SignInAsync(DemoSession.Scheme, DemoSession.Principal(Roles.Host, OtherVenueId));
+        return TypedResults.NoContent();
     }
 
     private static IResult Boom() => throw new InvalidOperationException(Secret);

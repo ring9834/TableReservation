@@ -21,11 +21,9 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [
-    {
-      // Mobile first (AC1.7): a phone-sized Chromium.
-      name: "mobile-chromium",
-      use: { ...devices["Pixel 7"] },
-    },
-  ],
+  // Mobile first (AC1.7): a phone-sized Chromium. CI uses Playwright's Linux Chromium; locally the installed
+  // Microsoft Edge (same engine), because Chrome crashes under automation on the development laptop.
+  projects: isCi
+    ? [{ name: "mobile-chromium", use: { ...devices["Pixel 7"] } }]
+    : [{ name: "mobile-edge", use: { ...devices["Pixel 7"], channel: "msedge" } }],
 });
