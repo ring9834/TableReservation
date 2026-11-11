@@ -5,6 +5,57 @@
     "version": "v1"
   },
   "paths": {
+    "/api/v1/venues/{venueId}": {
+      "get": {
+        "tags": [
+          "Venues"
+        ],
+        "operationId": "getVenue",
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VenueResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/venues/{venueId}/bookings/{id}/confirm": {
       "post": {
         "tags": [
@@ -961,37 +1012,47 @@
             "format": "date-time"
           },
           "partySize": {
+            "maximum": 20,
+            "minimum": 1,
             "type": "integer",
             "format": "int32"
           },
           "name": {
+            "maxLength": 80,
+            "minLength": 1,
             "type": "string"
           },
           "mobile": {
+            "minLength": 1,
             "type": "string"
           },
           "language": {
             "$ref": "#/components/schemas/Language"
           },
           "email": {
+            "maxLength": 254,
             "type": [
               "null",
               "string"
-            ]
+            ],
+            "format": "email"
           },
           "allergyNotes": {
+            "maxLength": 500,
             "type": [
               "null",
               "string"
             ]
           },
           "occasion": {
+            "maxLength": 50,
             "type": [
               "null",
               "string"
             ]
           },
           "notes": {
+            "maxLength": 500,
             "type": [
               "null",
               "string"
@@ -1080,6 +1141,8 @@
         "type": "object",
         "properties": {
           "passcode": {
+            "maxLength": 200,
+            "minLength": 1,
             "type": "string"
           }
         }
@@ -1155,10 +1218,63 @@
             "type": "string"
           }
         }
+      },
+      "VenueResponse": {
+        "required": [
+          "venueId",
+          "name",
+          "timeZone",
+          "today",
+          "slotTimes",
+          "maxOnlinePartySize",
+          "bookingWindowDays",
+          "contactPhone"
+        ],
+        "type": "object",
+        "properties": {
+          "venueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "today": {
+            "type": "string",
+            "format": "date"
+          },
+          "slotTimes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "time"
+            }
+          },
+          "maxOnlinePartySize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bookingWindowDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contactPhone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       }
     }
   },
   "tags": [
+    {
+      "name": "Venues"
+    },
     {
       "name": "Bookings"
     },

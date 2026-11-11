@@ -15,6 +15,13 @@ public sealed class ConcurrencyAndIdempotencyTests(PostgresFixture postgres) : A
 {
     private static readonly string Path = Venue + "/bookings";
 
+    // The stress test sends 100 bookings in a few seconds; rate limiting has its own tests.
+    protected override IReadOnlyDictionary<string, string?> Settings => new Dictionary<string, string?>
+    {
+        ["RateLimits:AnonymousPerMinute"] = "1000",
+        ["RateLimits:BookingPerMinute"] = "1000",
+    };
+
     [Theory]
     [InlineData(19, 0)] // same slot: the second waits at the advisory lock, then finds no room
     [InlineData(19, 15)] // overlapping slot, different lock: the exclusion constraint refuses the second (23P01)
@@ -29,6 +36,28 @@ public sealed class ConcurrencyAndIdempotencyTests(PostgresFixture postgres) : A
         Assert.Single(responses, r => r.StatusCode == HttpStatusCode.Created);
         await ProblemAssert.IsAsync(responses.Single(r => r.StatusCode != HttpStatusCode.Created), HttpStatusCode.Conflict, "slot_taken");
         Assert.Equal(1, await CountTomorrowBookingsAsync());
+    }
+
+    [Fact]
+    public async Task Overlapping_slots_for_the_same_table_never_deadlock_in_50_races()
+    {
+        // §12: 19:00 and 19:15 take different slot locks but both want T10; the table lock orders them. Before it,
+        // the two inserts could deadlock in the exclusion constraint (40P01) and one request got 500.
+        using var other = NewClient();
+        for (var run = 0; run < 50; run++)
+        {
+            var (first, second) = run % 2 == 0 ? ((19, 0), (19, 15)) : ((19, 15), (19, 0));
+            var responses = await Task.WhenAll(
+                PostAsync(Client, Path, BookingBody(Tomorrow, first.Item1, first.Item2, 8, mobile: "021 011 0181")),
+                PostAsync(other, Path, BookingBody(Tomorrow, second.Item1, second.Item2, 8, mobile: "021 011 0182")));
+
+            var statuses = string.Join(", ", responses.Select(r => (int)r.StatusCode).Order());
+            Assert.True(statuses == "201, 409", $"Run {run}: expected 201 and 409, got {statuses}");
+            await ProblemAssert.IsAsync(responses.Single(r => r.StatusCode != HttpStatusCode.Created), HttpStatusCode.Conflict, "slot_taken");
+            Assert.Equal(1, await CountTomorrowBookingsAsync());
+
+            await DeleteTomorrowBookingsAsync();
+        }
     }
 
     [Fact]
@@ -92,6 +121,18 @@ public sealed class ConcurrencyAndIdempotencyTests(PostgresFixture postgres) : A
         var response = await PostAsync(Client, Path, BookingBody(Tomorrow, 19, 0, 2), new string('k', 101));
 
         await ProblemAssert.IsValidationAsync(response, "idempotencyKey", "idempotency_key_invalid");
+    }
+
+    /// <summary>Resets tomorrow between races (no workers run in API tests, so the outbox rows left behind are inert).</summary>
+    private async Task DeleteTomorrowBookingsAsync()
+    {
+        await using var db = Database.Context();
+        var from = GoldenDragon.At(Tomorrow, TimeOnly.MinValue);
+        var to = GoldenDragon.At(Tomorrow.AddDays(1), TimeOnly.MinValue);
+        await db.Database.ExecuteSqlAsync(
+            $"DELETE FROM table_assignments WHERE booking_id IN (SELECT id FROM bookings WHERE lower(period) >= {from} AND lower(period) < {to})",
+            Ct);
+        await db.Database.ExecuteSqlAsync($"DELETE FROM bookings WHERE lower(period) >= {from} AND lower(period) < {to}", Ct);
     }
 
     private async Task<int> CountTomorrowBookingsAsync()

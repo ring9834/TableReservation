@@ -86,5 +86,14 @@ public sealed class PipelineTests(PostgresFixture postgres) : ApiTestBase(postgr
         Assert.Equal((409, "slot_taken"), GlobalExceptionHandler.Classify(new DbUpdateException("save", exclusion)));
         Assert.Equal((409, "version_conflict"), GlobalExceptionHandler.Classify(new DbUpdateConcurrencyException("stale")));
         Assert.Equal((500, "unexpected"), GlobalExceptionHandler.Classify(new DbUpdateException("other")));
+
+        var deadlock = new PostgresException("deadlock", "ERROR", "ERROR", PostgresErrorCodes.DeadlockDetected);
+        var serialization = new PostgresException("serialization", "ERROR", "ERROR", PostgresErrorCodes.SerializationFailure);
+        Assert.Equal((409, "slot_taken"), GlobalExceptionHandler.Classify(deadlock));
+        Assert.Equal((409, "slot_taken"), GlobalExceptionHandler.Classify(new DbUpdateException("save", deadlock)));
+        Assert.Equal((409, "slot_taken"), GlobalExceptionHandler.Classify(new DbUpdateException("save", serialization)));
+        Assert.Equal((409, "slot_taken"), GlobalExceptionHandler.Classify(new InvalidOperationException("tx", serialization)));
+        Assert.Equal((500, "unexpected"), GlobalExceptionHandler.Classify(
+            new DbUpdateException("save", new PostgresException("other", "ERROR", "ERROR", PostgresErrorCodes.UniqueViolation))));
     }
 }

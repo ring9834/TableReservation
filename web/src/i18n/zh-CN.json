@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "预订餐桌 · {{venue}}"
+  },
+  "language": {
+    "label": "语言",
+    "en": "English",
+    "zh": "中文"
+  },
+  "common": {
+    "loading": "加载中…",
+    "retry": "重试"
+  },
+  "book": {
+    "title": "预订餐桌",
+    "intro": "{{venue}}，奥克兰。无需注册账户。"
+  },
+  "when": {
+    "heading": "您想什么时候来？",
+    "partySize": "用餐人数",
+    "partyOne": "1 位",
+    "partyMany": "{{count}} 位",
+    "partyLarge": "{{count}} 位或以上",
+    "callUs": "{{count}} 位或以上的预订，请致电我们，以便为您妥善安排。",
+    "callUsPhone": "致电 {{phone}}",
+    "callUsNoPhone": "请致电餐厅。",
+    "date": "日期",
+    "time": "时间",
+    "chooseTime": "请选择时间",
+    "checking": "正在查询空位…",
+    "available": "{{time}} 有空位（{{party}}）。",
+    "continue": "继续",
+    "full": "抱歉，{{time}} 已满。最近的可订时间：",
+    "slotTaken": "抱歉，该时间刚刚被订走。最近的可订时间：",
+    "pickTime": "预订 {{time}}",
+    "noneThatDay": "抱歉，当天没有适合 {{party}} 的空桌。请换一个日期。"
+  },
+  "details": {
+    "heading": "您的信息",
+    "summary": "{{date}} {{time}}，{{party}}",
+    "change": "更改时间",
+    "name": "姓名",
+    "mobile": "手机号码",
+    "mobileHint": "新西兰手机号码，例如 021 123 4567",
+    "email": "电子邮箱（选填）",
+    "occasion": "用餐场合（选填）",
+    "occasionHint": "例如生日或周年纪念",
+    "allergies": "过敏或饮食要求（选填）",
+    "notes": "给餐厅的备注（选填）",
+    "submit": "立即预订",
+    "submitting": "正在预订…",
+    "fixErrors": "请检查标出的内容。"
+  },
+  "confirmation": {
+    "heading": "预订成功！",
+    "headingPending": "已为您保留餐桌",
+    "reference": "预订编号",
+    "when": "时间",
+    "party": "人数",
+    "depositHeading": "需支付订金",
+    "depositText": "6 位或以上的预订需支付订金 {{amount}}。我们将为您保留餐桌至 {{time}}。",
+    "paymentNext": "下一步为付款：在线付款将在本演示的后续版本中加入。",
+    "bookAnother": "再订一桌"
+  },
+  "errors": {
+    "slot_taken": "抱歉，该时间刚刚被订走。请选择其他时间。",
+    "party_too_large": "在线预订仅适用于人数较少的用餐。人数较多请致电我们。",
+    "outside_service_hours": "该时间不在可预订时段内。请选择其他时间。",
+    "outside_booking_window": "该日期无法在线预订。请在预订日历中选择日期。",
+    "validation_failed": "部分信息有误，请检查表单。",
+    "too_many_requests": "尝试次数过多，请稍等一分钟后再试。",
+    "unexpected": "系统出现问题，请重试。"
+  },
+  "fieldErrors": {
+    "name_length": "请输入您的姓名（最多 80 个字符）。",
+    "mobile_invalid": "请输入有效的新西兰手机号码。",
+    "mobile_not_mobile": "这似乎是固定电话号码。请输入手机号码，以便我们给您发短信。",
+    "email_invalid": "请输入有效的电子邮箱地址。",
+    "email_too_long": "电子邮箱地址过长。",
+    "occasion_too_long": "用餐场合请不要超过 50 个字符。",
+    "allergy_notes_too_long": "过敏说明请不要超过 500 个字符。",
+    "notes_too_long": "备注请不要超过 500 个字符。"
+  }
+}

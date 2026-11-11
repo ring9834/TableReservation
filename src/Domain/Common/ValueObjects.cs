@@ -172,6 +172,28 @@ public sealed record PhoneNumber
         return new PhoneNumber(_util.Format(parsed, PhoneNumberFormat.E164));
     }
 
+    /// <summary>
+    /// Whether <paramref name="input"/> could be an NZ phone number of any kind (landline, mobile, freephone), e.g. a
+    /// venue's contact number. Possible, not valid: fictional demo numbers such as <c>+64 9 000 0000</c> pass.
+    /// </summary>
+    public static bool IsPossibleNz(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        try
+        {
+            var parsed = _util.Parse(input, "NZ");
+            return parsed.CountryCode == 64 && _util.IsPossibleNumber(parsed);
+        }
+        catch (NumberParseException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Safe to log or show in the message log: country code and last 3 digits only.</summary>
     public string Masked() => E164.Length <= 6
         ? new string('*', E164.Length)

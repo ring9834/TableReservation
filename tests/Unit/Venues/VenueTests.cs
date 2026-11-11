@@ -106,6 +106,32 @@ public class VenueTests
         EventAssert.Failed(result, ErrorCodes.ValidationFailed, ErrorKind.Validation);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("+64 9 000 0000")]
+    [InlineData("09 000 0000")]
+    [InlineData("0800 000 000")]
+    [InlineData("021 123 4567")]
+    public void Validate_ContactPhone_AcceptsNoneOrAPossibleNzNumber(string? phone)
+    {
+        var result = (TestData.Settings() with { ContactPhone = phone }).Validate();
+
+        Assert.True(result.IsSuccess);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("call us")]
+    [InlineData("12")]
+    [InlineData("+61 2 9000 0000")]
+    public void Validate_ContactPhone_NotAPossibleNzNumber_ReturnsContactPhoneInvalid(string phone)
+    {
+        var result = (TestData.Settings() with { ContactPhone = phone }).Validate();
+
+        EventAssert.Failed(result, ErrorCodes.ValidationFailed, ErrorKind.Validation);
+        Assert.Equal("contact_phone_invalid", result.Error!.Fields!["contactPhone"].Single());
+    }
+
     [Fact]
     public void IsBookableSlot_UsesVenueTimeAcrossDaylightSaving_BR01()
     {

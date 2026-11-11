@@ -1,0 +1,218 @@
+/* Mobile first (AC1.7): one column, large touch targets (44 px), visible focus. */
+
+.page {
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem 0;
+}
+
+.main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 0.5rem 1rem 3rem;
+}
+
+.main h1 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.6rem;
+}
+
+.intro {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+}
+
+.step h2 {
+  font-size: 1.25rem;
+  margin: 0 0 1rem;
+}
+
+.step h2:focus {
+  outline: none;
+}
+
+.step h2:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.fields {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  font-size: 1rem; /* 16 px: no zoom on focus in iOS Safari */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field [aria-invalid="true"] {
+  border-color: var(--error);
+  border-width: 2px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.results {
+  margin-top: 1.25rem;
+}
+
+.available {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.primary,
+.secondary,
+.slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.primary {
+  width: 100%;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.secondary,
+.slot {
+  width: 100%;
+  color: var(--accent-text);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+
+.link {
+  min-height: 2.75rem;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-text);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-muted);
+  border-radius: 0.5rem;
+}
+
+.summary p {
+  margin: 0;
+}
+
+.notice,
+.alert {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border-left: 4px solid var(--accent);
+  background: var(--surface-muted);
+}
+
+.notice p,
+.alert p,
+.notice h3 {
+  margin: 0;
+}
+
+.notice h3 {
+  font-size: 1.05rem;
+}
+
+.alert {
+  border-left-color: var(--error);
+}
+
+.details {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+
+.details dt {
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.05rem;
+}
+
+.reference {
+  font-family: ui-monospace, monospace;
+  font-size: 1.5rem !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}

@@ -16,6 +16,9 @@ public static class GoldenDragon
     /// <summary>Demo "now" after Reset: the DemoClock is fixed here (Design §17, M11).</summary>
     public static readonly TimeOnly DemoTime = new(18, 25);
 
+    /// <summary>The number shown to parties too large to book online (BR-04). Fictional.</summary>
+    public const string ContactPhone = "+64 9 000 0000";
+
     public static readonly VenueId VenueId = new(Guid.Parse("0193a7d0-0000-7000-8000-000000000001"));
     public static readonly AreaId MainRoomId = new(Guid.Parse("0193a7d0-0000-7000-8000-0000000000a1"));
     public static readonly AreaId WindowId = new(Guid.Parse("0193a7d0-0000-7000-8000-0000000000a2"));
@@ -87,7 +90,8 @@ public static class GoldenDragon
         NotifiedTimeoutMinutes: 10,
         PaymentHoldMinutes: 10,
         LateBillMatchMinutes: 30,
-        BookingWindowDays: 30);
+        BookingWindowDays: 30,
+        ContactPhone: ContactPhone);
 
     public static TableId TableId(string name)
     {

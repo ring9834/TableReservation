@@ -219,28 +219,50 @@ Ask before adding packages beyond FluentValidation. Record decisions §9/§14 le
 
 ### M4b Guest booking page
 ```
-Start milestone M4b (guest booking page). The M4a API is done; its contract is docs/api/openapi.json
-(Design §14, §14.1).
+Start milestone M4b (guest booking page) from docs/BUILD-PLAN.md, using the M4a API.
 
-- Generate the TypeScript client with orval from docs/api/openapi.json into web/src/api (TanStack
-  Query hooks and zod schemas). Add `npm run generate:api`; CI fails if the generated client is out
-  of date.
-- Add the FluentValidation → OpenAPI schema transformer (ADR-004 "How it is used" 4) so the zod
-  schemas carry the basic rules, or, if that costs too much, add those few rules to zod by hand.
-- Build /book (Design §18.1 features/booking: WhenStep, DetailsStep, Confirmation; PayStep comes in
-  M8) for AC1.1–AC1.4, AC1.6 (reference shown; the phone panel arrives in M7), AC1.7 and AC1.8:
-  react-i18next with en and zh-CN, the English / 中文 switch without a reload (§18.2), the language
-  sent with the booking, one useApiError that maps each Problem Details `code` to a translated
-  message, and 409 slot_taken offering the next free times. A party of 6+ ends on a "deposit
-  needed" placeholder until M8.
-- Local development: decide how the SameSite=Strict session cookie works across
-  http://localhost:3000 and https://localhost:5001 (Design §20). The guest page needs no session,
-  but M5 does.
-- Set up tests/E2E with Playwright: a guest books a table for 2 in English and in Chinese, and a
-  full time shows the 3 nearest times. Run it in CI against the API and PostgreSQL.
+Dev setup:
+- Run next dev over HTTPS (--experimental-https) so the SameSite=Strict cookie reaches
+  https://localhost:5001; change Development Cors:AllowedOrigins to https://localhost:3000.
+  Close the Design §20 localhost item.
 
-Update the CLAUDE.md commands. Record design decisions in Design.md. Ask before adding packages
-beyond orval, react-i18next, i18next, @playwright/test and the libraries already listed.
+API client:
+- orval generates TanStack Query hooks and zod schemas from docs/api/openapi.json (the committed
+  file, not a running API) via `npm run generate:api`. Commit the generated code; CI fails if
+  regenerating changes it.
+- Fetch wrapper: base URL from NEXT_PUBLIC_API_BASE_URL, credentials 'include', X-Correlation-Id per
+  request, Problem Details parsed into a typed error with `code`.
+- Add the FluentValidation → OpenAPI schema transformer deferred from M4a (required, lengths,
+  ranges), regenerate docs/api/openapi.json, and let zod pick the rules up.
+
+/book page (Design §18, Requirements step 1, AC1.x), mobile first, done in under a minute:
+- Party size, date and time → availability; when the time is taken, show the 3 nearest slots
+  (AC1.3). Party over 8: "please call us" (BR-04).
+- Details: name, NZ mobile, optional email, occasion, allergies, notes; react-hook-form with the
+  generated zod schema.
+- Submit with an Idempotency-Key generated once per submission and reused on retry.
+- Confirmation with the reference. A party of 6+ shows the deposit due and the hold expiry;
+  payment itself comes in M8, so show a clear "payment step coming next" placeholder.
+- Each API error code (slot_taken, party_too_large, outside_service_hours,
+  outside_booking_window, validation_failed, too_many_requests, unexpected) maps to a translated
+  message; slot_taken reloads availability.
+- Times shown in Pacific/Auckland; labels, keyboard use and focus handling for accessibility.
+
+Languages:
+- react-i18next with English and Simplified Chinese; every string in translation files; a language
+  switch on the page; the active language is sent with the booking. A test fails if a key exists
+  in one language but not the other.
+
+Playwright (tests/E2E):
+- Book a party of 2 for tomorrow 19:30 in English; book in Chinese and check the confirmation text
+  is Chinese; a party of 9 shows "please call us". Use tomorrow so the test doesn't depend on the
+  time of day.
+- CI job: PostgreSQL service, API (migrations + seed, demo passcodes from CI-only values), the
+  built static site served locally, then Playwright. Upload the report on failure.
+
+Ask before adding packages beyond orval, @tanstack/react-query, zod, react-hook-form,
+@hookform/resolvers, i18next, react-i18next and @playwright/test.
+Record decisions §18 left open in Design.md.
 ```
 
 ### M5 onward

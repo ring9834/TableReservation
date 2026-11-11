@@ -1,0 +1,84 @@
+{
+  "app": {
+    "title": "Book a table · {{venue}}"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "zh": "中文"
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Try again"
+  },
+  "book": {
+    "title": "Book a table",
+    "intro": "{{venue}}, Auckland. No account needed."
+  },
+  "when": {
+    "heading": "When would you like to come?",
+    "partySize": "Party size",
+    "partyOne": "1 guest",
+    "partyMany": "{{count}} guests",
+    "partyLarge": "{{count}} or more",
+    "callUs": "For {{count}} or more guests, please call us so we can look after you.",
+    "callUsPhone": "Call {{phone}}",
+    "callUsNoPhone": "Please call the restaurant.",
+    "date": "Date",
+    "time": "Time",
+    "chooseTime": "Choose a time",
+    "checking": "Checking tables…",
+    "available": "{{time}} is available for {{party}}.",
+    "continue": "Continue",
+    "full": "Sorry, {{time}} is full. The nearest free times are:",
+    "slotTaken": "Sorry, that time was just taken. The nearest free times are:",
+    "pickTime": "Book {{time}}",
+    "noneThatDay": "Sorry, there are no free tables for {{party}} on that day. Please try another date."
+  },
+  "details": {
+    "heading": "Your details",
+    "summary": "{{date}} at {{time}}, {{party}}",
+    "change": "Change time",
+    "name": "Name",
+    "mobile": "Mobile",
+    "mobileHint": "NZ mobile number, e.g. 021 123 4567",
+    "email": "Email (optional)",
+    "occasion": "Occasion (optional)",
+    "occasionHint": "e.g. birthday or anniversary",
+    "allergies": "Allergies or dietary needs (optional)",
+    "notes": "Notes for the restaurant (optional)",
+    "submit": "Book now",
+    "submitting": "Booking…",
+    "fixErrors": "Please check the highlighted fields."
+  },
+  "confirmation": {
+    "heading": "You're booked!",
+    "headingPending": "Your table is held",
+    "reference": "Booking reference",
+    "when": "When",
+    "party": "Party",
+    "depositHeading": "Deposit needed",
+    "depositText": "Parties of 6 or more pay a deposit of {{amount}}. We hold your table until {{time}}.",
+    "paymentNext": "Payment step coming next: online payment is added in a later version of this demo.",
+    "bookAnother": "Book another table"
+  },
+  "errors": {
+    "slot_taken": "Sorry, that time was just taken. Please choose another time.",
+    "party_too_large": "Online bookings are for smaller parties. For larger parties, please call us.",
+    "outside_service_hours": "That time is outside our booking hours. Please choose another time.",
+    "outside_booking_window": "That date can't be booked online. Please choose a date in the booking calendar.",
+    "validation_failed": "Some details aren't right. Please check the form.",
+    "too_many_requests": "Too many attempts. Please wait a minute and try again.",
+    "unexpected": "Something went wrong on our side. Please try again."
+  },
+  "fieldErrors": {
+    "name_length": "Please enter your name (up to 80 characters).",
+    "mobile_invalid": "Please enter a valid NZ mobile number.",
+    "mobile_not_mobile": "This looks like a landline. Please enter a mobile number so we can text you.",
+    "email_invalid": "Please enter a valid email address.",
+    "email_too_long": "That email address is too long.",
+    "occasion_too_long": "Please keep the occasion under 50 characters.",
+    "allergy_notes_too_long": "Please keep allergy notes under 500 characters.",
+    "notes_too_long": "Please keep notes under 500 characters."
+  }
+}
