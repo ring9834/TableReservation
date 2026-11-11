@@ -103,7 +103,8 @@ internal static class IdempotencyKey
 /// <summary>
 /// <c>CreateOnlineBooking</c> and <c>CreatePhoneBooking</c> (Design §9.2, §11, §12), one transaction:
 /// claim the idempotency key → take <c>pg_advisory_xact_lock</c> for the venue and slot → count covers (BR-03) and
-/// pick the smallest free table (BR-05) → find or create the guest by mobile → <c>Booking.Create</c> → save (the
+/// pick the smallest free table (BR-05) → find or create the guest by mobile → lock each chosen table (ascending ID)
+/// → <c>Booking.Create</c> → save (the
 /// outbox rows go in the same save) → store the response under the key → commit. Pacing over the limit or no free
 /// table is 409 <c>slot_taken</c>; so is the exclusion constraint (<c>23P01</c>) at save time, mapped centrally.
 /// </summary>
@@ -215,8 +216,11 @@ internal sealed partial class BookingCreator(
             requestContext.Set(requestContext.CorrelationId, requestContext.CausationId, Actor.ForGuest(guest.Id));
         }
 
+        TableId[] tableIds = [slot.Table.Id];
+        await LockTablesAsync(tableIds, cancellationToken);
+
         var created = Booking.Create(
-            venue, guest.Id, await NewReferenceAsync(cancellationToken), channel, partySize, startsAt, [slot.Table.Id],
+            venue, guest.Id, await NewReferenceAsync(cancellationToken), channel, partySize, startsAt, tableIds,
             Blank(request.Notes), Blank(request.Occasion), now);
         if (created.IsFailure)
         {
@@ -252,6 +256,21 @@ internal sealed partial class BookingCreator(
         booking.Deposit is { } deposit ? MoneyDto.From(deposit.Amount) : null,
         booking.HoldExpiresAt?.UtcDateTime,
         ClientSecret: null);
+
+    /// <summary>
+    /// §12: overlapping slots take different slot locks, so two requests can pick the same table at once. Inserting
+    /// both assignments concurrently can deadlock inside the exclusion constraint (<c>40P01</c>); a lock per table,
+    /// taken in ascending ID order and held until commit, makes the second wait and then fail cleanly with
+    /// <c>23P01</c> → <c>slot_taken</c>.
+    /// </summary>
+    private async Task LockTablesAsync(IEnumerable<TableId> tableIds, CancellationToken cancellationToken)
+    {
+        foreach (var tableId in tableIds.Select(t => t.Value).Distinct().Order())
+        {
+            var lockKey = $"table:{tableId}";
+            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
+        }
+    }
 
     private async Task<BookingReference> NewReferenceAsync(CancellationToken cancellationToken)
     {

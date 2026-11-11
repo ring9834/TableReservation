@@ -9,7 +9,8 @@ namespace Reservation.Api.Pipeline;
 /// <summary>
 /// The central exception handler (ADR-004): the only place an exception becomes a response, logged once.
 /// Known infrastructure failures are mapped to their stable codes: a stale row version → 409
-/// <c>version_conflict</c>, the exclusion constraint (<c>23P01</c>) → 409 <c>slot_taken</c>, a body or parameter
+/// <c>version_conflict</c>, the exclusion constraint (<c>23P01</c>) and a deadlock or serialization failure
+/// (<c>40P01</c>, <c>40001</c>) → 409 <c>slot_taken</c>, a body or parameter
 /// that can't be read → 400 <c>validation_failed</c>. A request the client abandoned gets no response and no error log.
 /// Anything else is 500 <c>unexpected</c>, with details only in the log.
 /// </summary>
@@ -53,9 +54,19 @@ internal sealed partial class GlobalExceptionHandler(IProblemDetailsService prob
         DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, ErrorCodes.VersionConflict),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.ExclusionViolation } } =>
             (StatusCodes.Status409Conflict, ErrorCodes.SlotTaken),
+        _ when IsLostRace(exception) => (StatusCodes.Status409Conflict, ErrorCodes.SlotTaken),
         BadHttpRequestException bad => (bad.StatusCode, ApiProblems.CodeFor(bad.StatusCode)),
         _ => (StatusCodes.Status500InternalServerError, ProblemCodes.Unexpected),
     };
+
+    /// <summary>
+    /// Safety net (§12): a deadlock (<c>40P01</c>) or serialization failure (<c>40001</c>) means PostgreSQL rolled
+    /// back one of two competing transactions. The table locks in <c>BookingCreator</c> should prevent it; if it
+    /// still happens, the loser gets 409 <c>slot_taken</c>, not 500.
+    /// </summary>
+    private static bool IsLostRace(Exception exception) =>
+        (exception as PostgresException ?? exception.InnerException as PostgresException) is
+        { SqlState: PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure };
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled exception")]
     private static partial void LogUnexpected(ILogger logger, Exception exception);
