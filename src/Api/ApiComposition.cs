@@ -7,6 +7,7 @@ using Reservation.Api.Common;
 using Reservation.Api.Features.Bookings;
 using Reservation.Api.Features.Bookings.Availability;
 using Reservation.Api.Pipeline;
+using Reservation.Api.Realtime;
 
 namespace Reservation.Api;
 
@@ -48,7 +49,8 @@ internal static class ApiComposition
             .WithOrigins(origins)
             .AllowCredentials()
             .WithMethods("GET", "POST", "PUT", "DELETE")
-            .WithHeaders("Content-Type", IdempotencyKey.Header, RequestLoggingMiddleware.CorrelationHeader)
+            // X-Requested-With and X-SignalR-User-Agent: the browser SignalR client's negotiate and long-polling requests.
+            .WithHeaders("Content-Type", IdempotencyKey.Header, RequestLoggingMiddleware.CorrelationHeader, "X-Requested-With", "X-SignalR-User-Agent")
             .WithExposedHeaders(RequestLoggingMiddleware.CorrelationHeader)));
 
         services.AddOpenApi(options =>
@@ -63,7 +65,12 @@ internal static class ApiComposition
 
             // Basic FluentValidation rules → schema limits, so the generated zod schemas match (ADR-004, Design §18.4).
             options.AddSchemaTransformer<FluentValidationSchemaTransformer>();
+
+            // SignalR notices as component schemas (Design §15).
+            options.AddNoticeSchemas();
         });
+
+        services.AddRealtime();
 
         services.AddValidatorsFromAssemblyContaining<CreateBookingRequestValidator>(includeInternalTypes: true);
         services.AddFeatures(typeof(ApiComposition).Assembly);
@@ -102,6 +109,7 @@ internal static class ApiComposition
     {
         app.MapOpenApi().AllowAnonymous().DisableRateLimiting();
         app.MapFeatures();
+        app.MapRealtime();
         return app;
     }
 }

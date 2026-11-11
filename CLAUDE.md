@@ -56,8 +56,8 @@ dotnet run --project src/Api --Logging:LogLevel:Microsoft.EntityFrameworkCore.Da
 cd web && npm ci && npm run dev         # https://localhost:3000 (next dev --experimental-https; self-signed certificate in web/certificates/)
 cd web && npm run generate:api           # after an API change: regenerate src/api (orval) from docs/api/openapi.json, then commit it
 cd web && npm run lint && npm run typecheck && npm run format:check && npm test && npm run build   # what CI runs (plus "generate:api leaves src/api unchanged")
-cd tests/E2E && npm ci && npx playwright install chromium   # once
-cd tests/E2E && npx playwright test      # API and web must be running; E2E_BASE_URL defaults to https://localhost:3000
+cd tests/E2E && npm ci                   # once; locally Playwright drives the installed Microsoft Edge (project mobile-edge, channel 'msedge'), so no browser download
+cd tests/E2E && npx playwright test      # API and web must be running; E2E_BASE_URL defaults to https://localhost:3000. CI (CI=1) runs Linux Chromium instead (project mobile-chromium); Chrome crashes under automation on the dev laptop
 ```
 
 Keep this section in step with the real scripts when they change.

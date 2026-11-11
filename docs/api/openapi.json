@@ -5,6 +5,67 @@
     "version": "v1"
   },
   "paths": {
+    "/api/v1/venues/{venueId}/floor-plan": {
+      "get": {
+        "tags": [
+          "FloorPlan"
+        ],
+        "operationId": "getFloorPlan",
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorPlanResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/venues/{venueId}": {
       "get": {
         "tags": [
@@ -1167,11 +1228,170 @@
           null
         ]
       },
+      "FloorAreaDto": {
+        "required": [
+          "id",
+          "name",
+          "sortOrder"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "FloorPlanChangedNotice": {
+        "required": [
+          "tableIds",
+          "bookingIds",
+          "sequence"
+        ],
+        "type": "object",
+        "properties": {
+          "tableIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "bookingIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "FloorPlanResponse": {
+        "required": [
+          "venueId",
+          "timeZone",
+          "at",
+          "areas",
+          "tables"
+        ],
+        "type": "object",
+        "properties": {
+          "venueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "areas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FloorAreaDto"
+            }
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FloorTableDto"
+            }
+          }
+        }
+      },
+      "FloorTableDto": {
+        "required": [
+          "id",
+          "areaId",
+          "name",
+          "seats",
+          "shape",
+          "position",
+          "state",
+          "current",
+          "next"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "areaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "seats": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "shape": {
+            "$ref": "#/components/schemas/TableShape"
+          },
+          "position": {
+            "$ref": "#/components/schemas/TablePositionDto"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TableState"
+          },
+          "current": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TableBookingSummary"
+              }
+            ]
+          },
+          "next": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TableBookingSummary"
+              }
+            ]
+          }
+        }
+      },
       "Language": {
         "enum": [
           "en",
           "zh"
         ]
+      },
+      "MessageLogChangedNotice": {
+        "required": [
+          "messageIds"
+        ],
+        "type": "object",
+        "properties": {
+          "messageIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
       },
       "MoneyDto": {
         "required": [
@@ -1189,6 +1409,21 @@
           }
         }
       },
+      "PosLogChangedNotice": {
+        "required": [
+          "posMessageIds"
+        ],
+        "type": "object",
+        "properties": {
+          "posMessageIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "RefundDecision": {
         "enum": [
           "full",
@@ -1202,6 +1437,84 @@
           "host",
           "presenter"
         ]
+      },
+      "TableBookingSummary": {
+        "required": [
+          "bookingId",
+          "reference",
+          "status",
+          "partySize",
+          "startsAt",
+          "endsAt",
+          "guestName",
+          "hasAllergy"
+        ],
+        "type": "object",
+        "properties": {
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BookingStatus"
+          },
+          "partySize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "guestName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasAllergy": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TablePositionDto": {
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height",
+          "rotation"
+        ],
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "number",
+            "format": "double"
+          },
+          "height": {
+            "type": "number",
+            "format": "double"
+          },
+          "rotation": {
+            "type": "number",
+            "format": "double"
+          }
+        }
       },
       "TableRef": {
         "required": [
@@ -1218,6 +1531,20 @@
             "type": "string"
           }
         }
+      },
+      "TableShape": {
+        "enum": [
+          "round",
+          "rect"
+        ]
+      },
+      "TableState": {
+        "enum": [
+          "free",
+          "booked",
+          "arrivingSoon",
+          "seated"
+        ]
       },
       "VenueResponse": {
         "required": [
@@ -1268,10 +1595,44 @@
             ]
           }
         }
+      },
+      "WaitlistChangedNotice": {
+        "required": [
+          "entryIds",
+          "suggestedEntryId",
+          "freedTableId"
+        ],
+        "type": "object",
+        "properties": {
+          "entryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "suggestedEntryId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "freedTableId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
       }
     }
   },
   "tags": [
+    {
+      "name": "FloorPlan"
+    },
     {
       "name": "Venues"
     },

@@ -18,7 +18,8 @@ The six demo steps are never cut.
 | M3 | Outbox, dispatcher, inbox | §5 | Events are saved with the change and delivered once | 1.5 d |
 | M4a | Booking and availability API | §9, §11, §14 | Step 1 through the API without payment; `slot_taken`; idempotency; demo sign-in; OpenAPI document and `oasdiff` in CI | 1 d |
 | M4b | Guest booking page | §18 | Step 1 on the phone in English and Chinese, without payment; orval client; first Playwright test | 1 d |
-| M5 | Host app: floor plan + SignalR | §15, §18 | Step 2: booking appears within 2 s | 2 d |
+| M5a | Real-time API | §15, §18 (server side) | SignalR hub, ID-only notices, floor-plan read; a booking reaches a connected client within 2 s | 1 d |
+| M5b | Host screens | §18 | Step 2: host sign-in page, floor plan, tonight's list, reconnect; multi-screen Playwright (QA-1) | 1 d |
 | M6 | Walk-ins and waitlist | §3.2, §11.3, §11.4 | Step 3 | 1 d |
 | M7 | Messaging and phone panel | §7, §7.1 | Step 4: "table ready" text | 1 d |
 | M8 | Stripe deposits and refunds | §8 | Step 1 with deposit; step 5 refunds | 1.5 d |
@@ -265,7 +266,41 @@ Ask before adding packages beyond orval, @tanstack/react-query, zod, react-hook-
 Record decisions §18 left open in Design.md.
 ```
 
-### M5 onward
+### M5a Real-time API
+```
+Start milestone M5a (real-time server side; the host screens are M5b). Split M5 in
+docs/BUILD-PLAN.md into M5a (this prompt) and M5b (host sign-in page, floor plan, tonight's list,
+reconnect, multi-screen Playwright), and keep the other milestones' numbers.
+
+Implement docs/Design.md §15 and the server side of §18, ADR-002 "Real-time host screens":
+- SignalR hub at /hubs/venue, Host policy via the demo session cookie. The server puts the
+  connection in group venue:{venueId} from the venue_ids claim; the client never chooses its venue.
+  No access_token in the query string (the cookie is enough for the demo; ADR-004 notes the pilot).
+- RealtimeNotifier: event handlers registered unwrapped (idempotent: false) that turn domain
+  events into small notices: floorPlanChanged {tableIds, bookingIds, sequence}, waitlistChanged,
+  messageLogChanged (the last two can be stubs until M6/M7). Notices carry IDs only, no names.
+  A failed push is logged and must not fail the event (screens refetch anyway).
+- GET /api/v1/venues/{venueId}/floor-plan (Host): areas, tables (name, seats, shape, position),
+  and each table's current state from TableStateRule at business-clock "now", with a short
+  summary of the booking on it (reference, party, time, guest name, status). Tonight's
+  bookings endpoint stays as it is.
+- Latency: signal the outbox dispatcher on commit (already done), so a booking reaches a
+  connected screen well within 2 s (QA-1).
+- Local Playwright: add a Playwright project that uses channel 'msedge' when not in CI, because
+  Chrome crashes under automation on this laptop; CI keeps Linux Chromium. Note it in CLAUDE.md.
+
+Tests:
+- Integration (Microsoft.AspNetCore.SignalR.Client in tests only): anonymous connection rejected;
+  host joins only its venue's group; a booking made through the API produces floorPlanChanged on a
+  connected client within 2 s, with no personal data in the notice; another venue's client gets
+  nothing; a throwing SignalR push doesn't leave the outbox row pending.
+- Floor plan endpoint: seed at 18:25 gives the expected state per table (Design §17 seed table).
+
+Ask before adding packages beyond Microsoft.AspNetCore.SignalR.Client (tests).
+Record decisions §15 left open in Design.md.
+```
+
+### M5b onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse
