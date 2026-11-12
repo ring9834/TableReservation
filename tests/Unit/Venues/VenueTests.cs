@@ -33,12 +33,29 @@ public class VenueTests
     public void Create_WithDuplicateTableIds_ReturnsValidationFailed()
     {
         var position = new FloorPosition(0, 0, 0, TableShape.Rect, 1, 1);
-        var area = new Area(new AreaId(Guid.NewGuid()), "Main", 1,
+        var area = new Area(new AreaId(Guid.NewGuid()), "Main", "主厅", 1,
             [new Table(TestData.Table2, "A", 2, position), new Table(TestData.Table2, "B", 2, position)]);
 
         var result = Venue.Create(new VenueId(Guid.NewGuid()), "X", "Pacific/Auckland", Money.Nzd, TestData.Settings(), [area]);
 
         EventAssert.Failed(result, ErrorCodes.ValidationFailed, ErrorKind.Validation);
+    }
+
+    [Fact]
+    public void Area_KeepsItsEnglishAndChineseNames_M6a()
+    {
+        var area = new Area(new AreaId(Guid.NewGuid()), "Window", "窗边", 2, []);
+
+        Assert.Equal("Window", area.Name);
+        Assert.Equal("窗边", area.NameZh);
+    }
+
+    [Theory]
+    [InlineData("", "主厅")]
+    [InlineData("Main", " ")]
+    public void Area_WithoutBothNames_Throws_M6a(string name, string nameZh)
+    {
+        Assert.ThrowsAny<ArgumentException>(() => new Area(new AreaId(Guid.NewGuid()), name, nameZh, 1, []));
     }
 
     [Fact]
@@ -155,7 +172,7 @@ public class VenueTests
     }
 
     private static Area Area() =>
-        new(new AreaId(Guid.NewGuid()), "Main", 1, [new Table(TestData.Table2, "T2", 2, new FloorPosition(0, 0, 0, TableShape.Round, 1, 1))]);
+        new(new AreaId(Guid.NewGuid()), "Main", "主厅", 1, [new Table(TestData.Table2, "T2", 2, new FloorPosition(0, 0, 0, TableShape.Round, 1, 1))]);
 }
 
 /// <summary>Table state is derived from bookings (Design §2.5).</summary>

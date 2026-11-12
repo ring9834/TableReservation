@@ -31,6 +31,7 @@ internal sealed class AreaConfiguration : IEntityTypeConfiguration<Area>
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Name);
+        builder.Property(x => x.NameZh).HasColumnName("name_zh");
         builder.Property(x => x.SortOrder);
 
         builder.HasMany(x => x.Tables).WithOne().HasForeignKey(ShadowKeys.AreaId).IsRequired();

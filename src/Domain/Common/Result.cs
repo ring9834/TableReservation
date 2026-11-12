@@ -42,6 +42,7 @@ public static class ErrorCodes
     public const string SecondBill = "second_bill";
     public const string OutsideLateMatchWindow = "outside_late_match_window";
     public const string ReminderNotAllowed = "reminder_not_allowed";
+    public const string TableTooSmall = "table_too_small";
 }
 
 /// <summary>An expected failure: stable code, translation key, kind and optional field errors.</summary>

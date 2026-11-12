@@ -62,7 +62,8 @@ public sealed class MigrationAndSeedTests(PostgresFixture postgres)
         Assert.Equal(0, await Scalar(database, "SELECT count(*) FROM venues WHERE settings ? 'contactPhone'"));
         await using (var db = database.Context())
         {
-            Assert.Null((await db.Venues.AsNoTracking().SingleAsync(Ct)).Settings.ContactPhone);
+            // Settings only: the rest of today's model (e.g. areas.name_zh, M6a) doesn't exist at this migration.
+            Assert.Null((await db.Venues.AsNoTracking().Select(v => v.Settings).SingleAsync(Ct)).ContactPhone);
             await db.Database.MigrateAsync(Ct);
         }
 
@@ -71,6 +72,24 @@ public sealed class MigrationAndSeedTests(PostgresFixture postgres)
         {
             Assert.Equal(GoldenDragon.ContactPhone, (await db.Venues.AsNoTracking().SingleAsync(Ct)).Settings.ContactPhone);
         }
+    }
+
+    [Fact]
+    public async Task Contact_names_and_Chinese_area_names_are_backfilled_by_the_migration()
+    {
+        await using var database = await TestDatabase.CreateAsync(postgres);
+
+        // Back to before AddContactNamesAndAreaNamesZh (the columns are dropped), then forward again.
+        await using (var db = database.Context())
+        {
+            await db.GetService<IMigrator>().MigrateAsync("20261110204513_AddVenueContactPhone", cancellationToken: Ct);
+            await db.Database.MigrateAsync(Ct);
+        }
+
+        Assert.Equal(11, await Scalar(database, "SELECT count(*) FROM bookings b JOIN guests g ON g.id = b.guest_id WHERE b.contact_name = g.name"));
+        Assert.Equal(0, await Scalar(database, "SELECT count(*) FROM bookings WHERE contact_name IS NULL"));
+        Assert.Equal(1, await Scalar(database, "SELECT count(*) FROM areas WHERE name = 'Main room' AND name_zh = '主厅'"));
+        Assert.Equal(1, await Scalar(database, "SELECT count(*) FROM areas WHERE name = 'Window' AND name_zh = '窗边'"));
     }
 
     [Fact]

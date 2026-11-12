@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.OpenApi;
 using Reservation.Api.Auth;
+using Reservation.Domain.Bookings;
 using Reservation.Infrastructure.Outbox;
 
 namespace Reservation.Api.Realtime;
@@ -15,6 +16,13 @@ internal static class RealtimeRegistration
         {
             services.AddEventHandler(eventType, typeof(RealtimeNotifier<>).MakeGenericType(eventType), idempotent: false);
         }
+
+        // Reads only, so unwrapped like the notifier (Design §4.3 "Waitlist suggester", §15.1).
+        services.AddEventHandler<TableCleared, WaitlistSuggester>(idempotent: false);
+        services.AddEventHandler<BookingCancelled, WaitlistSuggester>(idempotent: false);
+
+        services.AddSingleton<WaitlistOverdueJob>();
+        services.AddHostedService(provider => provider.GetRequiredService<WaitlistOverdueJob>());
 
         return services;
     }

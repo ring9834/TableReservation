@@ -44,13 +44,16 @@ public sealed class WaitlistEntry : AggregateRoot<WaitlistEntryId>
     /// <summary>For EF Core only.</summary>
     private WaitlistEntry()
     {
+        ContactName = null!;
     }
 
-    private WaitlistEntry(WaitlistEntryId id, VenueId venueId, GuestId guestId, PartySize partySize, int quotedWaitMinutes, DateTimeOffset joinedAt)
+    private WaitlistEntry(
+        WaitlistEntryId id, VenueId venueId, GuestId guestId, PersonName contactName, PartySize partySize, int quotedWaitMinutes, DateTimeOffset joinedAt)
     {
         Id = id;
         VenueId = venueId;
         GuestId = guestId;
+        ContactName = contactName;
         PartySize = partySize;
         QuotedWaitMinutes = quotedWaitMinutes;
         JoinedAt = joinedAt;
@@ -60,6 +63,9 @@ public sealed class WaitlistEntry : AggregateRoot<WaitlistEntryId>
     public VenueId VenueId { get; }
 
     public GuestId GuestId { get; }
+
+    /// <summary>The name given when the party joined (M6a); the guest profile keeps its stored name.</summary>
+    public PersonName ContactName { get; }
 
     public PartySize PartySize { get; }
 
@@ -80,14 +86,16 @@ public sealed class WaitlistEntry : AggregateRoot<WaitlistEntryId>
     public bool IsActive => Status is WaitlistStatus.Waiting or WaitlistStatus.Notified;
 
     /// <summary>Join the waitlist (§3.2): party 1–20 (by type), quoted wait 0–240 minutes.</summary>
-    public static Result<WaitlistEntry> Join(VenueId venueId, GuestId guestId, PartySize partySize, int quotedWaitMinutes, DateTimeOffset now)
+    public static Result<WaitlistEntry> Join(
+        VenueId venueId, GuestId guestId, PersonName contactName, PartySize partySize, int quotedWaitMinutes, DateTimeOffset now)
     {
+        ArgumentNullException.ThrowIfNull(contactName);
         if (quotedWaitMinutes is < 0 or > MaxQuotedWaitMinutes)
         {
             return Error.Validation("quotedWaitMinutes", "quoted_wait_out_of_range");
         }
 
-        var entry = new WaitlistEntry(WaitlistEntryId.New(now), venueId, guestId, partySize, quotedWaitMinutes, now);
+        var entry = new WaitlistEntry(WaitlistEntryId.New(now), venueId, guestId, contactName, partySize, quotedWaitMinutes, now);
         entry.Raise(new WaitlistJoined(
             DomainEvent.NewEventId(now), now, venueId, entry.Id, guestId, partySize.Value, quotedWaitMinutes));
         return entry;

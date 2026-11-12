@@ -19,7 +19,7 @@ namespace Reservation.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "btree_gist");
@@ -51,6 +51,10 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.Property<string>("CompletedBy")
                         .HasColumnType("text")
                         .HasColumnName("completion_source");
+
+                    b.Property<string>("ContactName")
+                        .HasColumnType("text")
+                        .HasColumnName("contact_name");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -314,6 +318,11 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<string>("NameZh")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name_zh");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
                         .HasColumnName("sort_order");
@@ -432,6 +441,11 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("BookingId")
                         .HasColumnType("uuid")
                         .HasColumnName("booking_id");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contact_name");
 
                     b.Property<DateTimeOffset?>("EndedAt")
                         .HasColumnType("timestamp with time zone")

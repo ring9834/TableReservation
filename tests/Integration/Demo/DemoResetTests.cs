@@ -68,9 +68,9 @@ public sealed class DemoResetTests(PostgresFixture postgres)
         await using var db = database.Context();
         var venue = await db.Venues.SingleAsync(Ct);
         var guest = Guest.Create(GoldenDragon.VenueId, PersonName.Create("Walk In").Value, PhoneNumber.Create("+64 21 011 0050").Value, null, Language.En, null, now);
-        var walkIn = Booking.CreateWalkIn(venue, guest.Id, BookingReference.Parse("WALK22").Value, PartySize.Of(2),
+        var walkIn = Booking.CreateWalkIn(venue, guest.Id, guest.Name, BookingReference.Parse("WALK22").Value, PartySize.Of(2),
             [GoldenDragon.TableId("T1")], null, now).Value;
-        var waiting = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, PartySize.Of(4), 20, now).Value;
+        var waiting = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, guest.Name, PartySize.Of(4), 20, now).Value;
         var seated = await db.Bookings.SingleAsync(b => b.Reference == BookingReference.Parse("GD2A4K").Value, Ct);
         seated.Complete(CompletionSource.ClearedByHost, null, now);
 

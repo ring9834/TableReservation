@@ -16,7 +16,7 @@ public static class BookingFactory
         DateTimeOffset? now = null,
         Venue? venue = null) =>
         Booking.Create(
-            venue ?? TestData.Venue(), TestData.GuestId, TestData.Reference(), channel, PartySize.Of(partySize),
+            venue ?? TestData.Venue(), TestData.GuestId, TestData.ContactName, TestData.Reference(), channel, PartySize.Of(partySize),
             start ?? TestData.Start, [partySize <= 4 ? TestData.Table4 : TestData.Table8], null, null, now ?? TestData.Created).Value;
 
     /// <summary>Party of 6: deposit NZD 120 due, 10-minute hold.</summary>

@@ -102,12 +102,20 @@ internal static class AvailabilityCalculator
         }
 
         var period = TimeRange.FromStart(startsAt, TimeSpan.FromMinutes(settings.TurnMinutesFor(partySize)));
-        var table = input.Tables
-            .Where(t => t.Seats >= partySize.Value)
-            .OrderBy(t => t.Seats) // stable: equal sizes keep floor order
-            .FirstOrDefault(t => !input.Busy.Any(b => b.TableId == t.Id && b.Period.Overlaps(period)));
+        var table = FreeTables(input.Tables, input.Busy, period, partySize).FirstOrDefault();
         return table is null ? null : new SlotOption(startsAt, LocalTime(startsAt, input.TimeZone), table);
     }
+
+    /// <summary>
+    /// BR-05: the tables that seat <paramref name="partySize"/> and are free for the whole <paramref name="period"/>,
+    /// smallest first; equal sizes keep floor order. Shared by bookings (<see cref="Evaluate"/>) and walk-ins (M6a).
+    /// </summary>
+    public static IEnumerable<TableInfo> FreeTables(
+        IEnumerable<TableInfo> tables, IReadOnlyCollection<BusyPeriod> busy, TimeRange period, PartySize partySize) =>
+        tables
+            .Where(t => t.Seats >= partySize.Value)
+            .OrderBy(t => t.Seats) // stable: equal sizes keep floor order
+            .Where(t => !busy.Any(b => b.TableId == t.Id && b.Period.Overlaps(period)));
 
     /// <summary>§11.2 <c>GetAvailability</c>: all available slots, or the 3 nearest to an unavailable requested time (ties: earlier first).</summary>
     public static AvailabilitySearch Search(AvailabilityInput input, DateOnly date, PartySize partySize, TimeOnly? requestedTime)

@@ -24,6 +24,8 @@ public sealed class FloorPlanTests(PostgresFixture postgres) : ApiTestBase(postg
         Assert.Equal("Pacific/Auckland", plan.TimeZone);
         Assert.Equal(DemoTime.Now.UtcDateTime, plan.At);
         Assert.Equal([GoldenDragon.MainRoomId.Value, GoldenDragon.WindowId.Value], plan.Areas.Select(a => a.Id));
+        Assert.Equal(["Main room", "Window"], plan.Areas.Select(a => a.Name));
+        Assert.Equal(["主厅", "窗边"], plan.Areas.Select(a => a.NameZh)); // M6a: the screen picks by language
         Assert.Equal(GoldenDragon.Tables.Select(t => t.Name), plan.Tables.Select(t => t.Name));
 
         // Design §17 seed table at 18:25.

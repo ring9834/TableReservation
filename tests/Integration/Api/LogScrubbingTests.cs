@@ -40,4 +40,40 @@ public sealed class LogScrubbingTests(PostgresFixture postgres) : ApiTestBase(po
             Assert.DoesNotContain(secret, log, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    [Fact]
+    public async Task Walk_in_and_waitlist_requests_leave_no_names_or_mobiles_in_the_logs()
+    {
+        const string walkInName = "Vexmor Plinthwick";
+        const string waitingName = "Quorra Ashendell";
+        const string waitingMobile = "021 011 0167";
+        await SignInAsync(Client);
+        var t1 = Reservation.Infrastructure.Demo.GoldenDragon.TableId("T1").Value;
+        var t4 = Reservation.Infrastructure.Demo.GoldenDragon.TableId("T4").Value;
+
+        await ReadAsync<Reservation.Api.Features.Seating.SeatWalkInResponse>(
+            await PostAsync(Client, Venue + "/walk-ins", new { partySize = 2, tableId = t1, name = walkInName }, "scrub-walk-in"),
+            HttpStatusCode.Created);
+        var entry = await ReadAsync<Reservation.Api.Features.Waitlist.WaitlistItem>(
+            await PostAsync(Client, Venue + "/waitlist", new { name = waitingName, mobile = waitingMobile, partySize = 4, quotedWaitMinutes = 35 }),
+            HttpStatusCode.Created);
+        await PostAsync(Client, Venue + "/waitlist", new { name = waitingName, mobile = "not a mobile", partySize = 4, quotedWaitMinutes = 35 });
+        var notified = await ReadAsync<Reservation.Api.Features.Waitlist.WaitlistEntryStateResponse>(
+            await PostAsync(Client, $"{Venue}/waitlist/{entry.Id}/notify", new { tableId = t4, entry.Version }));
+        await ReadAsync<Reservation.Api.Features.Waitlist.WaitlistResponse>(await Client.GetAsync(Venue + "/waitlist", Ct));
+        await PostAsync(Client, $"{Venue}/waitlist/{entry.Id}/end", new { outcome = "walkedAway", notified.Version });
+
+        var log = string.Join('\n', Factory.Logs.Lines.Select(l => l.Text));
+        Assert.Contains("HTTP POST /api/v1/venues/{venueId:guid}/walk-ins responded 201", log, StringComparison.Ordinal);
+        Assert.Contains("HTTP POST /api/v1/venues/{venueId:guid}/waitlist responded 201", log, StringComparison.Ordinal);
+        string[] secrets =
+        [
+            walkInName, "Plinthwick", waitingName, "Ashendell", "not a mobile",
+            "021 011 0167", "0210110167", "+64210110167", "210110167", "__Host-demo-session",
+        ];
+        foreach (var secret in secrets)
+        {
+            Assert.DoesNotContain(secret, log, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }

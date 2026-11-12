@@ -18,6 +18,7 @@ export const GetFloorPlanResponse = zod.object({
   "areas": zod.array(zod.object({
   "id": zod.uuid(),
   "name": zod.string(),
+  "nameZh": zod.string(),
   "sortOrder": zod.int()
 })),
   "tables": zod.array(zod.object({
@@ -42,7 +43,8 @@ export const GetFloorPlanResponse = zod.object({
   "startsAt": zod.iso.datetime({"offset":true}),
   "endsAt": zod.iso.datetime({"offset":true}),
   "guestName": zod.string().nullable(),
-  "hasAllergy": zod.boolean()
+  "hasAllergy": zod.boolean(),
+  "version": zod.int()
 })]),
   "next": zod.union([zod.null(),zod.object({
   "bookingId": zod.uuid(),
@@ -52,7 +54,8 @@ export const GetFloorPlanResponse = zod.object({
   "startsAt": zod.iso.datetime({"offset":true}),
   "endsAt": zod.iso.datetime({"offset":true}),
   "guestName": zod.string().nullable(),
-  "hasAllergy": zod.boolean()
+  "hasAllergy": zod.boolean(),
+  "version": zod.int()
 })])
 }))
 })

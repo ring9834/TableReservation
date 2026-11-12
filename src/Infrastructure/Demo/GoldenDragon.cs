@@ -23,6 +23,13 @@ public static class GoldenDragon
     public static readonly AreaId MainRoomId = new(Guid.Parse("0193a7d0-0000-7000-8000-0000000000a1"));
     public static readonly AreaId WindowId = new(Guid.Parse("0193a7d0-0000-7000-8000-0000000000a2"));
 
+    /// <summary>Areas in English and Chinese (M6a). The migration <c>AddContactNamesAndAreaNamesZh</c> sets the same names.</summary>
+    public static readonly IReadOnlyList<AreaSpec> Areas =
+    [
+        new(MainRoomId, "Main room", "主厅", 1),
+        new(WindowId, "Window", "窗边", 2),
+    ];
+
     /// <summary>Main room: T1–T3 (2 seats), T4–T6 (4), T7–T9 (6), T10 (8). Window: W1–W2 (2), W3–W4 (4).</summary>
     public static readonly IReadOnlyList<TableSpec> Tables =
     [
@@ -109,6 +116,8 @@ public static class GoldenDragon
     /// <summary>A local Auckland date and time as a UTC instant.</summary>
     public static DateTimeOffset At(DateOnly date, TimeOnly time) =>
         new(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(time, DateTimeKind.Unspecified), TimeZone()));
+
+    public sealed record AreaSpec(AreaId Id, string Name, string NameZh, int SortOrder);
 
     public sealed record TableSpec(string Name, int Seats, AreaId Area, FloorPosition Position);
 

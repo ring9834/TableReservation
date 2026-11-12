@@ -122,8 +122,6 @@ internal sealed partial class BookingCreator(
     TimeProvider clock,
     ILogger<BookingCreator> logger)
 {
-    private const int MaxReferenceAttempts = 5;
-
     public async Task<Result<CreateBookingResponse>> CreateAsync(
         VenueId venueId, BookingChannel channel, CreateBookingRequest request, string? idempotencyKey, CancellationToken cancellationToken)
     {
@@ -212,7 +210,8 @@ internal sealed partial class BookingCreator(
         }
         else
         {
-            // Design §20: messages go out in the language active at submit; the stored name is kept.
+            // Design §20: messages go out in the language active at submit; the stored name is kept, and the name given
+            // now is the booking's contact name (M6a).
             guest.UseLanguage(request.Language);
         }
 
@@ -222,10 +221,10 @@ internal sealed partial class BookingCreator(
         }
 
         TableId[] tableIds = [slot.Table.Id];
-        await LockTablesAsync(tableIds, cancellationToken);
+        await TableLocks.LockAsync(db, tableIds, cancellationToken);
 
         var created = Booking.Create(
-            venue, guest.Id, await NewReferenceAsync(cancellationToken), channel, partySize, startsAt, tableIds,
+            venue, guest.Id, PersonName.Create(request.Name).Value, await BookingReferences.NewAsync(db, cancellationToken), channel, partySize, startsAt, tableIds,
             Blank(request.Notes), Blank(request.Occasion), now);
         if (created.IsFailure)
         {
@@ -261,35 +260,6 @@ internal sealed partial class BookingCreator(
         booking.Deposit is { } deposit ? MoneyDto.From(deposit.Amount) : null,
         booking.HoldExpiresAt?.UtcDateTime,
         ClientSecret: null);
-
-    /// <summary>
-    /// §12: overlapping slots take different slot locks, so two requests can pick the same table at once. Inserting
-    /// both assignments concurrently can deadlock inside the exclusion constraint (<c>40P01</c>); a lock per table,
-    /// taken in ascending ID order and held until commit, makes the second wait and then fail cleanly with
-    /// <c>23P01</c> → <c>slot_taken</c>.
-    /// </summary>
-    private async Task LockTablesAsync(IEnumerable<TableId> tableIds, CancellationToken cancellationToken)
-    {
-        foreach (var tableId in tableIds.Select(t => t.Value).Distinct().Order())
-        {
-            var lockKey = $"table:{tableId}";
-            await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
-        }
-    }
-
-    private async Task<BookingReference> NewReferenceAsync(CancellationToken cancellationToken)
-    {
-        for (var i = 0; i < MaxReferenceAttempts; i++)
-        {
-            var reference = BookingReference.Generate(Random.Shared);
-            if (!await db.Bookings.AnyAsync(b => b.Reference == reference, cancellationToken))
-            {
-                return reference;
-            }
-        }
-
-        throw new InvalidOperationException("Could not generate a unique booking reference.");
-    }
 
     private string Hash(CreateBookingRequest request) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, json.Value.SerializerOptions))));

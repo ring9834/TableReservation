@@ -106,11 +106,14 @@ public sealed class TableAssignment
 
     public TableId TableId { get; }
 
-    public TimeRange Period { get; }
+    public TimeRange Period { get; private set; }
 
     public bool Active { get; private set; }
 
     internal void Release() => Active = false;
+
+    /// <summary>The booking was seated on this table at another time: same row, new period (Design §14.2).</summary>
+    internal void MoveTo(TimeRange period) => Period = period;
 }
 
 /// <summary>The deposit inside a booking (§3.3). Changes only through <see cref="Booking"/>.</summary>

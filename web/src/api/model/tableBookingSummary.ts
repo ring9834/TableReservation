@@ -16,4 +16,5 @@ export interface TableBookingSummary {
   /** @nullable */
   guestName: string | null;
   hasAllergy: boolean;
+  version: number;
 }

@@ -14,7 +14,11 @@ namespace Reservation.Api.Realtime;
 /// <param name="Sequence">The event's sequence within its aggregate (ADR-002 envelope).</param>
 internal sealed record FloorPlanChangedNotice(IReadOnlyList<Guid> TableIds, IReadOnlyList<Guid> BookingIds, long Sequence);
 
-/// <summary>Invalidate <c>waitlist</c>; highlight the suggestion. The suggestion and freed table arrive in M6.</summary>
+/// <summary>
+/// Invalidate <c>waitlist</c>; highlight the suggestion. Waitlist events send their entry with no suggestion; the
+/// <c>WaitlistSuggester</c> sends the suggested entry and the freed table when a table frees (M6a, AC4.2); the overdue
+/// job sends entries that just became overdue (AC4.6).
+/// </summary>
 internal sealed record WaitlistChangedNotice(IReadOnlyList<Guid> EntryIds, Guid? SuggestedEntryId, Guid? FreedTableId);
 
 /// <summary>Invalidate <c>messages</c> (phone panel).</summary>
