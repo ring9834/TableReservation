@@ -176,7 +176,12 @@ public sealed class WaitlistTests(PostgresFixture postgres) : ApiTestBase(postgr
     [Fact]
     public async Task Step_4_clearing_T4_suggests_the_waiting_party_of_4_who_is_then_seated_from_the_waitlist()
     {
+        // The pair joins a minute earlier. At one fixed instant both entries would tie on JoinedAt, and the tie goes
+        // by entry ID (Design §11.4), which UUIDv7 leaves random within a millisecond: on a fast runner Lee could
+        // come "first".
+        Factory.Clock.Set(DemoTime.At(18, 24));
         var two = await JoinAsync("Early Pair", "021 011 0143", 2);
+        Factory.Clock.Set(DemoTime.Now);
         var lee = await JoinAsync("Lee Family", "021 011 0141", 4);
         await ClearT4Async();
 

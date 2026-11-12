@@ -17,13 +17,15 @@
   width: 100% !important;
 }
 
+/* The zoom buttons sit in their own row above the drawing, never over it, so they cover no table at any width
+   or zoom (the drawing is clipped below the row). */
 .zoomControls {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 1;
   display: flex;
+  justify-content: flex-end;
   gap: 0.25rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .zoomControls button {
@@ -93,23 +95,23 @@
   stroke: #be123c;
 }
 
+/* Tile text: the size comes from the tile's layout (tileLayout.mjs), which fits it inside the outline. */
 .tileName {
   fill: #1c1917;
-  font-size: 13px;
   font-weight: 700;
 }
 
 .tileState {
   fill: #1c1917;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  font-weight: 700;
 }
 
 .tileText {
   fill: #1c1917;
-  font-size: 11px;
+}
+
+.tileIcon {
+  fill: #1c1917;
 }
 
 .allergyBadge {
@@ -228,4 +230,16 @@
   color: #ffffff;
   background: #b91c1c;
   font-weight: 800;
+}
+
+/* A table freed for the suggested waiting party (AC4.2): a thick dashed violet ring AND the text "Suggested". */
+.highlightRing {
+  fill: none;
+  stroke: #6d28d9;
+  stroke-width: 4;
+  stroke-dasharray: 10 5;
+}
+
+.tileSuggested {
+  fill: #4c1d95;
 }

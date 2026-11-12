@@ -384,31 +384,32 @@ Ask before adding packages. Record decisions §3.2/§11 left open in Design.md.
 
 ### M6b Host screens: walk-ins, waitlist, seat and clear
 ```
-Start milestone M6b (host screens for step 3 and the step 4 waitlist) from docs/BUILD-PLAN.md,
-using the M6a API (Design §14.2).
+Start milestone M6b (host screens for walk-ins, waitlist, seat and clear) from docs/BUILD-PLAN.md,
+using the M6a API. Requirements step 3 and AC4.1, AC4.2, AC4.5, AC4.6 on screen.
 
-Host app (/host), Design §18 and Requirements step 3 / step 4:
-- "Walk-in" button → party size → the suggested table (getTableSuggestion) with the other free
-  tables to choose from → one tap seats (seatWalkIn, optional name). Three taps or fewer (AC3.1,
-  AC3.2). No table → "Add to waitlist" with the quote prefilled (AC3.4).
-- Seat a booked guest from the side panel or tonight's list with one tap (seatBooking, its own
-  tables; another table on request) (AC3.3).
-- "Clear" on a seated table (clearTable with the floor plan's bookingId and version) (AC4.1).
-- Waitlist panel (getWaitlist): join order, party size, quoted and waited minutes, status,
-  overdue flag (AC3.6, AC4.6); join dialog with name, mobile, party size and the editable quote
-  (getQuotedWait) (AC3.4, AC3.5); notify for a table; seat from the waitlist; walked away;
-  remove (AC3.7, AC4.5). On waitlistChanged invalidate the waitlist; highlight
-  suggestedEntryId for freedTableId; the host can pick another party (AC4.2).
-- 409 version_conflict / invalid_transition / slot_taken: refetch and show "This has just
-  changed" or "That table is no longer free"; 422 table_too_small translated.
-- English and Chinese for every new label; layout keeps the tablet and phone rules of M5b.
+- Walk-in: a "Walk-in" button → party size → the suggested table pre-selected with the other free
+  tables as choices → Seat. At most three taps for the suggested table (AC3.1, AC3.2). When nothing
+  fits, the dialog offers "Add to waitlist" with the party size carried over.
+- Seat a booked guest from the table panel or tonight's list with one tap (AC3.3); "Seat at another
+  table" lists free fitting tables. slot_taken and version_conflict refresh the data and say so.
+- Clear a seated table from its panel (AC4.1). "Bill paid" through the POS comes in M9, so only Clear
+  for now.
+- Waitlist panel: join with name, mobile, party size, the guest's language (English / 中文,
+  default the screen's language) and the quote pre-filled from the API but editable (AC3.4, AC3.5);
+  entries in join order with time waited and quote; Notify (records the notification; the text
+  arrives in M7, so label it plainly), Seat (choose a table, defaulting to the notified or suggested
+  one), Walked away, Remove (AC3.7); an overdue badge (AC4.6).
+- Suggestions: on waitlistChanged with suggestedEntryId, highlight that entry and the freed table on
+  every host screen (AC4.2); after a reconnect, ask GET /waitlist?tableId= so the highlight returns.
+- Every action sends the version it was shown; all text in English and Chinese; works on a tablet
+  and a phone; accessible (labels, focus, keyboard).
 
-Playwright (tests/E2E, shared host session from global-setup.ts):
-- Step 3 at 18:25: walk-in for 2 is seated on the suggested table; walk-in for 4 finds no table
-  and joins the waitlist with the quote; both host screens show it within 2 s.
-- Clear T4 → the waiting party of 4 is highlighted; notify; seat from the waitlist; the entry
-  leaves the list. Clean up everything the spec created (clear the tables it seated, end the
-  entries it added).
+Playwright (step 3, using the shared session):
+- Walk-in for 2 is seated on the suggested table in ≤ 3 taps, and appears on a second host screen.
+- Walk-in for 4 finds no table → added to the waitlist with the quote (35 min at 18:25).
+- Clear T4 → both host screens highlight the waiting party of 4 and T4; seat them there; the entry
+  leaves the list.
+- Each test cleans up what it created (cancel bookings; end waitlist entries) so reruns stay clean.
 
 Ask before adding packages. Record decisions §18 left open in Design.md.
 ```

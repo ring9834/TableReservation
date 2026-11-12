@@ -7,9 +7,11 @@ import {
   type IRetryPolicy,
 } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getGetFloorPlanQueryKey } from "@/api/endpoints/floor-plan/floor-plan";
 import { getGetTonightBookingsQueryKey } from "@/api/endpoints/bookings/bookings";
+import { getGetWaitlistQueryKey } from "@/api/endpoints/waitlist/waitlist";
+import type { WaitlistChangedNotice } from "@/api/model";
 import { apiBaseUrl } from "@/lib/apiFetch";
 import { createSignalRLogger } from "./signalrLogger.mjs";
 
@@ -35,7 +37,10 @@ const isUnauthorized = (error: unknown) =>
  * The host screen's SignalR connection to `/hubs/venue` (Design §15, §18.5). The demo session cookie is the only
  * credential; the server picks the venue from it, so the client never names one.
  *
- * - `floorPlanChanged` invalidates the floor plan and tonight's bookings; the hooks refetch (ADR-002).
+ * - `floorPlanChanged` invalidates the floor plan, tonight's bookings and the waitlist (a table taken by someone else
+ *   ends its suggestion); the hooks refetch (ADR-002).
+ * - `waitlistChanged` invalidates the waitlist and is passed to `onWaitlistChanged`, which highlights a suggested
+ *   party for a freed table (AC4.2, Design §18.6).
  * - After any reconnect every query is invalidated once, so nothing missed while away stays missing (AC2.5).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
  *   again. An open WebSocket can outlive a lost network for a while, and the browser knows sooner.
@@ -43,9 +48,18 @@ const isUnauthorized = (error: unknown) =>
  *   no console error, no state change. Failed starts and reconnects while the API or network is down are one
  *   console.warn per outage (`signalrLogger.mjs`); the banner is the user-facing signal.
  */
-export function useVenueConnection(venueId: string, onSignedOut: () => void): ConnectionStatus {
+export function useVenueConnection(
+  venueId: string,
+  onSignedOut: () => void,
+  onWaitlistChanged?: (notice: WaitlistChangedNotice) => void,
+): ConnectionStatus {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
+  // Read through a ref, so a new callback never restarts the connection.
+  const waitlistChangedRef = useRef(onWaitlistChanged);
+  useEffect(() => {
+    waitlistChangedRef.current = onWaitlistChanged;
+  }, [onWaitlistChanged]);
 
   useEffect(() => {
     let disposed = false;
@@ -73,6 +87,12 @@ export function useVenueConnection(venueId: string, onSignedOut: () => void): Co
     connection.on("floorPlanChanged", () => {
       void queryClient.invalidateQueries({ queryKey: getGetFloorPlanQueryKey(venueId) });
       void queryClient.invalidateQueries({ queryKey: getGetTonightBookingsQueryKey(venueId) });
+      void queryClient.invalidateQueries({ queryKey: getGetWaitlistQueryKey(venueId) });
+    });
+
+    connection.on("waitlistChanged", (notice: WaitlistChangedNotice) => {
+      void queryClient.invalidateQueries({ queryKey: getGetWaitlistQueryKey(venueId) });
+      waitlistChangedRef.current?.(notice);
     });
 
     connection.onreconnecting(() => {

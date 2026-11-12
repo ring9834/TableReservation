@@ -82,7 +82,11 @@
     "allergy_notes_too_long": "Please keep allergy notes under 500 characters.",
     "notes_too_long": "Please keep notes under 500 characters.",
     "passcode_required": "Please enter the passcode.",
-    "passcode_too_long": "That passcode is too long."
+    "passcode_too_long": "That passcode is too long.",
+    "party_size_required": "Please enter the party size.",
+    "party_size_out_of_range": "Party size must be between 1 and 20.",
+    "quoted_wait_out_of_range": "The quoted wait must be between 0 and 240 minutes.",
+    "language_invalid": "Please choose English or 中文."
   },
   "login": {
     "documentTitle": "Staff sign-in",
@@ -104,8 +108,18 @@
     "tableLabel": "Table {{name}}, {{count}} seats",
     "party": "Party of {{count}}",
     "tile": {
-      "seatedSince": "Since {{time}} · {{count}}",
-      "next": "{{time}} · {{count}}"
+      "seatedSince": "seated since {{time}}, {{party}}",
+      "next": "next at {{time}}, {{party}}",
+      "suggested": "Suggested",
+      "suggestedLabel": "Freed for the suggested waiting party",
+      "guestsOne": "1 guest",
+      "guestsMany": "{{count}} guests",
+      "status": {
+        "free": "Free",
+        "booked": "Booked",
+        "arrivingSoon": "Arriving",
+        "seated": "Seated"
+      }
     },
     "zoom": {
       "label": "Zoom",
@@ -131,6 +145,40 @@
     "list": {
       "heading": "Tonight's bookings",
       "empty": "No bookings tonight yet."
+    },
+    "walkInButton": "Walk-in",
+    "seats": "{{count}} seats",
+    "walkInDialog": {
+      "title": "Seat a walk-in",
+      "partySize": "How many guests?",
+      "largerParty": "Larger party",
+      "findTable": "Find a table",
+      "table": "Table",
+      "suggested": "Suggested",
+      "name": "Name (optional)",
+      "seatAt": "Seat at {{table}}",
+      "noTable": "No table fits a party of {{count}} right now.",
+      "addToWaitlist": "Add to waitlist"
+    },
+    "actions": {
+      "seat": "Seat",
+      "seating": "Seating…",
+      "seatGuest": "Seat {{guest}}, {{time}}",
+      "seatElsewhere": "Seat at another table",
+      "chooseTable": "Free tables that fit",
+      "noOtherTable": "No free table fits a party of {{count}} right now.",
+      "seatedAt": "Seated at {{table}}.",
+      "clear": "Clear table",
+      "clearing": "Clearing…"
+    },
+    "errors": {
+      "slot_taken": "That table is no longer free. The floor has been refreshed; please choose again.",
+      "version_conflict": "This has just changed on another screen. The latest details are shown; please check and try again.",
+      "invalid_transition": "This has just changed on another screen. The latest details are shown.",
+      "table_too_small": "That table is too small for the party.",
+      "party_too_large": "No table here seats a party that large.",
+      "not_found": "That is no longer here. The screen has been refreshed.",
+      "not_signed_in": "Your session has ended. Going to sign-in…"
     }
   },
   "tableState": {
@@ -146,5 +194,46 @@
     "seated": "Seated",
     "completed": "Completed",
     "cancelled": "Cancelled"
+  },
+  "waitlist": {
+    "heading": "Waitlist",
+    "joinButton": "Join waitlist",
+    "empty": "Nobody is waiting.",
+    "quoted": "Quoted {{minutes}} min",
+    "waited": "Waited {{minutes}} min",
+    "notifiedFor": "Notified for {{table}}",
+    "overdue": "Overdue",
+    "suggestedFor": "Suggested for {{table}}",
+    "freedTable": "Just freed",
+    "suggestion": "{{table}} is free: suggested party {{name}} ({{count}}).",
+    "dismiss": "Dismiss",
+    "notifyHint": "Records that you told the guest their table is ready. Text messages are added in a later version.",
+    "joined": "Added to the waitlist.",
+    "actions": {
+      "seat": "Seat",
+      "notify": "Mark notified",
+      "notifyFor": "Mark notified for {{table}}",
+      "walkedAway": "Walked away",
+      "remove": "Remove"
+    },
+    "join": {
+      "title": "Join the waitlist",
+      "name": "Name",
+      "mobile": "Mobile",
+      "partySize": "Party size",
+      "language": "Guest's language",
+      "quote": "Quoted wait (minutes)",
+      "quoteHint": "Suggested: {{minutes}} min. You can change it.",
+      "quoteHintEmpty": "Enter the party size to get a suggested wait.",
+      "submit": "Add to waitlist",
+      "submitting": "Adding…"
+    }
+  },
+  "waitlistStatus": {
+    "waiting": "Waiting",
+    "notified": "Notified",
+    "seated": "Seated",
+    "walkedAway": "Walked away",
+    "removed": "Removed"
   }
 }

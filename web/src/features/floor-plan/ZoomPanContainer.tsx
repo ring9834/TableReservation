@@ -8,7 +8,8 @@ import styles from "./floorPlan.module.css";
 /**
  * Zoom and pan for small screens (ADR-001, `react-zoom-pan-pinch`). At scale 1 the plan fits the width of its column
  * (a tablet sees the whole room) and panning is off, so a phone still scrolls the page; pinch, the wheel or the
- * buttons zoom in, and then one finger pans.
+ * buttons zoom in, and then one finger pans. The buttons have their own row above the drawing, so they never
+ * cover a table (Design §18.6).
  */
 export function ZoomPanContainer({ children }: Readonly<{ children: ReactNode }>) {
   const { t } = useTranslation();
@@ -25,7 +26,12 @@ export function ZoomPanContainer({ children }: Readonly<{ children: ReactNode }>
     >
       {({ zoomIn, zoomOut, resetTransform }) => (
         <div className={styles.zoomArea}>
-          <div className={styles.zoomControls} role="group" aria-label={t("host.zoom.label")}>
+          <div
+            className={styles.zoomControls}
+            role="group"
+            data-testid="zoom-controls"
+            aria-label={t("host.zoom.label")}
+          >
             <button type="button" onClick={() => zoomIn()} aria-label={t("host.zoom.in")}>
               +
             </button>

@@ -1,0 +1,368 @@
+/* Host actions (Design §18.6): dialogs, buttons, table choice and the waitlist. Touch targets are at least 44 px;
+   badges carry text as well as colour (QA-7). */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.primaryButton {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.secondaryButton {
+  color: var(--accent-text);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* Dialog: centred on a tablet, the whole screen on a phone. */
+
+.dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 1rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow-y: auto;
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.dialog > * + * {
+  margin-top: 1rem;
+}
+
+@media (max-width: 599px) {
+  .dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dialogHeader h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* Choices */
+
+.choice {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.choice legend {
+  margin-bottom: 0.4rem;
+  padding: 0;
+  font-weight: 600;
+}
+
+.choiceOptions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.4rem;
+}
+
+.choiceOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.choiceOption:has(input:checked) {
+  border: 2px solid var(--focus);
+  background: var(--surface-muted);
+}
+
+.choiceOption input {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.partyButtons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.partyButton {
+  min-height: 3rem;
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.partyButton[aria-pressed="true"] {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.inlineForm input {
+  width: 5rem;
+}
+
+/* Forms */
+
+.form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input,
+.inlineForm input {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 1rem; /* no zoom on focus in iOS Safari */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.field [aria-invalid="true"] {
+  border: 2px solid var(--error);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--error);
+  font-weight: 600;
+}
+
+.notice {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: var(--surface-muted);
+  border-radius: 0.5rem;
+}
+
+.notice p {
+  margin: 0;
+}
+
+/* Actions in the side panel and lists */
+
+.actions {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.buttonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rowAction {
+  display: grid;
+  align-content: center;
+  gap: 0.25rem;
+}
+
+/* Waitlist */
+
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.count {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.suggestionBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: #1c1917;
+  background: #ede9fe;
+  border: 2px solid #6d28d9;
+  border-radius: 0.5rem;
+  font-weight: 600;
+}
+
+.suggestionBanner p {
+  margin: 0;
+}
+
+.entries {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+}
+
+.suggestedEntry {
+  border: 3px dashed #6d28d9;
+}
+
+.entryHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.entryHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.entryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  margin: 0.2rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.3rem 0 0.5rem;
+}
+
+.statusBadge {
+  padding: 0.05rem 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.overdue {
+  color: #1c1917;
+  background: #fee2e2;
+  border: 2px solid #b91c1c;
+}
+
+.suggestedBadge {
+  color: #1c1917;
+  background: #ede9fe;
+  border: 2px solid #6d28d9;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

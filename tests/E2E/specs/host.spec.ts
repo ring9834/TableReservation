@@ -1,43 +1,12 @@
-import {
-  devices,
-  expect,
-  test,
-  type Browser,
-  type BrowserContext,
-  type BrowserContextOptions,
-  type Page,
-} from "@playwright/test";
-import { cancelBookings, hostSessionPath } from "../support/session";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { guestContext, hostContext, uniqueGuestName, uniqueMobile } from "../support/screens";
+import { cancelBookings } from "../support/session";
 
 // Requirements step 2 (AC2.1, AC2.4, AC2.5; QA-1, QA-2) with two host screens and a guest phone against the real
 // API, SignalR and database. The API's business clock is fixed at 18:25 in Development (Design §17), so "tonight"
 // at 20:00 / 20:15 is always still to come. The bookings a run makes are cancelled afterwards through the host
 // cancel endpoint, so reruns against one database don't fill the evening (cancelled bookings don't count for pacing).
 // The host session comes from global-setup.ts (one sign-in per run, shared with the other spec files).
-
-const baseOptions = (baseURL: string | undefined): BrowserContextOptions => ({
-  baseURL,
-  ignoreHTTPSErrors: true, // local dev certificates
-});
-
-/** A host tablet, signed in with the shared session. */
-const hostContext = (browser: Browser, baseURL: string | undefined) =>
-  browser.newContext({ ...devices["Galaxy Tab S4 landscape"], ...baseOptions(baseURL), storageState: hostSessionPath });
-
-/** A guest phone. */
-const guestContext = (browser: Browser, baseURL: string | undefined) =>
-  browser.newContext({ ...devices["Pixel 7"], ...baseOptions(baseURL) });
-
-const uniqueGuestName = () =>
-  `E2E ${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-
-/** A fictional mobile (021 0xx xxxx) per booking: a known mobile reuses the stored guest and its name (Design §14.1). */
-const uniqueMobile = () => {
-  const digits = Math.floor(Math.random() * 1_000_000)
-    .toString()
-    .padStart(6, "0");
-  return `021 0${digits.slice(0, 2)} ${digits.slice(2)}`;
-};
 
 /**
  * Books tonight (the venue's "today", the date picker's `min`) for 2 at `time` on /book/, waits for the confirmation
@@ -69,7 +38,8 @@ const bookTonight = async (page: Page, time: string, name: string) => {
 const expectBookingShown = async (page: Page, name: string, timeout: number) => {
   const deadline = Date.now() + timeout;
   const left = () => Math.max(1, deadline - Date.now());
-  const row = page.getByTestId("tonight-list").getByRole("button", { name: new RegExp(name) });
+  // The row itself, not the "Seat" button beside a booked row (M6b), whose label names the guest too.
+  const row = page.getByTestId("tonight-list").locator('[data-testid^="booking-"]').filter({ hasText: name });
   await expect(row).toBeVisible({ timeout: left() });
   const tableName = (await row.textContent())?.match(/· ([A-Z]+\d+)/)?.[1];
   expect(tableName, "the booking has a table").toBeTruthy();
