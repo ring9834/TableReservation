@@ -6,7 +6,7 @@ import { useGetVenue } from "@/api/endpoints/venues/venues";
 import { LanguageSwitch } from "@/i18n/LanguageSwitch";
 import { venueId } from "@/lib/config";
 import { BookingFlow } from "./BookingFlow";
-import { useApiError } from "./useApiError";
+import { useApiError } from "@/lib/useApiError";
 import styles from "./booking.module.css";
 
 /** The page around the flow: language switch, heading, venue details from `getVenue` (Design §18.4). */

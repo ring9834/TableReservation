@@ -37,7 +37,7 @@ test("no message is empty and both languages use the same placeholders", () => {
   }
 });
 
-test("every API error code the booking page can meet has a message", () => {
+test("every API error code the pages can meet has a message", () => {
   const codes = [
     "slot_taken",
     "party_too_large",
@@ -45,6 +45,7 @@ test("every API error code the booking page can meet has a message", () => {
     "outside_booking_window",
     "validation_failed",
     "too_many_requests",
+    "not_signed_in",
     "unexpected",
   ];
   for (const code of codes) {
@@ -66,5 +67,21 @@ test("every field rule code the booking form can meet has a message", () => {
   ];
   for (const code of codes) {
     assert.ok(valueAt(en, `fieldErrors.${code}`), `No message for field code ${code}`);
+  }
+});
+
+test("every field rule code the sign-in form can meet has a message", () => {
+  for (const code of ["passcode_required", "passcode_too_long"]) {
+    assert.ok(valueAt(en, `fieldErrors.${code}`), `No message for field code ${code}`);
+  }
+});
+
+test("every table state and booking status has a label", () => {
+  for (const state of ["free", "booked", "arrivingSoon", "seated"]) {
+    assert.ok(valueAt(en, `tableState.${state}`), `No label for table state ${state}`);
+  }
+  const statuses = ["pendingPayment", "booked", "confirmed", "seated", "completed", "cancelled"];
+  for (const status of statuses) {
+    assert.ok(valueAt(en, `bookingStatus.${status}`), `No label for booking status ${status}`);
   }
 });

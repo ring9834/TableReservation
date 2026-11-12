@@ -101,6 +101,7 @@ Both frameworks can deliver the demo well: they offer file-based routing, server
 - **Service view:** tables are coloured by status, with a text or icon badge as well (time seated, guest name, “due 19:30”). A tap opens a side panel. Pinch and pan come from `react-zoom-pan-pinch`.
 - **Layout editor:** a separate mode, built in the pilot. Dragging and rotating use `@use-gesture/react`, with snap to a 10-unit grid. Changes save as one layout version, so service screens never show a half-edited room.
 - **Live updates:** a `floorPlanChanged` push (ADR-002) refetches only the changed tables. React then redraws just those `<g>` elements.
+  - *Clarification, 12 Nov 2026:* at demo scale (≤ 80 tables) a notice triggers one refetch of the whole floor plan; per-table refetch is revisited if a venue's plan grows beyond that. React still redraws only the `<g>` elements whose data changed (Design §15.1, §18.5).
 - **Background:** an optional photo or drawing of the room behind the tables, stored in Amazon S3 so it stays in AWS (D10).
 - **Accessibility:** each table has `role="button"`, an `aria-label` such as “Table 12, 4 seats, seated 18:05”, and keyboard focus. Arrow keys move a selected table in the editor.
 

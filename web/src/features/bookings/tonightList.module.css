@@ -1,0 +1,94 @@
+.list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  grid-template-areas:
+    "time name status"
+    "time meta status";
+  align-items: center;
+  gap: 0 0.75rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.row[aria-pressed="true"] {
+  border: 2px solid var(--focus);
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+.time {
+  grid-area: time;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  grid-area: name;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  grid-area: meta;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status {
+  grid-area: status;
+  font-size: 0.85rem;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.cancelled .row,
+.completed .row {
+  opacity: 0.65;
+}
+
+.cancelled .name {
+  text-decoration: line-through;
+}
+
+.allergy {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-left: 0.4rem;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #b91c1c;
+  font-size: 0.8rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

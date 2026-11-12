@@ -300,7 +300,48 @@ Ask before adding packages beyond Microsoft.AspNetCore.SignalR.Client (tests).
 Record decisions §15 left open in Design.md.
 ```
 
-### M5b onward
+### M5b Host screens
+```
+Start milestone M5b (host screens) from docs/BUILD-PLAN.md, using the M5a API.
+
+Fixed business clock, brought forward from M11:
+- Configuration Demo:Clock:Mode (System | Fixed) and Demo:Clock:FixedLocalTime (e.g. 18:25):
+  in Fixed mode the business TimeProvider returns today (Auckland date at start-up) at that
+  local time and doesn't move. Development and CI E2E use Fixed 18:25; tests keep their
+  TestClocks. The infrastructure clock is never affected (two-clock rule). Presenter controls,
+  offset mode and reset come in M11. Record in Design §17.
+
+Host sign-in (/demo-login):
+- Passcode form; on success go to /host (host) or /presenter (presenter, empty page until M7);
+  wrong passcode and too_many_requests shown translated. Pages under /host redirect to
+  /demo-login on 401.
+
+Host app (/host), Design §18 and ADR-001 floor plan:
+- Floor plan as SVG React components with react-zoom-pan-pinch: tables in their positions and
+  shapes, state shown by colour AND a text label or icon (QA-7), seated time or next booking time,
+  truncated guest name. Tap a table → side panel with its current/next booking. Fit to screen on a
+  tablet; usable on a phone.
+- Tonight's bookings list in time order beside or below the plan (AC2.1).
+- Live updates: @microsoft/signalr with withAutomaticReconnect, credentials included; on
+  floorPlanChanged invalidate the floor-plan and tonight queries. A visible "reconnecting" banner
+  while disconnected, then one full refetch on reconnect (AC2.5).
+- English and Chinese for every label and status; layout editor and table combining stay out of
+  scope (pilot).
+
+Playwright (tests/E2E):
+- Two host browser contexts signed in, plus a guest context. The guest books tonight 20:00 for 2;
+  both host screens show it on the floor plan and in tonight's list within 2 s (AC2.1, AC2.4).
+- One host context goes offline (context.setOffline) for 10 s: the "reconnecting" banner shows; a
+  booking made meanwhile appears within 5 s of coming back online (AC2.5).
+- Wrong passcode shows an error; /host without a session goes to /demo-login.
+- CI runs over http://localhost: check that the __Host- Secure session cookie is accepted there.
+  If not, propose the smallest fix (e.g. a CI-only cookie setting) instead of weakening production.
+
+Ask before adding packages beyond @microsoft/signalr and react-zoom-pan-pinch.
+Record decisions §18 left open in Design.md.
+```
+
+### M6 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse

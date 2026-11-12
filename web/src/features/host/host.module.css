@@ -1,0 +1,133 @@
+/* Host screen: plan and list side by side on a tablet (≥ 900 px), stacked on a phone (ADR-001, D11). */
+
+.page {
+  min-height: 100vh;
+  padding: 0.75rem 1rem 2rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.banner {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  color: #1c1917;
+  background: #fef3c7;
+  border: 2px solid #b45309;
+  font-weight: 600;
+}
+
+.alert {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 1rem;
+  border: 2px solid var(--error);
+  border-radius: 0.5rem;
+}
+
+.alert p {
+  margin: 0 0 0.5rem;
+}
+
+.alert button {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  font: inherit;
+}
+
+.layout {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+    align-items: start;
+  }
+
+  .side {
+    position: sticky;
+    top: 0.75rem;
+    max-height: calc(100vh - 1.5rem);
+    overflow-y: auto;
+  }
+}
+
+.side {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.sectionHeading {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.swatch {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 2px solid;
+}
+
+.swatch.free {
+  background: #dcfce7;
+  border-color: #15803d;
+}
+
+.swatch.booked {
+  background: #dbeafe;
+  border-color: #1d4ed8;
+}
+
+.swatch.arrivingSoon {
+  background: #fef3c7;
+  border-color: #b45309;
+  border-style: dashed;
+}
+
+.swatch.seated {
+  background: #ffe4e6;
+  border-color: #be123c;
+}
+
+.allergySwatch {
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #b91c1c;
+  font-size: 0.75rem;
+  font-weight: 800;
+}

@@ -69,7 +69,8 @@
     "outside_booking_window": "That date can't be booked online. Please choose a date in the booking calendar.",
     "validation_failed": "Some details aren't right. Please check the form.",
     "too_many_requests": "Too many attempts. Please wait a minute and try again.",
-    "unexpected": "Something went wrong on our side. Please try again."
+    "unexpected": "Something went wrong on our side. Please try again.",
+    "not_signed_in": "That passcode isn't right. Please try again."
   },
   "fieldErrors": {
     "name_length": "Please enter your name (up to 80 characters).",
@@ -79,6 +80,71 @@
     "email_too_long": "That email address is too long.",
     "occasion_too_long": "Please keep the occasion under 50 characters.",
     "allergy_notes_too_long": "Please keep allergy notes under 500 characters.",
-    "notes_too_long": "Please keep notes under 500 characters."
+    "notes_too_long": "Please keep notes under 500 characters.",
+    "passcode_required": "Please enter the passcode.",
+    "passcode_too_long": "That passcode is too long."
+  },
+  "login": {
+    "documentTitle": "Staff sign-in",
+    "title": "Staff sign-in (demo)",
+    "intro": "Enter the demo passcode to open the host or presenter screen.",
+    "passcode": "Passcode",
+    "submit": "Sign in",
+    "signingIn": "Signing in…"
+  },
+  "host": {
+    "documentTitle": "Floor · {{venue}}",
+    "title": "{{venue}} · Floor",
+    "reconnecting": "Connection lost. Reconnecting…",
+    "signedOut": "Your session has ended. Going to sign-in…",
+    "planHeading": "Floor plan",
+    "legend": "Legend",
+    "allergy": "Allergy",
+    "walkIn": "Walk-in",
+    "tableLabel": "Table {{name}}, {{count}} seats",
+    "party": "Party of {{count}}",
+    "tile": {
+      "seatedSince": "Since {{time}} · {{count}}",
+      "next": "{{time}} · {{count}}"
+    },
+    "zoom": {
+      "label": "Zoom",
+      "in": "Zoom in",
+      "out": "Zoom out",
+      "fit": "Fit"
+    },
+    "panel": {
+      "close": "Close",
+      "current": "Seated now",
+      "next": "Next booking",
+      "nothingTonight": "No bookings for this table tonight.",
+      "guest": "Guest",
+      "time": "Time",
+      "party": "Party",
+      "status": "Status",
+      "reference": "Reference",
+      "mobile": "Mobile",
+      "occasion": "Occasion",
+      "notes": "Notes",
+      "allergyInList": "See tonight's list for details."
+    },
+    "list": {
+      "heading": "Tonight's bookings",
+      "empty": "No bookings tonight yet."
+    }
+  },
+  "tableState": {
+    "free": "Free",
+    "booked": "Booked",
+    "arrivingSoon": "Arriving soon",
+    "seated": "Seated"
+  },
+  "bookingStatus": {
+    "pendingPayment": "Awaiting payment",
+    "booked": "Booked",
+    "confirmed": "Confirmed",
+    "seated": "Seated",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
   }
 }
