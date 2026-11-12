@@ -40,3 +40,88 @@ export const cancelBookings = async (references: string[], day?: string) => {
     await api.dispose();
   }
 };
+
+type ApiContext = Awaited<ReturnType<typeof request.newContext>>;
+
+/** Runs `work` with an API client signed in as the shared host session. */
+const withHostApi = async <T>(work: (api: ApiContext) => Promise<T>): Promise<T> => {
+  const api = await request.newContext({
+    baseURL: apiBaseUrl,
+    storageState: hostSessionPath,
+    ignoreHTTPSErrors: true,
+  });
+  try {
+    return await work(api);
+  } finally {
+    await api.dispose();
+  }
+};
+
+const venuePath = `/api/v1/venues/${venueId}`;
+
+type SeatedListItem = HostListItem & { tables: { id: string; name: string }[] };
+type WaitlistEntryItem = { id: string; name: string; partySize: number; version: number };
+type FloorTable = { id: string; name: string; seats: number; current: { bookingId: string } | null };
+
+/**
+ * Clears the tables of the given seated bookings (POST …/tables/{id}/clear {bookingId, version}, Design §14.2), so
+ * the walk-ins a spec seated don't stay on the floor. Bookings already completed are left alone.
+ */
+export const clearBookings = async (references: string[]) => {
+  if (references.length === 0) return;
+  await withHostApi(async (api) => {
+    const list = await api.get(`${venuePath}/bookings`);
+    expect(list.ok(), `host list answered ${list.status()}`).toBe(true);
+    const { items } = (await list.json()) as { items: SeatedListItem[] };
+    for (const item of items.filter((i) => references.includes(i.reference) && i.status === "seated")) {
+      const clear = await api.post(`${venuePath}/tables/${item.tables[0].id}/clear`, {
+        data: { bookingId: item.id, version: item.version },
+      });
+      expect(clear.ok(), `clear ${item.reference} answered ${clear.status()}`).toBe(true);
+    }
+  });
+};
+
+/** Ends active waitlist entries as `removed` (POST …/waitlist/{id}/end, Design §14.2): by ID, or every one `match`es. */
+export const endWaitlistEntries = async (match: string[] | ((entry: WaitlistEntryItem) => boolean)) => {
+  await withHostApi(async (api) => {
+    const list = await api.get(`${venuePath}/waitlist`);
+    expect(list.ok(), `waitlist answered ${list.status()}`).toBe(true);
+    const { items } = (await list.json()) as { items: WaitlistEntryItem[] };
+    const chosen = items.filter((entry) => (Array.isArray(match) ? match.includes(entry.id) : match(entry)));
+    for (const entry of chosen) {
+      const end = await api.post(`${venuePath}/waitlist/${entry.id}/end`, {
+        data: { outcome: "removed", version: entry.version },
+      });
+      expect(end.ok(), `end waitlist entry answered ${end.status()}`).toBe(true);
+    }
+  });
+};
+
+/**
+ * Makes sure a party is seated at `tableName`, as the seed has it at 18:25 (Design §17). A previous run (or a person
+ * trying the demo) may have cleared it; then a stand-in walk-in of `partySize` is seated there through the API, so
+ * step 3 starts from the seeded shape. Returns the stand-in's reference, or null when the table was already taken.
+ */
+export const ensureSeated = async (tableName: string, partySize: number) =>
+  withHostApi(async (api) => {
+    const plan = await api.get(`${venuePath}/floor-plan`);
+    expect(plan.ok(), `floor plan answered ${plan.status()}`).toBe(true);
+    const { tables } = (await plan.json()) as { tables: FloorTable[] };
+    const table = tables.find((t) => t.name === tableName);
+    expect(table, `table ${tableName} exists`).toBeTruthy();
+    if (table!.current) return null;
+    const seat = await api.post(`${venuePath}/walk-ins`, {
+      data: { partySize, tableId: table!.id, name: "E2E stand-in" },
+    });
+    expect(seat.ok(), `stand-in walk-in on ${tableName} answered ${seat.status()}`).toBe(true);
+    return ((await seat.json()) as { reference: string }).reference;
+  });
+
+/** The quoted wait the API gives a party now (GET …/waitlist/quote, BR-08, Design §11.5). */
+export const quotedWait = async (partySize: number) =>
+  withHostApi(async (api) => {
+    const quote = await api.get(`${venuePath}/waitlist/quote?partySize=${partySize}`);
+    expect(quote.ok(), `quote answered ${quote.status()}`).toBe(true);
+    return ((await quote.json()) as { quotedWaitMinutes: number }).quotedWaitMinutes;
+  });

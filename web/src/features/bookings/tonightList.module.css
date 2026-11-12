@@ -92,3 +92,16 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* A seatable booking: the row and its "Seat" button side by side (AC3.3, Design §18.6). */
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.item > .row {
+  flex: 1 1 14rem;
+  width: auto;
+}

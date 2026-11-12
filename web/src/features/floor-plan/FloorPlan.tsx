@@ -9,6 +9,8 @@ import styles from "./floorPlan.module.css";
 type Props = Readonly<{
   plan: FloorPlanResponse;
   selectedTableId: string | null;
+  /** The table freed for a suggested waiting party (AC4.2). */
+  highlightedTableId?: string | null;
   onSelect: (tableId: string) => void;
   label: string;
 }>;
@@ -18,7 +20,7 @@ type Props = Readonly<{
  * table a {@link TableShape}. A notice refetches the whole plan; React redraws only the tables that changed.
  * Area names come in English and Chinese; the active language picks one (QA-7).
  */
-export function FloorPlan({ plan, selectedTableId, onSelect, label }: Props) {
+export function FloorPlan({ plan, selectedTableId, highlightedTableId, onSelect, label }: Props) {
   const bounds = planBounds(plan.tables);
   const areas = [...plan.areas].sort((a, b) => a.sortOrder - b.sortOrder);
   const { i18n } = useTranslation();
@@ -56,6 +58,7 @@ export function FloorPlan({ plan, selectedTableId, onSelect, label }: Props) {
                 table={table}
                 timeZone={plan.timeZone}
                 selected={table.id === selectedTableId}
+                highlighted={table.id === highlightedTableId}
                 onSelect={onSelect}
               />
             ))}

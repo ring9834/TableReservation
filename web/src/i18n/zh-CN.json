@@ -82,7 +82,11 @@
     "allergy_notes_too_long": "过敏说明请不要超过 500 个字符。",
     "notes_too_long": "备注请不要超过 500 个字符。",
     "passcode_required": "请输入密码。",
-    "passcode_too_long": "密码太长。"
+    "passcode_too_long": "密码太长。",
+    "party_size_required": "请输入人数。",
+    "party_size_out_of_range": "人数须在 1 至 20 之间。",
+    "quoted_wait_out_of_range": "预计等候时间须在 0 至 240 分钟之间。",
+    "language_invalid": "请选择 English 或中文。"
   },
   "login": {
     "documentTitle": "员工登录",
@@ -104,8 +108,18 @@
     "tableLabel": "{{name}} 号桌，{{count}} 座",
     "party": "{{count}} 位",
     "tile": {
-      "seatedSince": "{{time}} 入座 · {{count}} 位",
-      "next": "{{time}} · {{count}} 位"
+      "seatedSince": "{{time}} 入座，{{party}}",
+      "next": "下一位 {{time}}，{{party}}",
+      "suggested": "建议",
+      "suggestedLabel": "已空出，建议给等候的客人",
+      "guestsOne": "1 位",
+      "guestsMany": "{{count}} 位",
+      "status": {
+        "free": "空闲",
+        "booked": "已预订",
+        "arrivingSoon": "即将到店",
+        "seated": "已入座"
+      }
     },
     "zoom": {
       "label": "缩放",
@@ -131,6 +145,40 @@
     "list": {
       "heading": "今晚预订",
       "empty": "今晚还没有预订。"
+    },
+    "walkInButton": "现场入座",
+    "seats": "{{count}} 座",
+    "walkInDialog": {
+      "title": "安排现场顾客入座",
+      "partySize": "几位？",
+      "largerParty": "更多人数",
+      "findTable": "查找餐桌",
+      "table": "餐桌",
+      "suggested": "建议",
+      "name": "姓名（选填）",
+      "seatAt": "在 {{table}} 入座",
+      "noTable": "目前没有适合 {{count}} 位的餐桌。",
+      "addToWaitlist": "加入候位名单"
+    },
+    "actions": {
+      "seat": "入座",
+      "seating": "正在入座…",
+      "seatGuest": "安排 {{guest}}（{{time}}）入座",
+      "seatElsewhere": "换一张桌入座",
+      "chooseTable": "可用的空闲餐桌",
+      "noOtherTable": "目前没有适合 {{count}} 位的空闲餐桌。",
+      "seatedAt": "已在 {{table}} 入座。",
+      "clear": "清台",
+      "clearing": "正在清台…"
+    },
+    "errors": {
+      "slot_taken": "该餐桌已不再空闲。楼面已刷新，请重新选择。",
+      "version_conflict": "这项内容刚刚在另一屏幕上被更改。已显示最新信息，请核对后重试。",
+      "invalid_transition": "这项内容刚刚在另一屏幕上被更改。已显示最新信息。",
+      "table_too_small": "该餐桌坐不下这么多人。",
+      "party_too_large": "本店没有能容纳这么多人的餐桌。",
+      "not_found": "该项已不存在。屏幕已刷新。",
+      "not_signed_in": "登录已过期，正在前往登录页面…"
     }
   },
   "tableState": {
@@ -146,5 +194,46 @@
     "seated": "已入座",
     "completed": "已完成",
     "cancelled": "已取消"
+  },
+  "waitlist": {
+    "heading": "候位名单",
+    "joinButton": "加入候位",
+    "empty": "目前没有人候位。",
+    "quoted": "预计 {{minutes}} 分钟",
+    "waited": "已等 {{minutes}} 分钟",
+    "notifiedFor": "已通知：{{table}}",
+    "overdue": "已超时",
+    "suggestedFor": "建议入座 {{table}}",
+    "freedTable": "刚空出",
+    "suggestion": "{{table}} 已空出：建议 {{name}}（{{count}} 位）。",
+    "dismiss": "忽略",
+    "notifyHint": "记录您已告知客人餐桌已准备好。短信功能将在后续版本加入。",
+    "joined": "已加入候位名单。",
+    "actions": {
+      "seat": "入座",
+      "notify": "标记为已通知",
+      "notifyFor": "标记为已通知（{{table}}）",
+      "walkedAway": "已离开",
+      "remove": "移除"
+    },
+    "join": {
+      "title": "加入候位名单",
+      "name": "姓名",
+      "mobile": "手机",
+      "partySize": "人数",
+      "language": "客人语言",
+      "quote": "预计等候（分钟）",
+      "quoteHint": "建议：{{minutes}} 分钟，可修改。",
+      "quoteHintEmpty": "输入人数后显示建议等候时间。",
+      "submit": "加入候位名单",
+      "submitting": "正在加入…"
+    }
+  },
+  "waitlistStatus": {
+    "waiting": "等候中",
+    "notified": "已通知",
+    "seated": "已入座",
+    "walkedAway": "已离开",
+    "removed": "已移除"
   }
 }

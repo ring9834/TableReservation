@@ -1,14 +1,5 @@
 import type { FloorTableDto, TableBookingSummary } from "@/api/model";
 
-/** Names longer than this are cut with "…" on the tile; the full name is in the label and the side panel. */
-export const maxTileNameLength = 10;
-
-/** Cuts a name by characters (not bytes), so Chinese names cut cleanly too. */
-export const truncateName = (name: string, max = maxTileNameLength) => {
-  const chars = Array.from(name.trim());
-  return chars.length <= max ? chars.join("") : `${chars.slice(0, max - 1).join("")}…`;
-};
-
 /** The booking a tile talks about: the party seated there, otherwise the next one tonight. */
 export const shownBooking = (table: FloorTableDto): TableBookingSummary | null =>
   table.current ?? table.next;

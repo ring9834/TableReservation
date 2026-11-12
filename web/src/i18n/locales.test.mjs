@@ -85,3 +85,40 @@ test("every table state and booking status has a label", () => {
     assert.ok(valueAt(en, `bookingStatus.${status}`), `No label for booking status ${status}`);
   }
 });
+
+test("every code a host action can meet has a host message (Design §18.6)", () => {
+  // Keep in step with hostErrorCodes in src/features/host/useHostActionError.ts.
+  const codes = [
+    "slot_taken",
+    "version_conflict",
+    "invalid_transition",
+    "table_too_small",
+    "party_too_large",
+    "not_found",
+    "not_signed_in",
+  ];
+  for (const code of codes) {
+    assert.ok(valueAt(en, `host.errors.${code}`), `No host message for error code ${code}`);
+  }
+});
+
+test("every field rule code the waitlist form can meet has a message", () => {
+  const codes = [
+    "name_length",
+    "mobile_invalid",
+    "mobile_not_mobile",
+    "party_size_required",
+    "party_size_out_of_range",
+    "quoted_wait_out_of_range",
+    "language_invalid",
+  ];
+  for (const code of codes) {
+    assert.ok(valueAt(en, `fieldErrors.${code}`), `No message for field code ${code}`);
+  }
+});
+
+test("every waitlist status has a label", () => {
+  for (const status of ["waiting", "notified", "seated", "walkedAway", "removed"]) {
+    assert.ok(valueAt(en, `waitlistStatus.${status}`), `No label for waitlist status ${status}`);
+  }
+});
