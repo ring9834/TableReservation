@@ -7,7 +7,7 @@ import type { AvailableSlot, VenueResponse } from "@/api/model";
 import { venueId } from "@/lib/config";
 import { addDays, formatLocalTime, telHref } from "@/lib/format";
 import { partyLabel } from "./party";
-import { useApiError } from "./useApiError";
+import { useApiError } from "@/lib/useApiError";
 import { useFocusHeading } from "./useFocusHeading";
 import styles from "./booking.module.css";
 

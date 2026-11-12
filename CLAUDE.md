@@ -58,6 +58,7 @@ cd web && npm run generate:api           # after an API change: regenerate src/a
 cd web && npm run lint && npm run typecheck && npm run format:check && npm test && npm run build   # what CI runs (plus "generate:api leaves src/api unchanged")
 cd tests/E2E && npm ci                   # once; locally Playwright drives the installed Microsoft Edge (project mobile-edge, channel 'msedge'), so no browser download
 cd tests/E2E && npx playwright test      # API and web must be running; E2E_BASE_URL defaults to https://localhost:3000. CI (CI=1) runs Linux Chromium instead (project mobile-chromium); Chrome crashes under automation on the dev laptop
+E2E_HOST_PASSCODE=<host passcode> npx playwright test   # the host specs sign in with it (CI: ci-host-passcode). Development runs the business clock fixed at 18:25 today (Demo:Clock) and resets a stale database at start-up (Demo:ResetIfStale); the host specs cancel the bookings they make (API at E2E_API_BASE_URL, default NEXT_PUBLIC_API_BASE_URL or https://localhost:5001); /demo-login allows 5 attempts a minute, so leave a minute between full runs
 ```
 
 Keep this section in step with the real scripts when they change.

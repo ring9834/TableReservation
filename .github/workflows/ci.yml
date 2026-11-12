@@ -115,8 +115,9 @@ jobs:
       - run: npm run build
       - run: npm audit --audit-level=high
 
-  # Playwright against the real API and PostgreSQL (Design §18.4). Both sides run on plain HTTP on localhost: the guest
-  # page needs no session cookie, and there is no certificate to trust.
+  # Playwright against the real API and PostgreSQL (Design §18.4, §18.5). Both sides run on plain HTTP on localhost, so
+  # there is no certificate to trust. Chromium treats http://localhost as a secure context, so the host screens'
+  # __Host- Secure session cookie is still stored and sent (localhost:3000 and :5000 are the same site).
   e2e:
     name: End-to-end (Playwright)
     runs-on: ubuntu-latest
@@ -140,8 +141,10 @@ jobs:
       ConnectionStrings__Reservations: Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=ci_only
       Demo__HostPasscode: ci-host-passcode
       Demo__PresenterPasscode: ci-presenter-passcode
+      E2E_HOST_PASSCODE: ci-host-passcode
       Cors__AllowedOrigins__0: http://localhost:3000
-      # Development: migrations and the Golden Dragon seed run at start-up (Database:MigrateOnStartup).
+      # Development: migrations and the Golden Dragon seed run at start-up (Database:MigrateOnStartup), and the
+      # business clock is fixed at 18:25 today (Demo:Clock, Design §17).
       ASPNETCORE_ENVIRONMENT: Development
       NEXT_PUBLIC_API_BASE_URL: http://localhost:5000
       E2E_BASE_URL: http://localhost:3000
@@ -178,12 +181,13 @@ jobs:
           npm ci
           npm run build
 
-      # Plain static file server, like S3 + CloudFront in M12: /book/ must resolve to out/book/index.html.
+      # Plain static file server, like S3 + CloudFront in M12: /book/ must resolve to out/book/index.html (same for
+      # /demo-login/ and /host/).
       - name: Serve web
         run: |
           nohup python3 -m http.server 3000 --directory web/out > web.log 2>&1 &
           for i in $(seq 1 30); do
-            if curl -fsS http://localhost:3000/book/ > /dev/null; then echo "Web ready"; exit 0; fi
+            if curl -fsS http://localhost:3000/book/ > /dev/null && curl -fsS http://localhost:3000/demo-login/ > /dev/null && curl -fsS http://localhost:3000/host/ > /dev/null; then echo "Web ready"; exit 0; fi
             sleep 1
           done
           echo "::error::The static site did not start"; cat web.log; exit 1

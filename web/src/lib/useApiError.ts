@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { isApiError } from "@/lib/apiFetch";
 
-/** The Problem Details codes the guest page has its own message for; any other code reads as `unexpected`. */
+/** The Problem Details codes the pages have their own message for; any other code reads as `unexpected`. */
 export const knownErrorCodes = [
   "slot_taken",
   "party_too_large",
@@ -10,6 +10,7 @@ export const knownErrorCodes = [
   "outside_booking_window",
   "validation_failed",
   "too_many_requests",
+  "not_signed_in",
   "unexpected",
 ] as const;
 

@@ -1,0 +1,231 @@
+/* Floor plan (ADR-001, Design §18.3). State is colour AND text (QA-7); tiles keep dark text on light fills in
+   both colour schemes so the contrast holds. */
+
+.zoomArea {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.zoomWrapper {
+  width: 100% !important;
+}
+
+.zoomContent {
+  width: 100% !important;
+}
+
+.zoomControls {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.zoomControls button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.area {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-dasharray: 6 4;
+}
+
+.areaName {
+  fill: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.table {
+  cursor: pointer;
+  outline: none;
+}
+
+.shape {
+  stroke-width: 2.5;
+}
+
+.table:focus-visible .shape,
+.selected .shape {
+  stroke: var(--focus);
+  stroke-width: 5;
+}
+
+.free .shape {
+  fill: #dcfce7;
+  stroke: #15803d;
+}
+
+.booked .shape {
+  fill: #dbeafe;
+  stroke: #1d4ed8;
+}
+
+.arrivingSoon .shape {
+  fill: #fef3c7;
+  stroke: #b45309;
+  stroke-dasharray: 8 4;
+}
+
+.seated .shape {
+  fill: #ffe4e6;
+  stroke: #be123c;
+}
+
+.tileName {
+  fill: #1c1917;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tileState {
+  fill: #1c1917;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.tileText {
+  fill: #1c1917;
+  font-size: 11px;
+}
+
+.allergyBadge {
+  fill: #b91c1c;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.allergyMark {
+  fill: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* Side panel */
+
+.panel {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.close {
+  min-height: 2.75rem;
+  padding: 0 0.9rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.stateBadge {
+  display: inline-block;
+  margin: 0.5rem 0;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 2px solid;
+  color: #1c1917;
+  font-weight: 600;
+}
+
+.stateBadge.free {
+  background: #dcfce7;
+  border-color: #15803d;
+}
+
+.stateBadge.booked {
+  background: #dbeafe;
+  border-color: #1d4ed8;
+}
+
+.stateBadge.arrivingSoon {
+  background: #fef3c7;
+  border-color: #b45309;
+}
+
+.stateBadge.seated {
+  background: #ffe4e6;
+  border-color: #be123c;
+}
+
+.booking h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+}
+
+.booking dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 0.75rem;
+  margin: 0;
+}
+
+.booking dt {
+  color: var(--muted);
+}
+
+.booking dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reference {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.08em;
+}
+
+.allergyNote {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid #b91c1c;
+  background: var(--surface-muted);
+}
+
+.allergyIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #b91c1c;
+  font-weight: 800;
+}

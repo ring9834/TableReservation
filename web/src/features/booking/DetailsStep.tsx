@@ -24,7 +24,7 @@ import { isApiError } from "@/lib/apiFetch";
 import { venueId } from "@/lib/config";
 import { formatLocalDate, formatLocalTime } from "@/lib/format";
 import { partyLabel } from "./party";
-import { useApiError } from "./useApiError";
+import { useApiError } from "@/lib/useApiError";
 import { useFocusHeading } from "./useFocusHeading";
 import type { ChosenSlot } from "./WhenStep";
 import styles from "./booking.module.css";

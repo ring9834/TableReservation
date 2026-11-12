@@ -34,6 +34,7 @@ Changes made on **8 November** are **highlighted in yellow with an orange bar in
 | Table locks against deadlock (12 Nov) | `BookingCreator` locks the chosen tables in ascending ID order before inserting; `40P01` / `40001` → `409 slot_taken` | §12 |
 | Guest booking page (M4b, 11 Nov) | Public `getVenue` (slot grid, limits, contact phone); venue setting `ContactPhone`; FluentValidation rules copied into OpenAPI; orval client and zod schemas; `/book` flow, translations and error mapping; dev server over HTTPS; Playwright in CI | §2.2, §13.1, §14, §14.1, §18.4, §20 |
 | Real-time server side (M5a, 12 Nov) | Hub joins the venue group from the session's `venue_ids` claim (no `JoinVenue`); `RealtimeNotifier` maps every event to an ID-only notice and never fails the event; notice schemas in OpenAPI; `getFloorPlan` at business-clock now (no `?at`) with current and next booking per table; SignalR headers in CORS | §9.3, §14, §14.1, §15, §15.1 |
+| Host screens (M5b, 12 Nov) | Business clock fixed at 18:25 today by configuration (`Demo:Clock`), brought forward from M11; stale local data reset at start-up (`Demo:ResetIfStale`); `/demo-login` form; `/host` floor plan, side panel and tonight's list; SignalR connection with reconnect and catch-up; whole-plan refetch per notice (ADR-001 clarification); booking contact name and bilingual area names planned for M6 | §17, §17.1, §18.1, §18.5, §20 |
 | Event infrastructure details (M3, 10 Nov) | Two clocks: workers use the infrastructure clock, the domain uses the business clock; envelope in `src/Contracts`; payload shape; request context and causation in the dispatcher; one row per aggregate per batch; every handler runs; retry schedule counted from `created_at`; duplicate event sequence → concurrency error; outbox health check | §5.6, §16, §20 |
 | Clean-up (8 Nov) | Schema aligned with §6.6 and §7.1, inbound POS fields, explanations tidied, API and traceability updated | §2.1–§2.4, §3.1, §3.3, §4.3, §6.1, §6.2, §6.5, §9.1, §13, §14, §19 |
 
@@ -1973,7 +1974,7 @@ All jobs time themselves on the infrastructure clock (always the system clock) a
 
 | **Component**                            | **Purpose**                                                                                                                  | **Requirement**                 |
 |------------------------------------------|------------------------------------------------------------------------------------------------------------------------------|---------------------------------|
-| `DemoClock : TimeProvider`               | DemoClock fixed at 18:25 after Reset, fixed mode, not offset; the presenter controls can move it. Steps 3 and 5 depend on 18:25 (seed table below) | Assumptions in Requirements §11 |
+| `DemoClock : TimeProvider`               | DemoClock fixed at 18:25 after Reset, fixed mode, not offset; the presenter controls can move it. Steps 3 and 5 depend on 18:25 (seed table below). Since M5b the fixed mode comes from configuration (§17.1); the presenter controls, offset mode and reset arrive in M11 | Assumptions in Requirements §11 |
 | `DemoSeeder`                             | Loads Golden Dragon: 2 areas, 14 tables, 11 guests and 11 bookings for tonight (seed table below)                            | Constraints: Reset              |
 | `ResetDemo`                              | Truncates venue data, reseeds, resets clock and mock POS, broadcasts `demoReset`                                             | Demo script "Before starting"   |
 | `MockPosAdapter`                         | Online/offline switch; accepts messages; simulates `BillClosed`                                                              | Step 6, QA-5                    |
@@ -2011,6 +2012,17 @@ Checks at 18:25 (all covered by `GoldenDragonSeedTests`):
 
 The demo session keeps the ADR-004 pipeline intact: an `IUserContext` reads the cookie and returns a fixed `Staff` actor with role `Host` or `Presenter` and `venue_ids = [GoldenDragon]`. `Presenter` is a demo-only role: host permissions plus `/demo/*` and the message and POS logs. Turning on Cognito in the pilot replaces only this provider and drops the `Presenter` role.
 
+### 17.1 Build notes (M5b)
+
+The fixed business clock was brought forward from M11 so that Development and the CI end-to-end run always show the seeded evening at 18:25 (`src/Infrastructure/Demo/DemoClock.cs`, `DatabaseInitializer.cs`).
+
+| **Topic** | **Decision** |
+|-----------|--------------|
+| Configuration | Section `Demo:Clock`: `Mode` = `System` (default) or `Fixed`, and `FixedLocalTime` (e.g. `18:25`). `Fixed` without a time fails validation at start-up. `appsettings.Development.json` sets `Fixed` at `18:25`; the CI end-to-end job runs in Development, so it gets the same clock. Outside Development the default is the system clock; M12 sets the demo deployment together with the M11 controls |
+| Fixed mode | `DemoClock` is created once at start-up. It takes today's date in Pacific/Auckland (Golden Dragon's zone) from the system clock at that moment, adds `FixedLocalTime`, converts to UTC and returns that instant from `GetUtcNow()` for good. Timestamps and timers are the system clock's: nothing on the business side waits on timers. A process that runs past midnight keeps the day it started on |
+| Two clocks | Only the business clock (the default `TimeProvider`) is replaced. The keyed infrastructure clock stays `TimeProvider.System` (§5.6), so the outbox, retries, idempotency housekeeping and the session cookie's 12 hours keep running in real time. Integration tests keep registering their own `TestClock`s, which win over this registration |
+| Stale local data | `Demo:ResetIfStale` (default `false`; `true` in `appsettings.Development.json`). In Development, after migrating, `DatabaseInitializer` checks whether any booking starts on today's venue-local date (business clock). If the database has a venue but no such booking, it runs `DemoReset` (truncate and reseed in one transaction) and logs one Information line ("Demo data had no bookings today; reset and reseeded for today", no personal data). An empty database is seeded as before. A database that already has bookings today is left alone, so bookings added during the day stay until the M11 reset |
+
 ## 18. Front-end design
 
 ### 18.1 Structure
@@ -2018,12 +2030,13 @@ The demo session keeps the ADR-004 pipeline intact: an `IUserContext` reads the 
 ```
 web/src/
 ├─ api/                 ← orval output: client, query hooks, zod schemas (do not edit)
-├─ realtime/            ← SignalR connection, JoinVenue, notice → query invalidation map
+├─ realtime/            ← SignalR connection (useVenueConnection), notice → query invalidation, reconnect (§18.5)
 ├─ i18n/                ← react-i18next set-up; en.json, zh-CN.json; error code → message keys
 ├─ features/
 │  ├─ booking/          ← guest flow: WhenStep, DetailsStep, PayStep (Stripe Elements), Confirmation
 │  ├─ manage/           ← guest link page: confirm / cancel
-│  ├─ floor-plan/       ← FloorPlan (SVG), TableShape, TableDetailsPanel, ArrivingSoonBadge
+│  ├─ host/             ← HostPage (layout, connection banner), 401 → /demo-login
+│  ├─ floor-plan/       ← FloorPlan (SVG), TableShape, TableDetailsPanel, ZoomPanContainer
 │  ├─ bookings/         ← TonightList, SeatDialog
 │  ├─ waitlist/         ← WaitlistPanel, JoinWaitlistDialog, NotifyButton
 │  ├─ presenter/        ← PhonePanel, PosLog, DemoControls
@@ -2093,6 +2106,26 @@ Details §18.1–§18.3 left open, settled when the guest booking page was built
 | Local HTTPS | `npm run dev` runs `next dev --experimental-https` (mkcert certificate in `web/certificates/`, git-ignored) on `https://localhost:3000`, and Development CORS allows that origin. Both ends are HTTPS on `localhost`, so the `SameSite=Strict` session cookie is sent (M5) |
 | End-to-end tests | `tests/E2E` is its own npm project (`@playwright/test`): mobile Chromium (Pixel 7), one worker. Specs: party of 2 tomorrow at 19:30 in English; party of 2 tomorrow at 19:45 in Chinese with a Chinese confirmation; "9 or more" asks to call. "Tomorrow" is the venue's `today` (the date picker's `min`) plus one. The CI job `e2e` starts PostgreSQL and the API in Development (migrations and seed) over plain HTTP on port 5000 with CI-only passcodes, serves the static export on port 3000, runs Playwright and uploads the report on failure. The API has no `UseHttpsRedirection` and sends HSTS outside Development only, so nothing redirects. Local reruns add bookings for tomorrow (pacing allows 12 covers a slot); a fresh database resets that |
 
+### 18.5 Build notes (M5b)
+
+Details §18.1–§18.3 left open, settled when the host screens were built (`web/src/features/host`, `floor-plan`, `bookings`, `demo-login`, `web/src/realtime`, `tests/E2E/specs/host.spec.ts`).
+
+| **Topic** | **Decision** |
+|-----------|--------------|
+| Sign-in | `/demo-login` is a passcode form (password field, `maxLength` from the generated schema) using the generated `demoLogin` mutation. Role `host` → `/host/`, `presenter` → `/presenter/` (a placeholder until M7). `not_signed_in` (wrong passcode), `too_many_requests`, `validation_failed` (field codes `passcode_required`, `passcode_too_long`) and `unexpected` are translated; the field is cleared after a failure. `useApiError` moved to `src/lib` and gained `not_signed_in` |
+| Signed out | Any host query that answers 401, or a 401 on the SignalR negotiate, sends the screen to `/demo-login/` with `router.replace` |
+| Connection | `useVenueConnection`: one `HubConnection` to `/hubs/venue` with `withCredentials` (the session cookie is the only credential; the server chooses the venue). `withAutomaticReconnect` with a policy that never gives up: 0, 1, 2, 5 s, then every 5 s. A failed first start or an unexpected close is retried on the same schedule. Status `connecting` → `connected` ↔ `reconnecting` |
+| Notices | `floorPlanChanged` invalidates the `getFloorPlan` query and every `getTonightBookings` query of the venue (key prefix). Following the ADR-001 clarification of 12 Nov 2026, a notice refetches the whole floor plan (≤ 80 tables); React redraws only the tables whose data changed |
+| Reconnect (AC2.5) | While not connected the screen shows a "reconnecting" banner (`role="status"`). After every reconnect (automatic, retried start, or back online) every query is invalidated once, so nothing missed stays missing. The browser's `offline` event stops the connection and shows the banner at once; `online` starts it again. An open WebSocket can outlive a lost network for a while, so the browser's own signal is used as well |
+| Floor plan | One SVG; the `viewBox` is the tables' bounding box plus a margin, so it fits any width. `x`, `y` are the table's top-left corner in floor units; `rotation` turns the shape about its centre, and text stays upright. Each area is a dashed layer with its name (venue data, English only until the §20 item "Area names in English and Chinese"). Inside `react-zoom-pan-pinch`: scale 1 fits the column, zoom up to 4×, buttons for +, − and fit; panning is off at scale 1 so a phone still scrolls the page |
+| Table tile | `role="button"`, keyboard (Enter, Space), `aria-label` such as "Table T4, 4 seats, Seated, Since 5:30 pm · 4, guest name, Allergy". Colour **and** an upper-case state label (Free, Booked, Arriving soon, Seated; QA-7). Seated: "Since {time} · {party}"; otherwise the next booking: "{time} · {party}". The guest name is cut to 10 characters (by character, so Chinese names cut cleanly) with "…"; the full name is in the label and the panel. A red "!" badge marks an allergy (AC2.6). Fills are light with dark text in both colour schemes |
+| Side panel | Tapping a table (or a row of tonight's list) selects it; the panel shows its current and next booking: guest, time range, party, status, reference, and from tonight's list the masked mobile, occasion, notes and allergy notes (AC2.6, details on tap). Focus moves to the panel heading. Actions arrive with M6, M7 and M9 |
+| Tonight's list | `getTonightBookings` for the venue's today, every status in time order: time, guest (or "Walk-in"), party, tables, status, allergy icon. Cancelled and completed rows are dimmed |
+| Layout | ≥ 900 px (a tablet in landscape): plan on the left (2/3), panel and list on the right in a sticky column. Narrower: plan, panel and list stacked. Touch targets at least 44 px. The layout editor and combining tables stay out of scope (pilot) |
+| Languages | Every label and status in `en.json` and `zh-CN.json` (`login.*`, `host.*`, `tableState.*`, `bookingStatus.*`). No plural forms: Chinese has one form and the parity test compares keys, so texts read well for any count ("Party of {{count}}"). `npm test` also checks that every table state and booking status has a label |
+| End-to-end tests | `host.spec.ts` signs in once through the form in `beforeAll` and reuses the storage state (the `/demo-login` limit is 5 a minute), with the passcode from `E2E_HOST_PASSCODE`. Hosts are tablet contexts (Galaxy Tab S4 landscape), the guest a phone. A booking made tonight at 20:00 must reach both host screens' list and plan within 2 s (AC2.1, AC2.4); a host offline for 10 s shows "reconnecting" and has the 20:15 booking within 5 s of coming back (AC2.5). Each booking uses a new fictional mobile, because a known mobile reuses the stored guest and its name (§14.1). The plan is checked by tapping the booking's table and reading the panel, which works whichever table the booking got. Also: wrong passcode, and `/host/` without a session goes to `/demo-login/`. Clean-up: `afterAll` cancels the bookings the file made through the host cancel endpoint (`POST …/bookings/{id}/cancel {version}`) with the saved host session, using the API at `E2E_API_BASE_URL` (default `NEXT_PUBLIC_API_BASE_URL`, then `https://localhost:5001`). Cancelled bookings don't count for pacing and free their tables, so reruns against one database keep working (checked with three runs in a row). `booking.spec.ts` books for tomorrow and keeps its bookings; two per run allows about six runs before 19:30 fills |
+| Cookie over HTTP in CI | Checked: the CI job serves both sides over plain HTTP on `localhost` (ports 3000 and 5000). Chromium treats `http://localhost` as a secure context, so it stores the `__Host-` `Secure` cookie, and the two ports are the same site, so the `SameSite=Strict` cookie is sent on fetches and on the SignalR handshake. The whole suite passed this way locally (Edge, the same engine) with no change to the cookie settings |
+
 ## 19. Traceability
 
 | **Requirement**     | **Design sections**                                          |
@@ -2134,4 +2167,6 @@ Details §18.1–§18.3 left open, settled when the guest booking page was built
 | `Demo:Enabled` in the demo environment (M12) | `/demo-login` exists only when `Demo:Enabled` is true. It must be true in the demo deployment (with both passcodes from Secrets Manager) and never in the pilot |
 | Guest-link tokens in logs (M10) | ASP.NET Core logs `RequestPath` (the path without the query string) in its own scope, so guest-link tokens must never appear in the URL path. They go in the query string (`/guest/bookings?token=…`, §14), which is not logged, and M10 extends `LogScrubbingTests` to cover a guest-link request |
 | Late match when the POS sends `bookingId` | The demo applies the 30-minute window (§6.5 step 1); for the pilot, consider attaching regardless of timing because the ID is explicit |
+| Booking contact name (M5b review, 12 Nov) | **Before the demo, at the start of M6.** Store the name given with each booking on the booking (contact name) and show it on the confirmation and host screens; the guest profile keeps its stored name (§14.1). Today a mobile that books under two names shows the new name on the confirmation but the stored one on the host screens |
+| Area names in English and Chinese (M5b review, 12 Nov) | **Before the demo, at the start of M6.** Areas get an English and a Chinese name (seed and data: schema, `Area`, floor-plan response), and the host screen shows the one for the active language, so 中文 mode has no English area names (QA-7) |
 | Outbox retries while `DemoClock` stands at 18:25 (a fixed business clock would stop `next_attempt_at` from ever coming due) | **Resolved 10 Nov 2026 by the two-clock rule (§5.6).** Workers use the infrastructure clock, which is always the system clock, so retries and polling run during the demo. The M7 and M9 workers follow the same rule |

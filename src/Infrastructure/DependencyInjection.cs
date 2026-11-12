@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using Reservation.Infrastructure.Audit;
 using Reservation.Infrastructure.Demo;
@@ -23,8 +24,15 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services, string connectionString, Action<DbContextOptionsBuilder>? configureDatabase = null)
     {
-        // Business clock (DemoClock replaces it in the demo) and infrastructure clock (always the system clock), Design §5.6.
-        services.TryAddSingleton(TimeProvider.System);
+        // Business clock (the system clock, or DemoClock when Demo:Clock:Mode is Fixed, Design §17) and infrastructure
+        // clock (always the system clock), Design §5.6. Tests register their own business clock after this.
+        services.AddOptions<DemoClockOptions>()
+            .BindConfiguration(DemoClockOptions.Section)
+            .Validate(o => o.IsValid, "Demo:Clock:Mode is Fixed, so Demo:Clock:FixedLocalTime must be set (e.g. 18:25).")
+            .ValidateOnStart();
+        services.AddOptions<DemoDataOptions>().BindConfiguration(DemoDataOptions.Section);
+        services.TryAddSingleton(provider =>
+            DemoClock.Create(provider.GetRequiredService<IOptions<DemoClockOptions>>().Value, TimeProvider.System));
         services.TryAddKeyedSingleton(Clocks.Infrastructure, TimeProvider.System);
 
         services.TryAddSingleton(_ => NpgsqlDataSource.Create(connectionString));
