@@ -3,7 +3,6 @@
 import {
   HubConnectionBuilder,
   HubConnectionState,
-  LogLevel,
   type HubConnection,
   type IRetryPolicy,
 } from "@microsoft/signalr";
@@ -12,6 +11,7 @@ import { useEffect, useState } from "react";
 import { getGetFloorPlanQueryKey } from "@/api/endpoints/floor-plan/floor-plan";
 import { getGetTonightBookingsQueryKey } from "@/api/endpoints/bookings/bookings";
 import { apiBaseUrl } from "@/lib/apiFetch";
+import { createSignalRLogger } from "./signalrLogger.mjs";
 
 /**
  * - `connecting`: first connection, nothing missed yet.
@@ -39,6 +39,9 @@ const isUnauthorized = (error: unknown) =>
  * - After any reconnect every query is invalidated once, so nothing missed while away stays missing (AC2.5).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
  *   again. An open WebSocket can outlive a lost network for a while, and the browser knows sooner.
+ * - A start we stop ourselves (unmount; React Strict Mode mounts every effect twice in development) is expected:
+ *   no console error, no state change. Failed starts and reconnects while the API or network is down are one
+ *   console.warn per outage (`signalrLogger.mjs`); the banner is the user-facing signal.
  */
 export function useVenueConnection(venueId: string, onSignedOut: () => void): ConnectionStatus {
   const queryClient = useQueryClient();
@@ -50,12 +53,20 @@ export function useVenueConnection(venueId: string, onSignedOut: () => void): Co
     let hasConnected = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let attempt = 0;
+    /** True from our own stop() until the next start: failures it causes are expected. */
+    let stopping = false;
 
+    const logger = createSignalRLogger(() => disposed || stopping);
     const connection: HubConnection = new HubConnectionBuilder()
       .withUrl(`${apiBaseUrl}/hubs/venue`, { withCredentials: true })
       .withAutomaticReconnect(retryPolicy)
-      .configureLogging(LogLevel.Warning)
+      .configureLogging(logger)
       .build();
+
+    const stop = () => {
+      stopping = true;
+      void connection.stop();
+    };
 
     const catchUp = () => void queryClient.invalidateQueries();
 
@@ -69,13 +80,14 @@ export function useVenueConnection(venueId: string, onSignedOut: () => void): Co
     });
     connection.onreconnected(() => {
       if (disposed) return;
+      logger.connected();
       setStatus("connected");
       catchUp();
     });
     // Automatic reconnect never gives up, so a close means stop() was called (offline or unmount) or the
     // first transport failed after negotiating; start again unless we meant it.
     connection.onclose(() => {
-      if (!disposed && !offline) {
+      if (!disposed && !offline && !stopping) {
         setStatus("reconnecting");
         scheduleStart();
       }
@@ -91,15 +103,17 @@ export function useVenueConnection(venueId: string, onSignedOut: () => void): Co
         scheduleStart(); // still stopping or reconnecting: look again shortly
         return;
       }
+      stopping = false;
       try {
         await connection.start();
         if (disposed) return;
+        logger.connected();
         attempt = 0;
         setStatus("connected");
         if (hasConnected) catchUp();
         hasConnected = true;
       } catch (error) {
-        if (disposed) return;
+        if (disposed || stopping) return; // we stopped it ourselves: expected, nothing to show
         if (isUnauthorized(error)) {
           onSignedOut();
           return;
@@ -120,7 +134,7 @@ export function useVenueConnection(venueId: string, onSignedOut: () => void): Co
       offline = true;
       clearTimeout(retryTimer);
       setStatus("reconnecting");
-      void connection.stop();
+      stop();
     };
     const handleOnline = () => {
       offline = false;
@@ -138,7 +152,7 @@ export function useVenueConnection(venueId: string, onSignedOut: () => void): Co
       clearTimeout(retryTimer);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
-      void connection.stop();
+      stop();
     };
   }, [queryClient, venueId, onSignedOut]);
 
