@@ -31,7 +31,7 @@ public static class Scenarios
         var venue = await db.Venues.SingleAsync(ct);
         var guest = Guest.Create(GoldenDragon.VenueId, PersonName.Create(name).Value, PhoneNumber.Create(mobile).Value, null, Language.Zh, null, now);
         var booking = Booking.CreateWalkIn(
-            venue, guest.Id, BookingReference.Generate(Random.Shared), PartySize.Of(2), [GoldenDragon.TableId(table)], null, now).Value;
+            venue, guest.Id, guest.Name, BookingReference.Generate(Random.Shared), PartySize.Of(2), [GoldenDragon.TableId(table)], null, now).Value;
         db.AddRange(guest, booking);
         await db.SaveChangesAsync(ct);
         return booking;

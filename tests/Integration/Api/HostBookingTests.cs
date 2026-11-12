@@ -168,6 +168,26 @@ public sealed class HostBookingTests(PostgresFixture postgres) : ApiTestBase(pos
     }
 
     [Fact]
+    public async Task A_known_mobile_booking_under_another_name_shows_that_name_and_the_guest_keeps_its_own()
+    {
+        // Design §20 "Booking contact name" (M6a): the host screens show the name given with the booking.
+        var seedGuest = GoldenDragon.Guests[0];
+        var created = await ReadAsync<CreateBookingResponse>(
+            await PostAsync(Client, Venue + "/phone-bookings", BookingBody(DemoTime.Tonight, 19, 30, 2, name: "Wei's Colleague", mobile: seedGuest.Mobile)),
+            HttpStatusCode.Created);
+
+        var item = await ItemAsync(created.Reference);
+        var plan = await ReadAsync<Reservation.Api.Features.Venues.FloorPlanResponse>(await Client.GetAsync(Venue + "/floor-plan", Ct));
+
+        Assert.Equal("Wei's Colleague", item.GuestName);
+        Assert.Equal("Wei's Colleague", plan.Tables.Single(t => t.Next?.BookingId == created.BookingId).Next!.GuestName);
+        Assert.Equal(seedGuest.Name, (await ItemAsync(Seated)).GuestName);
+        await using var db = Database.Context();
+        var guest = await db.Guests.SingleAsync(g => g.Mobile == PhoneNumber.Create(seedGuest.Mobile).Value, Ct);
+        Assert.Equal(seedGuest.Name, guest.Name.Value);
+    }
+
+    [Fact]
     public async Task An_unknown_booking_is_not_found()
     {
         var response = await PostAsync(Client, $"{Venue}/bookings/{Guid.CreateVersion7()}/confirm", new { version = 1 });

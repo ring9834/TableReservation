@@ -37,6 +37,7 @@ internal sealed class WaitlistEntryConfiguration : IEntityTypeConfiguration<Wait
         builder.MapAggregate<WaitlistEntry, WaitlistEntryId>();
         builder.Property(x => x.VenueId);
         builder.Property(x => x.GuestId);
+        builder.Property(x => x.ContactName).HasColumnName("contact_name").IsRequired();
         builder.Property(x => x.PartySize);
         builder.Property(x => x.QuotedWaitMinutes);
         builder.Property(x => x.Status);

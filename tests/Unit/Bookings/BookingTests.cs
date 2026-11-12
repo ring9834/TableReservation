@@ -92,10 +92,18 @@ public class BookingTests
     }
 
     [Fact]
+    public void Create_KeepsTheNameGivenAsTheContactName_M6a()
+    {
+        var booking = BookingFactory.Create();
+
+        Assert.Equal(TestData.ContactName, booking.ContactName);
+    }
+
+    [Fact]
     public void Create_WhenOnlinePartyAboveEight_ReturnsPartyTooLarge_BR04()
     {
         var result = Booking.Create(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), BookingChannel.Online, PartySize.Of(9),
+            TestData.Venue(), TestData.GuestId, TestData.ContactName, TestData.Reference(), BookingChannel.Online, PartySize.Of(9),
             TestData.Start, [TestData.Table8], null, null, _clock.Now);
 
         EventAssert.Failed(result, ErrorCodes.PartyTooLarge, ErrorKind.Rule);
@@ -129,7 +137,7 @@ public class BookingTests
     public void CreateWalkIn_OfSixOrMore_HasNoDeposit_BR06()
     {
         var booking = Booking.CreateWalkIn(
-            TestData.Venue(), null, TestData.Reference(), PartySize.Of(8), [TestData.Table8], null, TestData.Start).Value;
+            TestData.Venue(), null, null, TestData.Reference(), PartySize.Of(8), [TestData.Table8], null, TestData.Start).Value;
 
         Assert.Equal(BookingStatus.Seated, booking.Status);
         Assert.Null(booking.Deposit);
@@ -163,7 +171,7 @@ public class BookingTests
         _clock.Set(TestData.Start.AddMinutes(1));
 
         var result = Booking.Create(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), BookingChannel.Online, PartySize.Of(2),
+            TestData.Venue(), TestData.GuestId, TestData.ContactName, TestData.Reference(), BookingChannel.Online, PartySize.Of(2),
             TestData.Start, [TestData.Table4], null, null, _clock.Now);
 
         EventAssert.Failed(result, ErrorCodes.OutsideServiceHours, ErrorKind.Rule);
@@ -173,7 +181,7 @@ public class BookingTests
     public void Create_WhenTableIsNotInVenue_ReturnsNotFound()
     {
         var result = Booking.Create(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), BookingChannel.Online, PartySize.Of(2),
+            TestData.Venue(), TestData.GuestId, TestData.ContactName, TestData.Reference(), BookingChannel.Online, PartySize.Of(2),
             TestData.Start, [new TableId(Guid.NewGuid())], null, null, _clock.Now);
 
         EventAssert.Failed(result, ErrorCodes.NotFound, ErrorKind.NotFound);
@@ -183,7 +191,7 @@ public class BookingTests
     public void Create_WithWalkInChannel_Throws()
     {
         Assert.Throws<ArgumentException>(() => Booking.Create(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), BookingChannel.WalkIn, PartySize.Of(2),
+            TestData.Venue(), TestData.GuestId, TestData.ContactName, TestData.Reference(), BookingChannel.WalkIn, PartySize.Of(2),
             TestData.Start, [TestData.Table4], null, null, _clock.Now));
     }
 
@@ -230,7 +238,7 @@ public class BookingTests
         _clock.Set(TestData.Start);
 
         var booking = Booking.CreateWalkIn(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), PartySize.Of(3), [TestData.Table4], null, _clock.Now).Value;
+            TestData.Venue(), TestData.GuestId, null, TestData.Reference(), PartySize.Of(3), [TestData.Table4], null, _clock.Now).Value;
 
         Assert.Equal(BookingStatus.Seated, booking.Status);
         Assert.Equal(BookingChannel.WalkIn, booking.Channel);
@@ -253,17 +261,30 @@ public class BookingTests
         var entryId = WaitlistEntryId.New(_clock.Now);
 
         var booking = Booking.CreateWalkIn(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), PartySize.Of(2), [TestData.Table2], entryId, _clock.Now).Value;
+            TestData.Venue(), TestData.GuestId, null, TestData.Reference(), PartySize.Of(2), [TestData.Table2], entryId, _clock.Now).Value;
 
         var seated = Assert.IsType<BookingSeated>(booking.DomainEvents[1].Event);
         Assert.Equal(entryId, seated.WaitlistEntryId);
     }
 
     [Fact]
+    public void CreateWalkIn_WithAName_KeepsItAsTheContactName_WithoutOne_HasNone_M6a()
+    {
+        var named = Booking.CreateWalkIn(
+            TestData.Venue(), null, PersonName.Create("Walk-in Wu").Value, TestData.Reference(), PartySize.Of(2), [TestData.Table2], null,
+            _clock.Now).Value;
+        var anonymous = Booking.CreateWalkIn(
+            TestData.Venue(), null, null, TestData.Reference(), PartySize.Of(2), [TestData.Table2], null, _clock.Now).Value;
+
+        Assert.Equal("Walk-in Wu", named.ContactName!.Value);
+        Assert.Null(anonymous.ContactName);
+    }
+
+    [Fact]
     public void CreateWalkIn_WhenTableIsNotInVenue_ReturnsNotFound()
     {
         var result = Booking.CreateWalkIn(
-            TestData.Venue(), null, TestData.Reference(), PartySize.Of(2), [new TableId(Guid.NewGuid())], null, _clock.Now);
+            TestData.Venue(), null, null, TestData.Reference(), PartySize.Of(2), [new TableId(Guid.NewGuid())], null, _clock.Now);
 
         EventAssert.Failed(result, ErrorCodes.NotFound, ErrorKind.NotFound);
     }
@@ -671,6 +692,49 @@ public class BookingTests
             Assert.True(t.Active);
             Assert.Equal(booking.Period, t.Period);
         });
+    }
+
+    [Fact]
+    public void Seat_OnTheSameTable_MovesTheExistingAssignmentInPlace_M6a()
+    {
+        // Design §14.2: a kept table keeps its assignment row (same object), so the save is an UPDATE, never a
+        // delete and insert that EF could order the wrong way round against the exclusion constraint.
+        var booking = BookingFactory.Create();
+        var assignment = Assert.Single(booking.Tables);
+        var seatedAt = TestData.Start.AddMinutes(-20);
+
+        booking.Seat([TestData.Table4], seatedAt, TestData.Host);
+
+        Assert.Same(assignment, Assert.Single(booking.Tables));
+        Assert.Equal(new TimeRange(seatedAt, seatedAt.AddMinutes(75)), assignment.Period);
+        Assert.True(assignment.Active);
+    }
+
+    [Fact]
+    public void Seat_KeepingOneTableAndAddingAnother_MovesTheKeptOneAndAddsOnlyTheNewOne_M6a()
+    {
+        var booking = BookingFactory.Create();
+        var kept = Assert.Single(booking.Tables);
+
+        booking.Seat([TestData.Table4, TestData.Table2], TestData.Start, TestData.Host);
+
+        Assert.Equal([TestData.Table4, TestData.Table2], booking.Tables.Select(t => t.TableId));
+        Assert.Same(kept, booking.Tables[0]);
+        Assert.All(booking.Tables, t => Assert.Equal(booking.Period, t.Period));
+    }
+
+    [Fact]
+    public void Seat_AtADifferentTable_RemovesTheOldAssignmentAndAddsTheNewOne_M6a()
+    {
+        var booking = BookingFactory.Create();
+        var old = Assert.Single(booking.Tables);
+
+        booking.Seat([TestData.Table6], TestData.Start, TestData.Host);
+
+        var moved = Assert.Single(booking.Tables);
+        Assert.NotSame(old, moved);
+        Assert.Equal(TestData.Table6, moved.TableId);
+        Assert.Equal(booking.Period, moved.Period);
     }
 
     [Fact]
@@ -1085,7 +1149,7 @@ public class BookingTests
         // 20 November 2026 is NZDT (UTC+13).
         var start = new DateTimeOffset(2026, 11, 20, hour, minute, 0, TimeSpan.FromHours(13));
         return Booking.Create(
-            TestData.Venue(), TestData.GuestId, TestData.Reference(), BookingChannel.Online, PartySize.Of(2),
+            TestData.Venue(), TestData.GuestId, TestData.ContactName, TestData.Reference(), BookingChannel.Online, PartySize.Of(2),
             start, [TestData.Table4], null, null, TestData.Created);
     }
 }

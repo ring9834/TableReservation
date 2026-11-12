@@ -4,11 +4,13 @@ import { defineConfig, devices } from "@playwright/test";
  * The API and the web app must already be running (Design §18.4):
  * - locally: `dotnet run --project src/Api` and `cd web && npm run dev` → https://localhost:3000 (self-signed);
  * - in CI: the API on http://localhost:5000 and the static export served on http://localhost:3000 (E2E_BASE_URL).
+ * global-setup.ts signs the host in once (E2E_HOST_PASSCODE) and saves the session for every spec file (Design §18.5).
  */
 const isCi = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./specs",
+  globalSetup: "./global-setup.ts",
   fullyParallel: false, // the specs book real tables in one shared database
   workers: 1,
   forbidOnly: isCi,

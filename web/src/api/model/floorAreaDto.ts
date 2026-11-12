@@ -8,5 +8,6 @@
 export interface FloorAreaDto {
   id: string;
   name: string;
+  nameZh: string;
   sortOrder: number;
 }

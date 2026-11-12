@@ -21,12 +21,13 @@ public sealed class Booking : AggregateRoot<BookingId>
     }
 
     private Booking(
-        BookingId id, VenueId venueId, GuestId? guestId, BookingReference reference, BookingChannel channel,
+        BookingId id, VenueId venueId, GuestId? guestId, PersonName? contactName, BookingReference reference, BookingChannel channel,
         PartySize partySize, TimeRange period, BookingTerms terms, string? notes, string? occasion, DateTimeOffset createdAt)
     {
         Id = id;
         VenueId = venueId;
         GuestId = guestId;
+        ContactName = contactName;
         Reference = reference;
         Channel = channel;
         PartySize = partySize;
@@ -40,6 +41,12 @@ public sealed class Booking : AggregateRoot<BookingId>
     public VenueId VenueId { get; }
 
     public GuestId? GuestId { get; }
+
+    /// <summary>
+    /// The name given when this booking was made (M6a). The guest profile keeps its own stored name, so a known mobile
+    /// that books under another name shows that name on this booking. <c>null</c> for a walk-in without a name.
+    /// </summary>
+    public PersonName? ContactName { get; }
 
     public BookingReference Reference { get; }
 
@@ -96,10 +103,11 @@ public sealed class Booking : AggregateRoot<BookingId>
     /// and, for online bookings only, applies the deposit rule (BR-06).
     /// </summary>
     public static Result<Booking> Create(
-        Venue venue, GuestId? guestId, BookingReference reference, BookingChannel channel, PartySize partySize,
+        Venue venue, GuestId? guestId, PersonName contactName, BookingReference reference, BookingChannel channel, PartySize partySize,
         DateTimeOffset startsAt, IReadOnlyCollection<TableId> tableIds, string? notes, string? occasion, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(venue);
+        ArgumentNullException.ThrowIfNull(contactName);
         ArgumentNullException.ThrowIfNull(reference);
         ArgumentNullException.ThrowIfNull(tableIds);
         if (channel == BookingChannel.WalkIn)
@@ -126,7 +134,7 @@ public sealed class Booking : AggregateRoot<BookingId>
 
         var terms = BookingTerms.From(settings, venue.SettingsVersion, partySize, now);
         var booking = new Booking(
-            BookingId.New(now), venue.Id, guestId, reference, channel, partySize,
+            BookingId.New(now), venue.Id, guestId, contactName, reference, channel, partySize,
             TimeRange.FromStart(startsAt, terms.Turn), terms, notes, occasion, now);
         booking.AssignTables(tableIds);
 
@@ -149,7 +157,7 @@ public sealed class Booking : AggregateRoot<BookingId>
 
     /// <summary>Walk-in, seated straight away for the turn time (§3.1 row "→ Seated", CreateWalkIn).</summary>
     public static Result<Booking> CreateWalkIn(
-        Venue venue, GuestId? guestId, BookingReference reference, PartySize partySize,
+        Venue venue, GuestId? guestId, PersonName? contactName, BookingReference reference, PartySize partySize,
         IReadOnlyCollection<TableId> tableIds, WaitlistEntryId? waitlistEntryId, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(venue);
@@ -164,7 +172,7 @@ public sealed class Booking : AggregateRoot<BookingId>
 
         var terms = BookingTerms.From(venue.Settings, venue.SettingsVersion, partySize, now);
         var booking = new Booking(
-            BookingId.New(now), venue.Id, guestId, reference, BookingChannel.WalkIn, partySize,
+            BookingId.New(now), venue.Id, guestId, contactName, reference, BookingChannel.WalkIn, partySize,
             TimeRange.FromStart(now, terms.Turn), terms, notes: null, occasion: null, now)
         {
             Status = BookingStatus.Seated,
@@ -286,7 +294,11 @@ public sealed class Booking : AggregateRoot<BookingId>
         return decision;
     }
 
-    /// <summary>Host seats the party (§3.1 Seat). The period restarts now for the turn time.</summary>
+    /// <summary>
+    /// Host seats the party (§3.1 Seat). The period restarts now for the turn time. A table the booking keeps has its
+    /// assignment moved to the new period in place; only tables that change are removed or added, so the save never
+    /// depends on EF ordering a delete before an insert on the same table (exclusion constraint, Design §14.2).
+    /// </summary>
     public Result Seat(IReadOnlyCollection<TableId> tableIds, DateTimeOffset now, Actor by)
     {
         ArgumentNullException.ThrowIfNull(tableIds);
@@ -310,8 +322,14 @@ public sealed class Booking : AggregateRoot<BookingId>
         Status = BookingStatus.Seated;
         SeatedAt = now;
         Period = TimeRange.FromStart(now, Terms.Turn);
-        _tables.Clear();
-        AssignTables(tableIds);
+        var wanted = tableIds.Distinct().ToList();
+        _tables.RemoveAll(t => !wanted.Contains(t.TableId));
+        foreach (var kept in _tables)
+        {
+            kept.MoveTo(Period);
+        }
+
+        AssignTables(wanted.Where(id => _tables.TrueForAll(t => t.TableId != id)));
 
         Raise(new BookingSeated(
             DomainEvent.NewEventId(now), now, VenueId, Id, TableIds, PartySize.Value, SeatSource.Booking, null, now));

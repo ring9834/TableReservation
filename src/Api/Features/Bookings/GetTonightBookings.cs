@@ -66,6 +66,7 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                 b.PartySize,
                 b.Period,
                 b.GuestId,
+                b.ContactName,
                 b.Occasion,
                 b.Notes,
                 DepositAmount = b.Deposit == null ? (Money?)null : b.Deposit.Amount,
@@ -78,7 +79,7 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
         var guestIds = rows.Where(r => r.GuestId is not null).Select(r => r.GuestId!.Value).Distinct().ToList();
         var guests = await db.Guests.AsNoTracking()
             .Where(g => guestIds.Contains(g.Id))
-            .Select(g => new { g.Id, g.Name, g.Mobile, g.AllergyNotes })
+            .Select(g => new { g.Id, g.Mobile, g.AllergyNotes })
             .ToDictionaryAsync(g => g.Id, cancellationToken);
         var tableNames = venue.Tables.ToDictionary(t => t.Id, t => t.Name);
 
@@ -97,7 +98,7 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                     r.Period.Start.UtcDateTime,
                     r.Period.End.UtcDateTime,
                     r.TableIds.Select(t => new TableRef(t.Value, tableNames.GetValueOrDefault(t, "?"))).ToList(),
-                    guest?.Name.Value,
+                    r.ContactName?.Value,
                     guest?.Mobile.Masked(),
                     !string.IsNullOrWhiteSpace(guest?.AllergyNotes),
                     guest?.AllergyNotes,

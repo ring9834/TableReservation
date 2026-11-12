@@ -9,14 +9,17 @@ using Reservation.Infrastructure.Persistence;
 
 namespace Reservation.Api.Features.Venues;
 
-internal sealed record FloorAreaDto(Guid Id, string Name, int SortOrder);
+/// <param name="Name">English name.</param>
+/// <param name="NameZh">Simplified Chinese name; the screen shows the one for the active language (M6a).</param>
+internal sealed record FloorAreaDto(Guid Id, string Name, string NameZh, int SortOrder);
 
 /// <summary>Where the table is drawn, in floor units (ADR-001); <c>rotation</c> in degrees.</summary>
 internal sealed record TablePositionDto(decimal X, decimal Y, decimal Width, decimal Height, decimal Rotation);
 
 /// <summary>A short summary of a booking on a table, for the host screens only.</summary>
-/// <param name="GuestName">The guest's full name as stored; <c>null</c> for a walk-in without a name.</param>
+/// <param name="GuestName">The name given with this booking (its contact name, M6a); <c>null</c> for a walk-in without a name.</param>
 /// <param name="HasAllergy">The guest has allergy notes (AC2.6); the notes themselves are in the host list.</param>
+/// <param name="Version">The booking's row version; send it back to seat or clear (M6a).</param>
 internal sealed record TableBookingSummary(
     Guid BookingId,
     string Reference,
@@ -25,7 +28,8 @@ internal sealed record TableBookingSummary(
     DateTime StartsAt,
     DateTime EndsAt,
     string? GuestName,
-    bool HasAllergy);
+    bool HasAllergy,
+    uint Version);
 
 /// <param name="State">Derived by <see cref="TableStateRule"/> at <c>at</c> (Design §2.5).</param>
 /// <param name="Current">The booking seated at the table, if any.</param>
@@ -85,6 +89,8 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
                 b.PartySize,
                 b.Period,
                 b.GuestId,
+                b.ContactName,
+                b.Version,
                 TableIds = b.Tables.Where(t => t.Active).Select(t => t.TableId).ToList(),
             })
             .ToListAsync(cancellationToken);
@@ -92,7 +98,7 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
         var guestIds = rows.Where(r => r.GuestId is not null).Select(r => r.GuestId!.Value).Distinct().ToList();
         var guests = await db.Guests.AsNoTracking()
             .Where(g => guestIds.Contains(g.Id))
-            .Select(g => new { g.Id, g.Name, g.AllergyNotes })
+            .Select(g => new { g.Id, g.AllergyNotes })
             .ToDictionaryAsync(g => g.Id, cancellationToken);
 
         var bookings = rows.Select(r =>
@@ -105,8 +111,9 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
                 r.PartySize.Value,
                 r.Period.Start.UtcDateTime,
                 r.Period.End.UtcDateTime,
-                guest?.Name.Value,
-                !string.IsNullOrWhiteSpace(guest?.AllergyNotes));
+                r.ContactName?.Value,
+                !string.IsNullOrWhiteSpace(guest?.AllergyNotes),
+                r.Version);
             return (r.TableIds, View: new TableBookingView(r.Status, r.Period), Summary: summary);
         }).ToList();
 
@@ -140,7 +147,7 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
             venue.Id.Value,
             venue.TimeZone,
             now.UtcDateTime,
-            [.. areas.Select(a => new FloorAreaDto(a.Id.Value, a.Name, a.SortOrder))],
+            [.. areas.Select(a => new FloorAreaDto(a.Id.Value, a.Name, a.NameZh, a.SortOrder))],
             tables);
     }
 }

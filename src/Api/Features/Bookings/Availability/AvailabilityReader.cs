@@ -2,6 +2,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using Reservation.Api.Features.Seating;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Domain.Venues;
@@ -34,10 +35,7 @@ internal sealed class AvailabilityReader(ReservationsDbContext db)
         ArgumentNullException.ThrowIfNull(venue);
         var timeZone = venue.FindTimeZone();
         var window = AvailabilityCalculator.ServiceWindow(venue.Settings, timeZone, date);
-        var tables = venue.Areas.OrderBy(a => a.SortOrder)
-            .SelectMany(a => a.Tables.OrderBy(t => t.Id.Value))
-            .Select(t => new TableInfo(t.Id, t.Name, t.Seats))
-            .ToList();
+        var tables = TablesInFloorOrder(venue);
 
         await db.Database.OpenConnectionAsync(cancellationToken);
         try
@@ -55,6 +53,47 @@ internal sealed class AvailabilityReader(ReservationsDbContext db)
         {
             await db.Database.CloseConnectionAsync();
         }
+    }
+
+    private const string NowSql =
+        "SELECT ta.booking_id, ta.table_id, lower(ta.period), upper(ta.period), b.status = 'Seated' " +
+        "FROM table_assignments ta JOIN bookings b ON b.id = ta.booking_id " +
+        "WHERE ta.venue_id = @venue AND ta.active AND (b.status = 'Seated' OR ta.period && tstzrange(@from, @to))";
+
+    /// <summary>
+    /// The floor at <paramref name="now"/> for walk-ins, seating and the waitlist (Design §11.5): every seated party
+    /// (even past its turn) and every active assignment overlapping <c>[now, now + longest turn)</c>. Runs on the
+    /// caller's connection and transaction, so a handler that holds table locks reads under them.
+    /// </summary>
+    public async Task<FloorNow> LoadNowAsync(Venue venue, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(venue);
+        var window = new TimeRange(now, now.AddMinutes(venue.Settings.TurnTimes.Max(t => t.Minutes)));
+        await db.Database.OpenConnectionAsync(cancellationToken);
+        try
+        {
+            var occupancy = await QueryAsync(
+                NowSql, venue.Id, window, r => new TableOccupancy(
+                    new BookingId(r.GetGuid(0)),
+                    new TableId(r.GetGuid(1)),
+                    new TimeRange(r.GetFieldValue<DateTimeOffset>(2), r.GetFieldValue<DateTimeOffset>(3)),
+                    r.GetBoolean(4)),
+                cancellationToken);
+            return new FloorNow(venue.Settings, TablesInFloorOrder(venue), occupancy, now);
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    /// <summary>Area order, then table ID: the order BR-05 breaks ties in.</summary>
+    public static List<TableInfo> TablesInFloorOrder(Venue venue)
+    {
+        ArgumentNullException.ThrowIfNull(venue);
+        return [.. venue.Areas.OrderBy(a => a.SortOrder)
+            .SelectMany(a => a.Tables.OrderBy(t => t.Id.Value))
+            .Select(t => new TableInfo(t.Id, t.Name, t.Seats))];
     }
 
     private async Task<List<T>> QueryAsync<T>(

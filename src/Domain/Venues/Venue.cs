@@ -107,7 +107,7 @@ public sealed class Venue : AggregateRoot<VenueId>
     }
 }
 
-/// <summary>An area of the floor (e.g. Main, Private Room).</summary>
+/// <summary>An area of the floor (e.g. Main, Private Room), named in English and Chinese (M6a, QA-7).</summary>
 public sealed class Area
 {
     private readonly List<Table> _tables;
@@ -117,21 +117,28 @@ public sealed class Area
     {
         _tables = [];
         Name = null!;
+        NameZh = null!;
     }
 
-    public Area(AreaId id, string name, int sortOrder, IEnumerable<Table> tables)
+    public Area(AreaId id, string name, string nameZh, int sortOrder, IEnumerable<Table> tables)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(nameZh);
         ArgumentNullException.ThrowIfNull(tables);
         Id = id;
         Name = name;
+        NameZh = nameZh;
         SortOrder = sortOrder;
         _tables = [.. tables];
     }
 
     public AreaId Id { get; }
 
+    /// <summary>English name.</summary>
     public string Name { get; }
+
+    /// <summary>Simplified Chinese name.</summary>
+    public string NameZh { get; }
 
     public int SortOrder { get; }
 

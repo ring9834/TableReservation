@@ -16,6 +16,7 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
 
         builder.Property(x => x.VenueId);
         builder.Property(x => x.GuestId);
+        builder.Property(x => x.ContactName).HasColumnName("contact_name");
         builder.Property(x => x.Reference);
         builder.Property(x => x.Channel);
         builder.Property(x => x.PartySize);

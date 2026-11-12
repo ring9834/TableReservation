@@ -27,7 +27,7 @@ public sealed class DemoSeeder(TimeProvider timeProvider)
         var venue = CreateVenue();
         var guests = GoldenDragon.Guests.Select(spec => CreateGuest(spec, clock.GetUtcNow())).ToList();
         var bookings = GoldenDragon.Bookings
-            .Select(spec => CreateBooking(venue, guests[spec.Number - 1].Id, spec, tonight, clock.GetUtcNow()))
+            .Select(spec => CreateBooking(venue, guests[spec.Number - 1], spec, tonight, clock.GetUtcNow()))
             .ToList();
 
         // Deposits are paid a minute after booking.
@@ -67,12 +67,13 @@ public sealed class DemoSeeder(TimeProvider timeProvider)
 
     private static Venue CreateVenue()
     {
-        var areas = new[] { (GoldenDragon.MainRoomId, "Main room", 1), (GoldenDragon.WindowId, "Window", 2) }
+        var areas = GoldenDragon.Areas
             .Select(a => new Area(
-                a.Item1,
-                a.Item2,
-                a.Item3,
-                GoldenDragon.Tables.Where(t => t.Area == a.Item1)
+                a.Id,
+                a.Name,
+                a.NameZh,
+                a.SortOrder,
+                GoldenDragon.Tables.Where(t => t.Area == a.Id)
                     .Select(t => new Table(GoldenDragon.TableId(t.Name), t.Name, t.Seats, t.Position))));
 
         return Venue.Create(GoldenDragon.VenueId, GoldenDragon.Name, GoldenDragon.TimeZoneId, Money.Nzd, GoldenDragon.Settings(), areas).Value;
@@ -88,10 +89,11 @@ public sealed class DemoSeeder(TimeProvider timeProvider)
             allergyNotes: null,
             now);
 
-    private static Booking CreateBooking(Venue venue, GuestId guestId, GoldenDragon.BookingSpec spec, DateOnly tonight, DateTimeOffset now) =>
+    private static Booking CreateBooking(Venue venue, Guest guest, GoldenDragon.BookingSpec spec, DateOnly tonight, DateTimeOffset now) =>
         Booking.Create(
             venue,
-            guestId,
+            guest.Id,
+            guest.Name,
             BookingReference.Parse(spec.Reference).Value,
             spec.Channel,
             PartySize.Of(spec.PartySize),

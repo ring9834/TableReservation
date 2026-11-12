@@ -33,7 +33,7 @@ public sealed class RoundTripTests(PostgresFixture postgres)
             var venue = await db.Venues.SingleAsync(Ct);
             var guest = await db.Guests.OrderBy(g => g.Id).FirstAsync(Ct);
             var booking = Booking.Create(
-                venue, guest.Id, BookingReference.Parse("RTRP6X").Value, BookingChannel.Online, PartySize.Of(6),
+                venue, guest.Id, PersonName.Create("Test Guest").Value, BookingReference.Parse("RTRP6X").Value, BookingChannel.Online, PartySize.Of(6),
                 start, [t7], "High chair please", "Birthday", made).Value;
             id = booking.Id;
             db.Bookings.Add(booking);
@@ -98,7 +98,7 @@ public sealed class RoundTripTests(PostgresFixture postgres)
             guest = Guest.Create(GoldenDragon.VenueId, PersonName.Create("周杰 Zhou Jie").Value, PhoneNumber.Create("+64 21 011 0099").Value,
                 "zhou@example.test", Language.Zh, "Peanuts", now);
             guest.RecordVisit(Money.FromNzd(9_900), now);
-            entry = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, PartySize.Of(4), 25, now).Value;
+            entry = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, guest.Name, PartySize.Of(4), 25, now).Value;
             Check(entry.Notify(GoldenDragon.TableId("T4"), now.AddMinutes(20)));
             message = Message.Queue(GoldenDragon.VenueId, guest.Id, MessagePurpose.TableReady, MessageChannel.Sms, Language.Zh,
                 "您的餐桌已准备好", [new MessageAction("confirm", "https://example.test/c"), new MessageAction("cancel", "https://example.test/x")],
@@ -211,11 +211,11 @@ public sealed class VenueFilterTests(PostgresFixture postgres)
         var tableId = new TableId(Guid.CreateVersion7());
         var venue = Domain.Venues.Venue.Create(
             new VenueId(Guid.CreateVersion7()), "Jade Garden", GoldenDragon.TimeZoneId, Money.Nzd, GoldenDragon.Settings(),
-            [new Domain.Venues.Area(new AreaId(Guid.CreateVersion7()), "Main", 1,
+            [new Domain.Venues.Area(new AreaId(Guid.CreateVersion7()), "Main", "主厅", 1,
                 [new Domain.Venues.Table(tableId, "J1", 4, new Domain.Venues.FloorPosition(0, 0, 0, Domain.Venues.TableShape.Rect, 90, 90))])]).Value;
         var guest = Guest.Create(venue.Id, PersonName.Create("Other Guest").Value, PhoneNumber.Create("+64 21 011 0001").Value, null, Language.En, null, now);
         var booking = Booking.Create(
-            venue, guest.Id, BookingReference.Parse("JADE22").Value, BookingChannel.Phone, PartySize.Of(2),
+            venue, guest.Id, PersonName.Create("Test Guest").Value, BookingReference.Parse("JADE22").Value, BookingChannel.Phone, PartySize.Of(2),
             DemoTime.At(19, 0), [tableId], null, null, now).Value;
 
         await using var db = database.Context(venue.Id);

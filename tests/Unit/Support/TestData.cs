@@ -37,10 +37,12 @@ public static class TestData
         PaymentHoldMinutes: 10,
         LateBillMatchMinutes: 30);
 
+    public static readonly PersonName ContactName = PersonName.Create("Test Guest").Value;
+
     public static Venue Venue()
     {
         var position = new FloorPosition(0, 0, 0, TableShape.Round, 1, 1);
-        var area = new Area(new AreaId(Guid.CreateVersion7(Created)), "Main", 1,
+        var area = new Area(new AreaId(Guid.CreateVersion7(Created)), "Main", "主厅", 1,
         [
             new Table(Table2, "T2", 2, position),
             new Table(Table4, "T4", 4, position),

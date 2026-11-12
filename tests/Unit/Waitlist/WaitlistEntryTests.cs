@@ -15,10 +15,11 @@ public class WaitlistEntryTests
     [Fact]
     public void Join_WithValidInput_IsWaitingAndRaisesWaitlistJoined()
     {
-        var entry = WaitlistEntry.Join(_venueId, TestData.GuestId, PartySize.Of(4), 25, _joinedAt).Value;
+        var entry = WaitlistEntry.Join(_venueId, TestData.GuestId, TestData.ContactName, PartySize.Of(4), 25, _joinedAt).Value;
 
         Assert.Equal(WaitlistStatus.Waiting, entry.Status);
         Assert.Equal(_joinedAt, entry.JoinedAt);
+        Assert.Equal(TestData.ContactName, entry.ContactName);
         Assert.True(entry.IsActive);
         var joined = EventAssert.RaisedOnce<WaitlistJoined>(entry, 0);
         Assert.Equal(entry.Id, joined.WaitlistEntryId);
@@ -32,7 +33,7 @@ public class WaitlistEntryTests
     [InlineData(240)]
     public void Join_WithQuotedWaitAtTheLimits_Succeeds(int minutes)
     {
-        Assert.True(WaitlistEntry.Join(_venueId, TestData.GuestId, PartySize.Of(2), minutes, _joinedAt).IsSuccess);
+        Assert.True(WaitlistEntry.Join(_venueId, TestData.GuestId, TestData.ContactName, PartySize.Of(2), minutes, _joinedAt).IsSuccess);
     }
 
     [Theory]
@@ -40,7 +41,7 @@ public class WaitlistEntryTests
     [InlineData(241)]
     public void Join_WithQuotedWaitOutOfRange_ReturnsValidationFailed(int minutes)
     {
-        var result = WaitlistEntry.Join(_venueId, TestData.GuestId, PartySize.Of(2), minutes, _joinedAt);
+        var result = WaitlistEntry.Join(_venueId, TestData.GuestId, TestData.ContactName, PartySize.Of(2), minutes, _joinedAt);
 
         EventAssert.Failed(result, ErrorCodes.ValidationFailed, ErrorKind.Validation);
         Assert.Contains("quotedWaitMinutes", result.Error!.Fields!.Keys);
@@ -235,7 +236,7 @@ public class WaitlistEntryTests
     }
 
     private static WaitlistEntry Waiting() =>
-        WaitlistEntry.Join(_venueId, TestData.GuestId, PartySize.Of(4), 25, _joinedAt).Value;
+        WaitlistEntry.Join(_venueId, TestData.GuestId, TestData.ContactName, PartySize.Of(4), 25, _joinedAt).Value;
 
     private static WaitlistEntry InStatus(WaitlistStatus status)
     {

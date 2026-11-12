@@ -26,7 +26,7 @@ public sealed class ConcurrencyTests(PostgresFixture postgres)
             await using var db = database.Context();
             var venue = await db.Venues.SingleAsync(Ct);
             var booking = Booking.Create(
-                venue, null, BookingReference.Parse(reference).Value, BookingChannel.Phone, PartySize.Of(8),
+                venue, null, PersonName.Create("Test Guest").Value, BookingReference.Parse(reference).Value, BookingChannel.Phone, PartySize.Of(8),
                 start, [t10], null, null, DemoTime.Now).Value;
             db.Bookings.Add(booking);
             try
@@ -62,7 +62,7 @@ public sealed class ConcurrencyTests(PostgresFixture postgres)
 
         twentyThirty.Cancel(Actor.ForGuest(twentyThirty.GuestId), CancelReason.GuestRequest, DemoTime.Now);
         db.Bookings.Add(Booking.Create(
-            venue, null, BookingReference.Parse("NEWW2A").Value, BookingChannel.Phone, PartySize.Of(2),
+            venue, null, PersonName.Create("Test Guest").Value, BookingReference.Parse("NEWW2A").Value, BookingChannel.Phone, PartySize.Of(2),
             DemoTime.At(20, 30), [GoldenDragon.TableId("W1")], null, null, DemoTime.Now).Value);
 
         await db.SaveChangesAsync(Ct); // the inactive assignment is outside the constraint (WHERE active)
@@ -98,7 +98,7 @@ public sealed class ConcurrencyTests(PostgresFixture postgres)
 
         // Seed booking #1's reference again: ux on (venue_id, reference), not the outbox key.
         db.Bookings.Add(Booking.Create(
-            venue, null, BookingReference.Parse(GoldenDragon.Bookings[0].Reference).Value, BookingChannel.Phone, PartySize.Of(2),
+            venue, null, PersonName.Create("Test Guest").Value, BookingReference.Parse(GoldenDragon.Bookings[0].Reference).Value, BookingChannel.Phone, PartySize.Of(2),
             tomorrow, [GoldenDragon.TableId("T1")], null, null, DemoTime.Now).Value);
 
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync(Ct));

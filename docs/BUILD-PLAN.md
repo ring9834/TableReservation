@@ -20,7 +20,8 @@ The six demo steps are never cut.
 | M4b | Guest booking page | §18 | Step 1 on the phone in English and Chinese, without payment; orval client; first Playwright test | 1 d |
 | M5a | Real-time API | §15, §18 (server side) | SignalR hub, ID-only notices, floor-plan read; a booking reaches a connected client within 2 s | 1 d |
 | M5b | Host screens | §18 | Step 2: host sign-in page, floor plan, tonight's list, reconnect; multi-screen Playwright (QA-1) | 1 d |
-| M6 | Walk-ins and waitlist | §3.2, §11.3, §11.4 | Step 3 | 1 d |
+| M6a | Walk-in and waitlist API | §3.1, §3.2, §11.3, §11.4, §14, §20 | Step 3 and the step 4 waitlist through the API; booking contact name and bilingual area names; one Playwright sign-in per run | 1 d |
+| M6b | Host screens: walk-ins, waitlist, seat, clear | §18 | Step 3 on the host tablet; Playwright for step 3 | 1 d |
 | M7 | Messaging and phone panel | §7, §7.1 | Step 4: "table ready" text | 1 d |
 | M8 | Stripe deposits and refunds | §8 | Step 1 with deposit; step 5 refunds | 1.5 d |
 | M9 | Mock POS and POS log | §6 | Step 6, incl. POS offline (QA-5) | 1.5 d |
@@ -341,7 +342,78 @@ Ask before adding packages beyond @microsoft/signalr and react-zoom-pan-pinch.
 Record decisions §18 left open in Design.md.
 ```
 
-### M6 onward
+### M6a Walk-in and waitlist API
+```
+Start milestone M6a. Split M6 in docs/BUILD-PLAN.md into M6a (this prompt: catch-up items and
+the walk-in/waitlist API) and M6b (host screens for walk-ins, waitlist, seat and clear, plus
+Playwright for step 3), and keep the other milestones' numbers.
+
+Catch-up items first (Design §20, "start of M6"):
+1. Booking contact name: each booking stores the name given when it was made; host screens and
+   tonight's list show it. The guest profile keeps its stored name. Domain, migration (backfill
+   existing bookings from the guest name), API responses, generated client.
+2. Area names in English and Chinese: areas carry both names (seed + migration for the existing
+   Golden Dragon areas); the floor-plan response returns both and the screen picks by language.
+3. Playwright: sign in once in a global setup and share the session (storageState) across spec
+   files; booking.spec.ts cancels the bookings it creates, like host.spec.ts.
+
+Then the API (Design §3.1 Seat/Complete, §3.2, §11.3, §11.4; Requirements step 3 and AC4.1, AC4.2,
+AC4.5, AC4.6), Host policy, business clock throughout:
+- Walk-in: suggest the smallest free table for a party now (BR-05, the availability calculator),
+  host may pick another (AC3.1, AC3.2); seat creates a walk-in booking and raises BookingSeated.
+- Seat a booked guest (AC3.3) and clear a seated table (Complete with ClearedByHost, TableCleared;
+  "Bill paid" via the mock POS comes in M9).
+- Waitlist: join with name, mobile, party size and a quoted wait from BR-08 that the host can
+  adjust (AC3.4, AC3.5); list active entries; notify (status and event only; the text is M7);
+  seat from the waitlist (creates the walk-in booking and ends the entry as seated); walked away;
+  remove (AC3.7). Overdue flag after the notified-party timeout (AC4.6, BR-10).
+- When a table frees, compute the suggested waiting party (BR-09, §11.4) and fill
+  waitlistChanged's suggestedEntryId and freedTableId (AC4.2).
+- Seat and seat-from-waitlist take the same table locks as booking creation (lock order from M4b),
+  and every update checks version (409 version_conflict).
+- OpenAPI updated, client regenerated.
+
+Tests: every endpoint's success and error codes; the seed at 18:25 gives step 3's outcomes (walk-in
+for 2 → a 2-seat table; walk-in for 4 → no table, so waitlist with a quote); clearing T4 suggests the
+waiting party of 4; a walk-in and a booking racing for one table give one success and one
+slot_taken; waitlistChanged and floorPlanChanged notices carry IDs only; logs have no names or
+mobiles.
+
+Ask before adding packages. Record decisions §3.2/§11 left open in Design.md.
+```
+
+### M6b Host screens: walk-ins, waitlist, seat and clear
+```
+Start milestone M6b (host screens for step 3 and the step 4 waitlist) from docs/BUILD-PLAN.md,
+using the M6a API (Design §14.2).
+
+Host app (/host), Design §18 and Requirements step 3 / step 4:
+- "Walk-in" button → party size → the suggested table (getTableSuggestion) with the other free
+  tables to choose from → one tap seats (seatWalkIn, optional name). Three taps or fewer (AC3.1,
+  AC3.2). No table → "Add to waitlist" with the quote prefilled (AC3.4).
+- Seat a booked guest from the side panel or tonight's list with one tap (seatBooking, its own
+  tables; another table on request) (AC3.3).
+- "Clear" on a seated table (clearTable with the floor plan's bookingId and version) (AC4.1).
+- Waitlist panel (getWaitlist): join order, party size, quoted and waited minutes, status,
+  overdue flag (AC3.6, AC4.6); join dialog with name, mobile, party size and the editable quote
+  (getQuotedWait) (AC3.4, AC3.5); notify for a table; seat from the waitlist; walked away;
+  remove (AC3.7, AC4.5). On waitlistChanged invalidate the waitlist; highlight
+  suggestedEntryId for freedTableId; the host can pick another party (AC4.2).
+- 409 version_conflict / invalid_transition / slot_taken: refetch and show "This has just
+  changed" or "That table is no longer free"; 422 table_too_small translated.
+- English and Chinese for every new label; layout keeps the tablet and phone rules of M5b.
+
+Playwright (tests/E2E, shared host session from global-setup.ts):
+- Step 3 at 18:25: walk-in for 2 is seated on the suggested table; walk-in for 4 finds no table
+  and joins the waitlist with the quote; both host screens show it within 2 s.
+- Clear T4 → the waiting party of 4 is highlighted; notify; seat from the waitlist; the entry
+  leaves the list. Clean up everything the spec created (clear the tables it seated, end the
+  entries it added).
+
+Ask before adding packages. Record decisions §18 left open in Design.md.
+```
+
+### M7 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse

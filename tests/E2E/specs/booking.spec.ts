@@ -1,8 +1,27 @@
 import { expect, test, type Page } from "@playwright/test";
+import { cancelBookings } from "../support/session";
 
 // Requirements step 1 (AC1.1–AC1.4, AC1.6, AC1.8) and BR-04 through the real page, API and database.
 // Bookings are made for tomorrow so the result does not depend on the time of day. The date picker's `min` is the
 // venue's "today" (from getVenue, on the API's business clock), so the browser's own clock and zone do not matter.
+// The bookings a run makes are cancelled afterwards with the shared host session (global-setup.ts), like
+// host.spec.ts, so reruns against one database never fill tomorrow's slots.
+
+/** References this file booked, and the venue-local date they are on. */
+const created: string[] = [];
+let bookedDay: string | undefined;
+
+test.afterAll(async () => {
+  await cancelBookings(created, bookedDay);
+});
+
+/** Reads the confirmed booking's reference and remembers it for the clean-up. */
+const rememberBooking = async (page: Page, day: string) => {
+  const reference = page.getByTestId("booking-reference");
+  await expect(reference).toHaveText(referencePattern);
+  created.push((await reference.textContent())!.trim());
+  bookedDay = day;
+};
 
 const referencePattern = /^[A-HJ-NP-Z2-9]{6}$/; // BookingReference: 6 characters, no 0/O/1/I
 
@@ -45,9 +64,7 @@ test("a guest books a table for 2 tomorrow at 19:30 in English", async ({
   await expect(
     page.getByRole("heading", { name: "You're booked!" }),
   ).toBeVisible();
-  await expect(page.getByTestId("booking-reference")).toHaveText(
-    referencePattern,
-  );
+  await rememberBooking(page, tomorrow);
   await expect(page.getByTestId("booking-details")).toContainText("2 guests");
 });
 
@@ -74,9 +91,7 @@ test("a guest books in Chinese and the confirmation is in Chinese", async ({
   await expect(page.getByRole("heading", { name: "预订成功！" })).toBeVisible();
   await expect(page.getByText("预订编号")).toBeVisible();
   await expect(page.getByTestId("booking-details")).toContainText("2 位");
-  await expect(page.getByTestId("booking-reference")).toHaveText(
-    referencePattern,
-  );
+  await rememberBooking(page, tomorrow);
   await expect(page.getByText("You're booked!")).toHaveCount(0);
 });
 

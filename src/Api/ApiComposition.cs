@@ -76,6 +76,7 @@ internal static class ApiComposition
         services.AddFeatures(typeof(ApiComposition).Assembly);
         services.AddScoped<AvailabilityReader>();
         services.AddScoped<BookingCreator>();
+        services.AddScoped<IdempotentRequests>();
         return builder;
     }
 

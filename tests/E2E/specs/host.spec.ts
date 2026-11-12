@@ -6,56 +6,23 @@ import {
   type BrowserContext,
   type BrowserContextOptions,
   type Page,
-  request,
 } from "@playwright/test";
+import { cancelBookings, hostSessionPath } from "../support/session";
 
 // Requirements step 2 (AC2.1, AC2.4, AC2.5; QA-1, QA-2) with two host screens and a guest phone against the real
 // API, SignalR and database. The API's business clock is fixed at 18:25 in Development (Design §17), so "tonight"
 // at 20:00 / 20:15 is always still to come. The bookings a run makes are cancelled afterwards through the host
 // cancel endpoint, so reruns against one database don't fill the evening (cancelled bookings don't count for pacing).
-
-type BrowserStorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
-
-const hostPasscode = process.env.E2E_HOST_PASSCODE ?? "";
-
-/** The API the web app calls (CI: http://localhost:5000), for the clean-up, and Golden Dragon's seeded ID. */
-const apiBaseUrl =
-  process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://localhost:5001";
-const venueId = process.env.E2E_VENUE_ID ?? "0193a7d0-0000-7000-8000-000000000001";
-
-type HostListItem = { id: string; reference: string; status: string; version: number };
-
-/** Cancels the given bookings with the host session (POST …/bookings/{id}/cancel {version}, Design §14.1). */
-const cancelBookings = async (session: BrowserStorageState, references: string[]) => {
-  if (references.length === 0) return;
-  const api = await request.newContext({
-    baseURL: apiBaseUrl,
-    storageState: session,
-    ignoreHTTPSErrors: true,
-  });
-  try {
-    const list = await api.get(`/api/v1/venues/${venueId}/bookings`);
-    expect(list.ok(), `host list answered ${list.status()}`).toBe(true);
-    const { items } = (await list.json()) as { items: HostListItem[] };
-    for (const item of items.filter((i) => references.includes(i.reference) && i.status !== "cancelled")) {
-      const cancel = await api.post(`/api/v1/venues/${venueId}/bookings/${item.id}/cancel`, {
-        data: { version: item.version },
-      });
-      expect(cancel.ok(), `cancel ${item.reference} answered ${cancel.status()}`).toBe(true);
-    }
-  } finally {
-    await api.dispose();
-  }
-};
+// The host session comes from global-setup.ts (one sign-in per run, shared with the other spec files).
 
 const baseOptions = (baseURL: string | undefined): BrowserContextOptions => ({
   baseURL,
   ignoreHTTPSErrors: true, // local dev certificates
 });
 
-/** A host tablet. */
-const hostContext = (browser: Browser, baseURL: string | undefined, storageState?: BrowserStorageState) =>
-  browser.newContext({ ...devices["Galaxy Tab S4 landscape"], ...baseOptions(baseURL), storageState });
+/** A host tablet, signed in with the shared session. */
+const hostContext = (browser: Browser, baseURL: string | undefined) =>
+  browser.newContext({ ...devices["Galaxy Tab S4 landscape"], ...baseOptions(baseURL), storageState: hostSessionPath });
 
 /** A guest phone. */
 const guestContext = (browser: Browser, baseURL: string | undefined) =>
@@ -134,33 +101,18 @@ const openHostScreen = async (context: BrowserContext) => {
 test.describe("host screens", () => {
   test.describe.configure({ mode: "serial" });
 
-  let hostSession: BrowserStorageState | undefined;
   const created: string[] = [];
 
-  // One sign-in through the form for the whole file: /demo-login allows 5 attempts a minute per IP.
-  test.beforeAll(async ({ browser, baseURL }) => {
-    expect(hostPasscode, "Set E2E_HOST_PASSCODE to the API's Demo:HostPasscode").not.toBe("");
-    const context = await hostContext(browser, baseURL);
-    const page = await context.newPage();
-    await page.goto("/demo-login/");
-    await page.getByLabel("Passcode", { exact: true }).fill(hostPasscode);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/host\/$/);
-    await expect(page.getByTestId("floor-plan")).toBeVisible();
-    hostSession = await context.storageState();
-    await context.close();
-  });
-
   test.afterAll(async () => {
-    if (hostSession) await cancelBookings(hostSession, created);
+    await cancelBookings(created);
   });
 
   test("two host screens show a guest's booking within 2 seconds (AC2.1, AC2.4)", async ({
     browser,
     baseURL,
   }) => {
-    const hostA = await hostContext(browser, baseURL, hostSession);
-    const hostB = await hostContext(browser, baseURL, hostSession);
+    const hostA = await hostContext(browser, baseURL);
+    const hostB = await hostContext(browser, baseURL);
     const guest = await guestContext(browser, baseURL);
     const [screenA, screenB] = await Promise.all([openHostScreen(hostA), openHostScreen(hostB)]);
     const name = uniqueGuestName();
@@ -180,7 +132,7 @@ test.describe("host screens", () => {
     baseURL,
   }) => {
     test.setTimeout(60_000);
-    const host = await hostContext(browser, baseURL, hostSession);
+    const host = await hostContext(browser, baseURL);
     const guest = await guestContext(browser, baseURL);
     const screen = await openHostScreen(host);
     const banner = screen.getByTestId("connection-banner");
