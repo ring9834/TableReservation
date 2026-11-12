@@ -111,8 +111,20 @@ const expectBookingShown = async (page: Page, name: string, timeout: number) => 
   await expect(page.getByTestId("table-panel")).toContainText(name, { timeout: left() });
 };
 
+/**
+ * SignalR errors a host page wrote to the console. Under `next dev` React Strict Mode mounts the connection twice, and
+ * the first start, stopped by us, must not surface as an error (Design §18.5).
+ */
+const signalRConsoleErrors: string[] = [];
+
 const openHostScreen = async (context: BrowserContext) => {
   const page = await context.newPage();
+  page.on("console", (message) => {
+    const text = message.text();
+    if (message.type() === "error" && /SignalR|Failed to start the connection|stopped during negotiation/.test(text)) {
+      signalRConsoleErrors.push(text);
+    }
+  });
   await page.goto("/host/");
   await expect(page.getByTestId("floor-plan")).toBeVisible();
   await expect(page.getByTestId("tonight-list")).toBeVisible();
@@ -159,6 +171,7 @@ test.describe("host screens", () => {
       expectBookingShown(screenA, name, 2_000),
       expectBookingShown(screenB, name, 2_000),
     ]);
+    expect(signalRConsoleErrors, "SignalR console errors on the host screens").toEqual([]);
     await Promise.all([hostA.close(), hostB.close(), guest.close()]);
   });
 
@@ -186,6 +199,7 @@ test.describe("host screens", () => {
     await host.setOffline(false);
     await expectBookingShown(screen, name, 5_000);
     await expect(banner).toBeHidden();
+    expect(signalRConsoleErrors, "SignalR console errors while offline and reconnecting").toEqual([]);
     await Promise.all([host.close(), guest.close()]);
   });
 });
