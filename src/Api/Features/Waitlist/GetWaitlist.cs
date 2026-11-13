@@ -7,6 +7,7 @@ using Reservation.Api.Features.Bookings.Availability;
 using Reservation.Api.Features.Seating;
 using Reservation.Api.Pipeline;
 using Reservation.Domain.Common;
+using Reservation.Domain.Messaging;
 using Reservation.Domain.Waitlist;
 using Reservation.Infrastructure.Persistence;
 
@@ -19,6 +20,9 @@ namespace Reservation.Api.Features.Waitlist;
 /// <param name="WaitedMinutes">Whole minutes since joining, at <c>at</c> (AC3.6).</param>
 /// <param name="Overdue">Notified more than the venue's timeout (10 minutes) ago and not seated (AC4.6, BR-10).</param>
 /// <param name="Version">Row version; send it back to notify, seat or end the entry.</param>
+/// <param name="TableReadyStatus">The status of the latest "table ready" text to this entry; <c>null</c> before any (M7a, AC4.4).</param>
+/// <param name="TableReadySentAt">When that text was sent (business clock).</param>
+/// <param name="TableReadyFailed">That text failed: the host should call the guest (Design §7.1 Visibility).</param>
 internal sealed record WaitlistItem(
     Guid Id,
     string Name,
@@ -31,7 +35,10 @@ internal sealed record WaitlistItem(
     DateTime? NotifiedAt,
     Guid? NotifiedTableId,
     bool Overdue,
-    uint Version);
+    uint Version,
+    MessageStatus? TableReadyStatus,
+    DateTime? TableReadySentAt,
+    bool TableReadyFailed);
 
 /// <param name="At">The business-clock instant the list was read at.</param>
 /// <param name="Items">Active entries (waiting or notified) in the order they joined (AC3.6).</param>
@@ -92,6 +99,15 @@ internal sealed class GetWaitlistHandler(ReservationsDbContext db, AvailabilityR
             .Select(g => new { g.Id, g.Mobile })
             .ToDictionaryAsync(g => g.Id, g => g.Mobile, cancellationToken);
 
+        // The latest "table ready" text per entry (a re-notify queues a new one, Design §7.2).
+        var entryIds = entries.Select(e => e.Id.Value).ToList();
+        var tableReady = (await db.Messages.AsNoTracking()
+                .Where(m => m.Purpose == MessagePurpose.TableReady && entryIds.Contains(m.SubjectId))
+                .Select(m => new { m.SubjectId, m.Id, m.CreatedAt, m.Status, m.SentAt })
+                .ToListAsync(cancellationToken))
+            .GroupBy(m => m.SubjectId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id.Value).First());
+
         Guid? suggested = null;
         if (table is not null)
         {
@@ -101,19 +117,26 @@ internal sealed class GetWaitlistHandler(ReservationsDbContext db, AvailabilityR
         }
 
         var timeout = venue.Settings.NotifiedTimeoutMinutes;
-        var items = entries.Select(e => new WaitlistItem(
-            e.Id.Value,
-            e.ContactName.Value,
-            mobiles.TryGetValue(e.GuestId, out var mobile) ? mobile.Masked() : null,
-            e.PartySize.Value,
-            e.QuotedWaitMinutes,
-            e.JoinedAt.UtcDateTime,
-            Math.Max(0, (int)(now - e.JoinedAt).TotalMinutes),
-            e.Status,
-            e.NotifiedAt?.UtcDateTime,
-            e.NotifiedTableId?.Value,
-            e.IsOverdue(now, timeout),
-            e.Version)).ToList();
+        var items = entries.Select(e =>
+        {
+            var text = tableReady.GetValueOrDefault(e.Id.Value);
+            return new WaitlistItem(
+                e.Id.Value,
+                e.ContactName.Value,
+                mobiles.TryGetValue(e.GuestId, out var mobile) ? mobile.Masked() : null,
+                e.PartySize.Value,
+                e.QuotedWaitMinutes,
+                e.JoinedAt.UtcDateTime,
+                Math.Max(0, (int)(now - e.JoinedAt).TotalMinutes),
+                e.Status,
+                e.NotifiedAt?.UtcDateTime,
+                e.NotifiedTableId?.Value,
+                e.IsOverdue(now, timeout),
+                e.Version,
+                text?.Status,
+                text?.SentAt?.UtcDateTime,
+                text?.Status == MessageStatus.Failed);
+        }).ToList();
         return new WaitlistResponse(now.UtcDateTime, venue.TimeZone, items, suggested);
     }
 

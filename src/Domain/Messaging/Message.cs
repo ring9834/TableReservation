@@ -35,8 +35,11 @@ public sealed record MessageSent(
     : DomainEvent(EventId, OccurredAt, VenueId);
 
 /// <summary>
-/// Message aggregate (Design §2.2, state machine §3.4, delivery rules §7.1). Handlers queue it;
+/// Message aggregate (Design §2.2, state machine §3.4, delivery rules §7.1, §7.2). Handlers queue it;
 /// the delivery worker sends it, retries with backoff and expires stale ones.
+/// Two clocks (§5.6): <see cref="CreatedAt"/>, <see cref="SentAt"/> and <see cref="DeliveredAt"/> are business-clock
+/// times people see; <see cref="NextAttemptAt"/>, <see cref="ExpiresAt"/> and <see cref="DeliveryDueAt"/> are
+/// infrastructure-clock times the worker schedules by, so texts still go out while the demo clock stands still.
 /// </summary>
 public sealed class Message : AggregateRoot<MessageId>
 {
@@ -60,7 +63,7 @@ public sealed class Message : AggregateRoot<MessageId>
 
     private Message(
         MessageId id, VenueId venueId, GuestId guestId, MessagePurpose purpose, MessageChannel channel, Language language,
-        string body, List<MessageAction> actions, Guid subjectId, DateTimeOffset createdAt, DateTimeOffset expiresAt)
+        string body, List<MessageAction> actions, Guid subjectId, DateTimeOffset createdAt, DateTimeOffset queuedAt, DateTimeOffset expiresAt)
     {
         Id = id;
         VenueId = venueId;
@@ -72,7 +75,7 @@ public sealed class Message : AggregateRoot<MessageId>
         _actions = actions;
         SubjectId = subjectId;
         CreatedAt = createdAt;
-        NextAttemptAt = createdAt;
+        NextAttemptAt = queuedAt;
         ExpiresAt = expiresAt;
         Status = MessageStatus.Queued;
     }
@@ -108,34 +111,54 @@ public sealed class Message : AggregateRoot<MessageId>
 
     public DateTimeOffset ExpiresAt { get; }
 
+    /// <summary>
+    /// When a sent message is to be marked delivered by the worker (infrastructure clock), for a sender that reports
+    /// delivery itself after a delay (the demo phone panel). <c>null</c> otherwise.
+    /// </summary>
+    public DateTimeOffset? DeliveryDueAt { get; private set; }
+
     public string? ProviderRef { get; private set; }
 
     public string? LastError { get; private set; }
 
     /// <summary>
-    /// Queue a message. Expiry by purpose (§7.1): <c>TableReady</c> 10 minutes after creation;
-    /// <c>Reminder</c> at the booking start (<paramref name="bookingStart"/> required); others 24 hours.
+    /// Queue a message. <paramref name="now"/> is the business clock (<see cref="CreatedAt"/>);
+    /// <paramref name="queuedAt"/> the infrastructure clock, which the first attempt and the expiry count from.
+    /// Expiry by purpose (§7.1): <c>TableReady</c> 10 minutes; <c>Reminder</c> at the booking start
+    /// (<paramref name="bookingStart"/> required, a business-clock time, so the time left until it is added); others 24 hours.
     /// </summary>
     public static Message Queue(
         VenueId venueId, GuestId guestId, MessagePurpose purpose, MessageChannel channel, Language language,
-        string body, IEnumerable<MessageAction> actions, Guid subjectId, DateTimeOffset now, DateTimeOffset? bookingStart = null)
+        string body, IEnumerable<MessageAction> actions, Guid subjectId, DateTimeOffset now, DateTimeOffset queuedAt,
+        DateTimeOffset? bookingStart = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
         ArgumentNullException.ThrowIfNull(actions);
 
-        var expiresAt = purpose switch
+        var lifetime = purpose switch
         {
-            MessagePurpose.TableReady => now.AddMinutes(10),
-            MessagePurpose.Reminder => bookingStart
-                ?? throw new ArgumentException("A reminder expires at the booking start.", nameof(bookingStart)),
-            _ => now.AddHours(24),
+            MessagePurpose.TableReady => TimeSpan.FromMinutes(10),
+            MessagePurpose.Reminder => bookingStart is { } start
+                ? (start > now ? start - now : TimeSpan.Zero)
+                : throw new ArgumentException("A reminder expires at the booking start.", nameof(bookingStart)),
+            _ => TimeSpan.FromHours(24),
         };
 
-        return new Message(MessageId.New(now), venueId, guestId, purpose, channel, language, body, [.. actions], subjectId, now, expiresAt);
+        // The ID is a UUID v7 on the infrastructure clock, so ordering by ID follows real time even while the demo clock stands still.
+        return new Message(
+            MessageId.New(queuedAt), venueId, guestId, purpose, channel, language, body, [.. actions], subjectId,
+            now, queuedAt, queuedAt + lifetime);
     }
 
-    /// <summary>The provider accepted the message (§3.4 Queued → Sent). Raises <see cref="MessageSent"/>.</summary>
-    public Result MarkSent(string providerRef, string toMasked, DateTimeOffset at)
+    /// <summary>Past its expiry on the infrastructure clock (§7.1): it fails instead of being sent.</summary>
+    public bool IsExpired(DateTimeOffset infrastructureNow) => infrastructureNow >= ExpiresAt;
+
+    /// <summary>
+    /// The provider accepted the message (§3.4 Queued → Sent). Raises <see cref="MessageSent"/>. <paramref name="at"/> is
+    /// the business clock; <paramref name="deliveryDueAt"/> (infrastructure clock) is set when the sender reports
+    /// delivery itself after a delay, so the worker marks it delivered then.
+    /// </summary>
+    public Result MarkSent(string providerRef, string toMasked, DateTimeOffset at, DateTimeOffset? deliveryDueAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerRef);
         ArgumentException.ThrowIfNullOrWhiteSpace(toMasked);
@@ -155,6 +178,7 @@ public sealed class Message : AggregateRoot<MessageId>
         SentAt = at;
         ProviderRef = providerRef;
         LastError = null;
+        DeliveryDueAt = deliveryDueAt;
         Raise(new MessageSent(DomainEvent.NewEventId(at), at, VenueId, Id, Purpose, Channel, SubjectId, toMasked));
         return Result.Success();
     }
@@ -174,11 +198,12 @@ public sealed class Message : AggregateRoot<MessageId>
 
         Status = MessageStatus.Delivered;
         DeliveredAt = at;
+        DeliveryDueAt = null;
         return Result.Success();
     }
 
     /// <summary>
-    /// A temporary provider error (§3.4 note, §7.1): attempts + 1 and retry after the backoff.
+    /// A temporary provider error (§3.4 note, §7.1): attempts + 1 and retry after the backoff, on the infrastructure clock.
     /// When the next attempt would be at or after <see cref="ExpiresAt"/>, the message fails instead.
     /// </summary>
     public Result ScheduleRetry(string error, DateTimeOffset now)
@@ -220,6 +245,7 @@ public sealed class Message : AggregateRoot<MessageId>
 
         Status = MessageStatus.Failed;
         LastError = reason;
+        DeliveryDueAt = null;
         return Result.Success();
     }
 }

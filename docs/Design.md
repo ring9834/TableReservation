@@ -5,7 +5,7 @@
 | **System**       | Restaurant and catering reservation system, demo build                                         |
 | **Status**       | Draft for the demo build                                                                       |
 | **Owner**        | Antonio Huang                                                                                  |
-| **Last updated** | 13 November 2026                                                                               |
+| **Last updated** | 14 November 2026                                                                               |
 | **Inputs**       | [`Requirements.md`](Requirements.md), [`Architecture.md`](Architecture.md), ADR-001 to ADR-005 |
 
 This file turns the requirements and ADRs into buildable design: classes and their relationships, state machines, events, sequences, database tables, endpoints and background jobs. It is written for the developer and for Claude Code.
@@ -36,6 +36,7 @@ Changes made on **8 November** are **highlighted in yellow with an orange bar in
 | Real-time server side (M5a, 12 Nov) | Hub joins the venue group from the session's `venue_ids` claim (no `JoinVenue`); `RealtimeNotifier` maps every event to an ID-only notice and never fails the event; notice schemas in OpenAPI; `getFloorPlan` at business-clock now (no `?at`) with current and next booking per table; SignalR headers in CORS | §9.3, §14, §14.1, §15, §15.1 |
 | Walk-in and waitlist API (M6a, 12 Nov) | Booking and waitlist contact name; area names in English and Chinese; table suggestion, walk-ins, seat, clear and waitlist endpoints; `Seat` moves a kept table's assignment in place; quoted wait and suggested party rules; `WaitlistSuggester` fills `waitlistChanged`; `WaitlistOverdueJob`; one Playwright sign-in per run | §2.2, §11.5, §12, §13, §13.1, §14, §14.2, §15.1, §16, §18.5, §20 |
 | Host screens for walk-ins and the waitlist (M6b, 13 Nov) | Walk-in dialog (three taps for the suggested table), seat a booked guest from the panel or tonight's list, clear a seated table, waitlist panel with join dialog, notify, seat, walked away and remove, overdue badge; the suggested party and freed table highlighted from `waitlistChanged` and `GET …/waitlist?tableId=`; Playwright for step 3 | §18.6 |
+| Messaging back end (M7a, 14 Nov) | `NotificationHandler` queues the confirmation (online and phone bookings created as Booked) and the "table ready" text; English and Chinese templates in resource files; language stored on each booking and waitlist entry; `MessageDeliveryWorker` sends, retries, expires and marks the phone panel's texts delivered on the infrastructure clock; message changes pushed only after commit (savepoints included); presenter message log; TableReady status on the waitlist | §2.2, §3.2, §7.2, §13, §13.1, §14, §14.2, §16 |
 | Host screens (M5b, 12 Nov) | Business clock fixed at 18:25 today by configuration (`Demo:Clock`), brought forward from M11; stale local data reset at start-up (`Demo:ResetIfStale`); `/demo-login` form; `/host` floor plan, side panel and tonight's list; SignalR connection with reconnect and catch-up; whole-plan refetch per notice (ADR-001 clarification); booking contact name and bilingual area names planned for M6 | §17, §17.1, §18.1, §18.5, §20 |
 | Event infrastructure details (M3, 10 Nov) | Two clocks: workers use the infrastructure clock, the domain uses the business clock; envelope in `src/Contracts`; payload shape; request context and causation in the dispatcher; one row per aggregate per batch; every handler runs; retry schedule counted from `created_at`; duplicate event sequence → concurrency error; outbox health check | §5.6, §16, §20 |
 | Clean-up (8 Nov) | Schema aligned with §6.6 and §7.1, inbound POS fields, explanations tidied, API and traceability updated | §2.1–§2.4, §3.1, §3.3, §4.3, §6.1, §6.2, §6.5, §9.1, §13, §14, §19 |
@@ -234,6 +235,7 @@ classDiagram
         +BookingStatus Status
         +string? Notes
         +string? Occasion
+        +Language Language
         +DateTimeOffset? HoldExpiresAt
         +DateTimeOffset? SeatedAt
         +DateTimeOffset? CompletedAt
@@ -306,6 +308,8 @@ BillTotal is how much the guests spent, taken from the POS bill. It’s empty un
 
 Domain methods take `now` as a value; handlers read it from `TimeProvider`, so the domain never reads the clock itself. `CaptureDeposit` cannot see other bookings, so `CaptureDepositHandler` re-checks the table and passes the answer as `tableStillFree`; it only matters once the hold has expired. `CancellationReason` and `CancellationRefund` keep why the booking was cancelled and the refund decision made at that moment: the first drives the `hold_expired` rule (§3.1), the second is returned again if `Cancel` is repeated.
 
+`Language` (M7a) is the language of the booking's messages: the language active when the guest submitted, or for a party seated from the waitlist the entry's. `WaitlistEntry.Language` is the language chosen when the party joined. Messages use these, not the guest profile's language, which can change with a later booking (§7.2).
+
 `ContactName` (M6a) is the name given when the booking was made: the guest's name on an online or phone booking, the optional name of a walk-in, or the waitlist entry's name when a waiting party is seated. The host screens show it. The guest profile keeps its own stored name, so a known mobile that books under another name shows that name on this booking only (§14.1, §20). `WaitlistEntry.ContactName` is the same for waitlist entries. Neither is put on an event: events stay ID-only.
 
 CompletedBy records how the booking reached Completed: either BillClosed (the POS reported the bill paid) or ClearedByHost (a host tapped “Clear”). The late-match rule needs this, because it only attaches a late bill to bookings cleared by a host. A booking completed by BillClosed already has its bill. It also helps reports and checks: lots of ClearedByHost at a venue suggests the POS link isn’t working, or staff are skipping the POS.
@@ -334,6 +338,7 @@ classDiagram
         +PersonName ContactName
         +PartySize PartySize
         +int QuotedWaitMinutes
+        +Language Language
         +DateTimeOffset JoinedAt
         +DateTimeOffset? NotifiedAt
         +WaitlistStatus Status
@@ -358,9 +363,12 @@ classDiagram
         +int Attempts
         +DateTimeOffset NextAttemptAt
         +DateTimeOffset ExpiresAt
+        +DateTimeOffset? DeliveryDueAt
         +string? ProviderRef
         +string? LastError
-        +MarkSent(string providerRef, string toMasked, DateTimeOffset at) Result
+        +Queue(..., DateTimeOffset now, DateTimeOffset queuedAt, DateTimeOffset? bookingStart)$ Message
+        +IsExpired(DateTimeOffset infrastructureNow) bool
+        +MarkSent(string providerRef, string toMasked, DateTimeOffset at, DateTimeOffset? deliveryDueAt) Result
         +MarkDelivered(DateTimeOffset at) Result
         +ScheduleRetry(string error, DateTimeOffset now) Result
         +MarkFailed(string reason) Result
@@ -532,7 +540,7 @@ stateDiagram-v2
 | **Transition**        | **Guard**                                                                               | **Events**                                          |
 |-----------------------|-----------------------------------------------------------------------------------------|-----------------------------------------------------|
 | `Join`                | Party size 1–20; quoted wait 0–240 min                                                  | `WaitlistJoined`                                    |
-| `Notify`              | Status `Waiting` or `Notified` (re-notify allowed; `NotifiedAt` updated)                | `WaitlistNotified`                                  |
+| `Notify`              | Status `Waiting` or `Notified` (re-notify allowed; `NotifiedAt` updated; each sends a new "table ready" text, §7.2) | `WaitlistNotified`                                  |
 | `MarkSeated`          | Status `Waiting` or `Notified`; the walk-in booking was created in the same transaction | `WaitlistEnded` (`outcome: seated`)                 |
 | `WalkAway` / `Remove` | Status `Waiting` or `Notified`                                                          | `WaitlistEnded` (`outcome: walkedAway` / `removed`) |
 
@@ -1286,6 +1294,26 @@ loop:
 | Late cancellation warning  | If a guest opens a Confirm or Cancel link inside the free-cancellation window (`booking.Terms`, §2.6), the page says "cancelling now keeps your deposit" before the guest taps Cancel |
 | Providers                  | Demo: `PhonePanelSender`. Pilot: AWS End User Messaging SMS and Amazon SES, keeping guest data in AWS (ADR-001 D10). Both sit behind `IMessageSender`                                               |
 
+### 7.2 Build notes (M7a)
+
+Details §7 and §7.1 left open, settled when the messaging back end was built (`src/Api/Messaging`, `src/Api/Features/Messages`, `src/Infrastructure/Messaging`). The presenter phone panel and the host screen change come in M7b.
+
+| **Topic** | **Decision** |
+|-----------|--------------|
+| What is queued | `NotificationHandler` (consumer `notifications`, wrapped in the inbox decorator, so each event queues at most once) only adds `Queued` rows; it never calls a sender. `BookingCreated` → `Confirmation` when the channel is `Online` or `Phone`, `holdExpiresAt` is empty (not `PendingPayment`; a deposit booking gets its confirmation on `DepositCaptured` in M8) and there is a guest. Walk-ins, including parties seated from the waitlist, get none. `WaitlistNotified` → `TableReady` to the entry's guest. No actions yet: the manage-booking link comes with M10 (`GuestLinkSigner`, token in the query string) |
+| Repeated Notify | Every Notify, for the same table or another, queues a new `TableReady`: a second tap is deliberate (a double tap is a stale `version`, `409`). The text names no table, so the body is the same. An earlier `TableReady` for the entry that is still `Queued` is failed with `lastError = superseded`, so the guest never gets two. An entry that ended before the event was handled gets none. **M7b:** the phone panel shows a `superseded` failure as "Replaced", not as an error |
+| Language | Stored on each booking (`bookings.language`: the request's language; for a party seated from the waitlist the entry's; `En` for a plain walk-in) and each waitlist entry (`waitlist_entries.language`: the language chosen when joining). The guest profile keeps its own, as in M4a and M6a: a known guest joining in Chinese gets a Chinese text without changing the profile |
+| Templates | `TemplatesEnglish.resx` and `TemplatesChinese.resx` in `src/Api/Messaging/Templates`, one neutral resource per language (no satellite assemblies, no culture lookup), keys = purpose names, placeholders `{venue}`, `{party}`, `{date}`, `{time}`, `{reference}`. `MessageComposer` fills them; the venue name is used as stored in both languages (venues have no Chinese name). Dates and times are in the venue's zone and formatted by hand: `Sat 14 Nov`, `7:30 pm`; `11月14日（周六）`, `19:30`. A missing template throws; `MessageComposerTests` covers every purpose in use × language |
+| Two clocks | `Message.Queue(..., now, queuedAt)`: `created_at`, `sent_at` and `delivered_at` are business-clock times people see (the waitlist's "time sent" is `sent_at`); `next_attempt_at`, `expires_at` and `delivery_due_at` are infrastructure-clock times the worker schedules by, so with the business clock fixed at 18:25 texts still go out, retry and expire. Expiry counts from `queuedAt`; a reminder's (M10) is `queuedAt + (bookingStart − now)`. The message ID is a UUID v7 on the infrastructure clock, so ordering by ID follows real time |
+| Worker | `MessageDeliveryWorker` (section `Messaging`: `PollInterval` 1 s, `BatchSize` 20, `PhonePanelDeliveryDelay` 1 s; runs with `Outbox:RunWorkers`). One transaction per batch: `Queued` rows with `next_attempt_at <= now` and `Sent` rows with `delivery_due_at <= now`, `now` passed in from the infrastructure clock (never SQL `now()`), `LIMIT 20 FOR UPDATE SKIP LOCKED`. Expired → `Failed` (`expired`); otherwise sent with the message ID as the client reference: accepted → `Sent` (`MessageSent` through the outbox), temporary → `ScheduleRetry` (5 s, 30 s, 2 min, 10 min, then every 10 min, failing when the next try would pass the expiry), permanent → `Failed` at once. A sender that throws counts as temporary, recorded as `sender_exception:{type}` only. `DeliverBatchAsync` is the test hook |
+| Delivered | `IMessageSender` returns `SendResult`: `Accepted(providerRef, deliveredAfter?)`, `Temporary(code)` or `Permanent(code)`. `PhonePanelSender` accepts with `panel-{id}` and `deliveredAfter` = 1 s; the worker stores `delivery_due_at` and marks the row `Delivered` when it is due. No fire-and-forget delay, so a restart still delivers. Pilot providers leave `deliveredAfter` empty and report through `/webhooks/messages` |
+| After commit | `MessageChangeInterceptor` (scoped, next to the outbox interceptor) notes messages added or whose status or attempts change, and after the commit rings `MessageSignal` (for new `Queued` rows) and calls `IMessageChangeNotifier`. It follows savepoints: a rollback to a savepoint forgets what was noted since, so a handler that fails after saving sends no signal and no notice while the other handlers' messages in the batch still do. A rolled-back transaction or a failed save sends nothing. The API's `MessageChangePusher` sends `messageLogChanged {messageIds}` to `venue:{id}`, plus `waitlistChanged {entryIds}` for `TableReady` changes so host screens refresh the status. `MessageSent` → `messageLogChanged` from `RealtimeNotifier` (§15.1) stays; it costs one extra refetch |
+| Message log | `GET …/messages` (`getMessages`, tag `Messages`, `Presenter`) → `{at, timeZone, items}`: messages created in today's venue-local day (business clock), the latest 100, oldest first (`created_at`, then ID). Items: `{id, purpose, language, body, mobileMasked, status, sentAt?, deliveredAt?, lastError? (failed only), subjectId, subjectType}`, where `subjectType` is `booking` or `waitlistEntry` |
+| Waitlist | Each `GET …/waitlist` item gains `tableReadyStatus?`, `tableReadySentAt?` and `tableReadyFailed` from the entry's latest `TableReady` (AC4.4; a failed one is flagged so the host can call, §7.1 Visibility). Additive |
+| Reset and seed | `DemoReset` (and so `ResetIfStale`) already truncates `messages`; the seed writes no events, so it creates no messages. Seeded bookings take their guest's language |
+| Logging | Message ID, purpose, status, attempts and the error code only; never bodies, names or numbers. `LogScrubbingTests` sends a booking and a waitlist notify through dispatch and delivery and finds none in the logs |
+| Tests | `MessageDeliveryWorkerTests` (harness, both clocks as `TestClock`s, only the infrastructure one moved): sent and delivered, backoff, expiry, permanent error, two workers, crash after send, push only after commit, savepoint rollback, restart, wake on signal. `MessagingTests` through the API; `MessagingDeliveryTests` with the workers running checks AC1.6 (the confirmation is `Sent` in `GET …/messages` within 2 s of the booking response, then `Delivered`) and AC4.3 / AC4.4 (a Chinese entry's text, and its status and time sent on the waitlist) |
+
 ## 8. Payments
 
 ### 8.1 Classes
@@ -1751,6 +1779,7 @@ CREATE TABLE bookings (
   deposit_cents bigint, deposit_status text, payment_intent_id text, refund_id text,
   hold_expires_at timestamptz, seated_at timestamptz, completed_at timestamptz,
   notes text, occasion text, reminder jsonb,
+  language text NOT NULL,                            -- language of this booking's messages (M7a, §7.2)
   terms jsonb NOT NULL,                              -- BookingTerms snapshot (§2.6)
   completion_source text,                            -- BillClosed / ClearedByHost (§6.5)
   cancel_reason text, refund_decision text,          -- set on cancellation (§2.2, §8.3)
@@ -1788,6 +1817,7 @@ CREATE TABLE waitlist_entries (
   party_size int NOT NULL, quoted_wait_minutes int NOT NULL, status text NOT NULL,
   joined_at timestamptz NOT NULL, notified_at timestamptz, ended_at timestamptz,
   notified_table_id uuid, booking_id uuid,
+  language text NOT NULL,                            -- language chosen when joining (M7a, §7.2)
   last_event_sequence bigint NOT NULL DEFAULT 0      -- events raised by this record (§2.2)
 );
 ```
@@ -1800,9 +1830,13 @@ CREATE TABLE messages (
   created_at timestamptz NOT NULL, sent_at timestamptz, delivered_at timestamptz,
   attempts int NOT NULL DEFAULT 0, next_attempt_at timestamptz NOT NULL,   -- §7.1
   expires_at timestamptz NOT NULL, provider_ref text, last_error text,     -- §7.1
+  delivery_due_at timestamptz,                       -- when the worker marks a sent message delivered (M7a, §7.2)
   last_event_sequence bigint NOT NULL DEFAULT 0      -- events raised by this record (§2.2)
 );
 CREATE INDEX ix_messages_queued ON messages (next_attempt_at) WHERE status = 'Queued';
+CREATE INDEX ix_messages_delivery_due ON messages (delivery_due_at) WHERE status = 'Sent';   -- M7a
+CREATE INDEX ix_messages_subject_id ON messages (subject_id);                                -- M7a: waitlist read
+CREATE INDEX ix_messages_venue_created ON messages (venue_id, created_at);                    -- M7a: message log
 ```
 
 ```sql
@@ -1876,6 +1910,7 @@ Details §13 left open, settled when the schema was built (`src/Infrastructure/P
 | Venue filter | EF named query filter `"Venue"` (`ReservationsDbContext.VenueFilter`) on venues, areas, tables, guests, bookings, waitlist entries, messages, POS messages and the audit log, reading `IVenueContext.VenueId`; `null` matches nothing. Outbox and inbox are not filtered (the workers serve every venue). In the demo `IVenueContext` is fixed to Golden Dragon (§17); M4 reads it from the demo session. Background jobs use `IgnoreQueryFilters([VenueFilter])` |
 | Outbox, inbox, POS messages, audit | Tables and plain persistence records exist from M2; their behaviour comes in M3 (outbox, inbox, audit) and M9 (POS) |
 | Contact and area names (M6a) | The migration `AddContactNamesAndAreaNamesZh` adds `bookings.contact_name` (backfilled from the guest's stored name), `waitlist_entries.contact_name` (backfilled the same way, then `NOT NULL`) and `areas.name_zh` (主厅 / 窗边 for the two Golden Dragon areas as in the seed, the English name for any other area, then `NOT NULL`) |
+| Messaging (M7a) | The migration `AddMessagingLanguageAndDelivery` adds `bookings.language` and `waitlist_entries.language` (backfilled from the guest; `En` for a booking without one; then `NOT NULL`), `messages.delivery_due_at` and the three message indexes. `next_attempt_at`, `expires_at` and `delivery_due_at` are infrastructure-clock times (§7.2) |
 | Migrations at start-up | Development only, when `Database:MigrateOnStartup=true`: migrate, then seed if there is no venue (D8). CI fails on model changes without a migration (`dotnet ef migrations has-pending-model-changes`) |
 
 ## 14. HTTP API
@@ -1906,7 +1941,7 @@ Base path `/api/v1`. Venue-scoped routes are `/api/v1/venues/{venueId}/…`. All
 | POST       | `/venues/{venueId}/waitlist` `{name, mobile, partySize, quotedWaitMinutes, language?}` | Host       | `JoinWaitlist` (M6a); optional `Idempotency-Key`                                            |
 | POST       | `/venues/{venueId}/waitlist/{id}/notify` `{tableId, version}`                | Host                 | `NotifyWaitlistEntry` (M6a)                                                                 |
 | POST       | `/venues/{venueId}/waitlist/{id}/end` `{outcome, version}`                   | Host                 | `EndWaitlistEntry` (M6a; `walkedAway` or `removed`)                                         |
-| GET        | `/venues/{venueId}/messages`                                                 | Presenter            | `GetMessageLog`                                                                             |
+| GET        | `/venues/{venueId}/messages`                                                 | Presenter            | `GetMessageLog` (M7a, §7.2): today's messages, newest last, at most 100                     |
 | GET        | `/venues/{venueId}/pos-messages?status`                                      | Presenter / manager  | `GetPosLog` (`status=unmatched` lists bills to match)                                       |
 | POST       | `/venues/{venueId}/pos-messages/{id}/match` `{bookingId}`                    | Manager              | `MatchPosBill`                                                                              |
 | POST       | `/venues/{venueId}/pos-messages/{id}/dismiss`                                | Manager              | `DismissPosBill`                                                                            |
@@ -1963,10 +1998,10 @@ Details §9.2, §9.3 and §14 left open, settled when the walk-in and waitlist A
 | Seat | `POST …/bookings/{id}/seat {version, tableIds?}` (`seatBooking`) → `BookingStateResponse`. Already seated → its state whatever the version (§3.1 no-op). Otherwise version check, then `invalid_transition` unless `Booked` / `Confirmed`; tables in the venue (404) and seating the party together (422 `table_too_small`); `[]` is 400 `tables_required`. Then table locks → re-check each table is free for the turn, ignoring the booking's own assignment → `Seat`. A clash with another booking, including the next one on the same table, is 409 `slot_taken` (§20) |
 | Seat keeps rows | `Booking.Seat` no longer clears and re-adds its assignments. A table the booking keeps has its existing `TableAssignment` moved to the new period in place (`MoveTo`, an `UPDATE`); only tables that change are removed or added. Clearing and re-adding the same `(booking_id, table_id)` relied on EF Core deleting before inserting, and the exclusion constraint checks each statement. `SeatingTests` seats the 18:45 booking early on its own T5 and moves the 20:30 booking from W1 to T1, both without `23P01` |
 | Clear | `POST …/tables/{tableId}/clear {bookingId, version}` (`clearTable`) → `BookingStateResponse`. The booking must hold the table (else 404). Already completed → its state, so a retried tap is safe; otherwise a stale version is 409 `version_conflict` and a booking that isn't seated 409 `invalid_transition`. `Complete(ClearedByHost)` raises `BookingCompleted` and `TableCleared`. The floor-plan summary gained `version` so the screen can send it |
-| Waitlist list | `GET …/waitlist[?tableId]` (`getWaitlist`, tag `Waitlist`) → `{at, timeZone, items, suggestedEntryId?}`. Items are active entries in join order: `{id, name, mobileMasked, partySize, quotedWaitMinutes, joinedAt, waitedMinutes, status, notifiedAt?, notifiedTableId?, overdue, version}`. `waitedMinutes` and `overdue` use business-clock now (`IsOverdue` with the venue's `NotifiedTimeoutMinutes`). An unknown `tableId` is 404 |
+| Waitlist list | `GET …/waitlist[?tableId]` (`getWaitlist`, tag `Waitlist`) → `{at, timeZone, items, suggestedEntryId?}`. Items are active entries in join order: `{id, name, mobileMasked, partySize, quotedWaitMinutes, joinedAt, waitedMinutes, status, notifiedAt?, notifiedTableId?, overdue, version}`, and since M7a `tableReadyStatus?`, `tableReadySentAt?` and `tableReadyFailed` (§7.2). `waitedMinutes` and `overdue` use business-clock now (`IsOverdue` with the venue's `NotifiedTimeoutMinutes`). An unknown `tableId` is 404 |
 | Quote | `GET …/waitlist/quote?partySize` (`getQuotedWait`) → `{partySize, quotedWaitMinutes}` (§11.5) |
-| Join | `POST …/waitlist {name, mobile, partySize, quotedWaitMinutes, language?}` (`joinWaitlist`) → `201` with the list item. Optional `Idempotency-Key` (operation `join-waitlist`). The guest is found by mobile or created, as for bookings (one retry on a concurrent first join). The name given is the entry's contact name; a known guest keeps its stored name and language. `language` (default `en`) applies to a new guest only. It is an init property rather than a parameter default, so the shared `Language` schema in OpenAPI gets no default. Codes as for bookings plus `quoted_wait_out_of_range` (0–240) |
-| Notify | `POST …/waitlist/{id}/notify {tableId, version}` (`notifyWaitlistEntry`) → `{id, status, version, notifiedAt?, notifiedTableId?, bookingId?}`. Version check, table in the venue (404) and seating the party (422 `table_too_small`), then `Notify` (re-notifying is allowed, §3.2). Status and `WaitlistNotified` only; the "table ready" text comes with M7 |
+| Join | `POST …/waitlist {name, mobile, partySize, quotedWaitMinutes, language?}` (`joinWaitlist`) → `201` with the list item. Optional `Idempotency-Key` (operation `join-waitlist`). The guest is found by mobile or created, as for bookings (one retry on a concurrent first join). The name given is the entry's contact name; a known guest keeps its stored name and language. `language` (default `en`) is stored on the entry for its texts (M7a, §7.2) and becomes the profile language of a new guest only. It is an init property rather than a parameter default, so the shared `Language` schema in OpenAPI gets no default. Codes as for bookings plus `quoted_wait_out_of_range` (0–240) |
+| Notify | `POST …/waitlist/{id}/notify {tableId, version}` (`notifyWaitlistEntry`) → `{id, status, version, notifiedAt?, notifiedTableId?, bookingId?}`. Version check, table in the venue (404) and seating the party (422 `table_too_small`), then `Notify` (re-notifying is allowed, §3.2). Status and `WaitlistNotified`; since M7a the event queues the "table ready" text (§7.2) |
 | End | `POST …/waitlist/{id}/end {outcome, version}` (`endWaitlistEntry`): `walkedAway` or `removed` (`seated` is 400 `outcome_invalid`; parties are seated through `seatWalkIn`). The same outcome again returns the state (no-op); otherwise version check, then `WalkAway` / `Remove`. An entry that ended otherwise is 409 `invalid_transition`. The quoted wait is kept (AC3.7) |
 | New codes | 422 `table_too_small`. Field codes `table_required`, `tables_required`, `booking_required`, `outcome_invalid`, `quoted_wait_out_of_range`, `waitlist_entry_version_required`, `party_size_required` (suggestion and quote) |
 | Logging | IDs only: walk-in seated (booking, table, entry), booking seated, table cleared, entry joined (with party size), notified, ended. `LogScrubbingTests` sends names and a mobile through every new endpoint and finds none in the logs |
@@ -2006,7 +2041,7 @@ Details §15 left open, settled when the server side was built (`src/Api/Realtim
 |-------------------------|---------------------|----------------------------------------|--------------------------------------------------------------------------------------------------|
 | `OutboxDispatcher`      | `BackgroundService` | Signal or 1 s                          | §5.3                                                                                             |
 | `PosDeliveryWorker`     | `BackgroundService` | Signal or 1 s; 5 s retry while offline | §6.4                                                                                             |
-| `MessageDeliveryWorker` | `BackgroundService` | Signal or 1 s; backoff per message     | Sends `Queued` texts and emails through `IMessageSender`; retries; expires stale messages (§7.1) |
+| `MessageDeliveryWorker` | `BackgroundService` | Signal or 1 s; backoff per message     | Sends `Queued` texts and emails through `IMessageSender`; retries; expires stale messages; marks the phone panel's texts delivered when due (§7.1). Built in M7a (§7.2); runs with `Outbox:RunWorkers` |
 | `PaymentHoldExpiryJob`  | `PeriodicTimer`     | 30 s                                   | `ExpireHold` on `PendingPayment` bookings past `HoldExpiresAt`                                   |
 | `WaitlistOverdueJob`    | `PeriodicTimer`     | 30 s                                   | Pushes `waitlistChanged` when a notified entry passes 10 min. Built in M6a (`src/Api/Realtime`): reads notified entries across venues, checks `IsOverdue` on the business clock, pushes each entry once (remembered in memory; after a restart at most one repeat), writes nothing; runs with `Outbox:RunWorkers` |
 | `ArrivingSoonTicker`    | `PeriodicTimer`     | 60 s                                   | Pushes `floorPlanChanged` when a table crosses the 30-minute mark                                |

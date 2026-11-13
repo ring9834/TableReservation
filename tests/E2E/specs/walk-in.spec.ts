@@ -1,14 +1,21 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { hostContext, uniqueGuestName, uniqueMobile } from "../support/screens";
-import { clearBookings, endWaitlistEntries, ensureSeated, quotedWait } from "../support/session";
+import {
+  clearBookings,
+  endWaitlistEntries,
+  ensureSeated,
+  quotedWait,
+  seatStandInsUntilNoTable,
+} from "../support/session";
 
 // Requirements step 3 and the step 4 waitlist (AC3.1, AC3.2, AC3.4, AC4.1, AC4.2) on two host tablets against the
 // real API, SignalR and database, with the business clock fixed at 18:25 in Development (Design §17, §18.6).
 // The seed has every table of 4 or more seats taken at 18:25, T4 by a party seated at 17:30.
 //
 // Reruns against one database: the spec clears the tables it seated and ends the waitlist entries it added. Clearing
-// T4 completes the seated party for good, so `beforeAll` seats a stand-in walk-in of 4 on T4 when it is free, and
-// ends "E2E …" entries an aborted run left behind. The quote therefore depends on what is seated (35 min on a fresh
+// T4 completes the seated party for good, and a person may clear other tables by hand, so `beforeAll` seats a
+// stand-in walk-in of 4 on T4 when it is free, then one on every table the API still suggests for a party of 4,
+// until none fits; `afterAll` clears every stand-in it seated. It also ends "E2E …" entries an aborted run left behind. The quote therefore depends on what is seated (35 min on a fresh
 // seed, 50 after a stand-in), so the spec compares with the API's own quote; the exact 35 is checked by the
 // integration tests on a fresh database.
 
@@ -35,6 +42,7 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
   test.describe.configure({ mode: "serial" });
 
   const seated: string[] = [];
+  const standIns: string[] = [];
   const entries: string[] = [];
   let hostA: BrowserContext;
   let hostB: BrowserContext;
@@ -44,7 +52,10 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
 
   test.beforeAll(async ({ browser, baseURL }) => {
     await endWaitlistEntries((entry) => entry.name.startsWith("E2E "));
-    await ensureSeated("T4", 4);
+    // T4 first: the third test clears it, so it must be taken whatever else is free.
+    const t4 = await ensureSeated("T4", 4);
+    if (t4) standIns.push(t4);
+    standIns.push(...(await seatStandInsUntilNoTable(4)));
     hostA = await hostContext(browser, baseURL);
     hostB = await hostContext(browser, baseURL);
     [screenA, screenB] = await Promise.all([openHostScreen(hostA), openHostScreen(hostB)]);
@@ -54,7 +65,7 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
 
   test.afterAll(async () => {
     await Promise.all([hostA?.close(), hostB?.close()]);
-    await clearBookings(seated);
+    await clearBookings([...seated, ...standIns]);
     await endWaitlistEntries(entries);
   });
 

@@ -70,6 +70,22 @@ public sealed class GoldenDragonSeedTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task The_seed_creates_no_messages_and_books_in_each_guests_language()
+    {
+        await using var database = await TestDatabase.CreateAsync(postgres);
+        await using var db = database.Context();
+
+        Assert.Equal(0, await db.Messages.CountAsync(Ct));
+        Assert.False(await db.Outbox.AnyAsync(Ct));
+        var languages = await db.Bookings
+            .Join(db.Guests, b => b.GuestId, g => (GuestId?)g.Id, (b, g) => new { Booking = b.Language, Guest = g.Language })
+            .ToListAsync(Ct);
+        Assert.Equal(GoldenDragon.Bookings.Count, languages.Count);
+        Assert.All(languages, l => Assert.Equal(l.Guest, l.Booking));
+        Assert.Contains(languages, l => l.Booking == Language.Zh);
+    }
+
+    [Fact]
     public async Task Step_1_online_party_of_6_at_20_00_has_a_table_and_pacing_room()
     {
         await using var database = await TestDatabase.CreateAsync(postgres);

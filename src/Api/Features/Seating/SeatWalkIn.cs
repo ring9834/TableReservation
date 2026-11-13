@@ -131,7 +131,7 @@ internal sealed partial class SeatWalkInHandler(
             ?? (string.IsNullOrWhiteSpace(request.Name) ? null : PersonName.Create(request.Name).Value);
         var created = Booking.CreateWalkIn(
             venue, entry?.GuestId, contactName, await BookingReferences.NewAsync(db, cancellationToken), partySize, [tableId],
-            entry?.Id, now);
+            entry?.Id, now, entry?.Language ?? Language.En);
         if (created.IsFailure)
         {
             return created.Error!;

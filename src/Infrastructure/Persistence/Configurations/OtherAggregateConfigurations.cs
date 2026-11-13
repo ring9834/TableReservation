@@ -40,6 +40,7 @@ internal sealed class WaitlistEntryConfiguration : IEntityTypeConfiguration<Wait
         builder.Property(x => x.ContactName).HasColumnName("contact_name").IsRequired();
         builder.Property(x => x.PartySize);
         builder.Property(x => x.QuotedWaitMinutes);
+        builder.Property(x => x.Language);
         builder.Property(x => x.Status);
         builder.Property(x => x.JoinedAt);
         builder.Property(x => x.NotifiedAt);
@@ -74,10 +75,14 @@ internal sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(x => x.ExpiresAt);
         builder.Property(x => x.ProviderRef);
         builder.Property(x => x.LastError);
+        builder.Property(x => x.DeliveryDueAt);
 
         builder.Ignore(x => x.Actions);
         builder.Property<List<MessageAction>>("_actions").HasColumnName("actions").HasJsonConversion();
 
         builder.HasIndex(x => x.NextAttemptAt).HasFilter("status = 'Queued'").HasDatabaseName("ix_messages_queued");
+        builder.HasIndex(x => x.DeliveryDueAt).HasFilter("status = 'Sent'").HasDatabaseName("ix_messages_delivery_due");
+        builder.HasIndex(x => x.SubjectId).HasDatabaseName("ix_messages_subject_id");
+        builder.HasIndex(x => new { x.VenueId, x.CreatedAt }).HasDatabaseName("ix_messages_venue_created");
     }
 }

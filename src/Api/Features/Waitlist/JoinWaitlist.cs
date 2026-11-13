@@ -21,8 +21,9 @@ namespace Reservation.Api.Features.Waitlist;
 internal sealed record JoinWaitlistRequest(string Name, string Mobile, int PartySize, int QuotedWaitMinutes)
 {
     /// <summary>
-    /// A new guest's language for messages (<c>en</c> when omitted); a known guest keeps the stored one. An init property,
-    /// not a parameter default, so the shared <c>Language</c> schema in OpenAPI gets no default.
+    /// The language of this entry's messages (<c>en</c> when omitted), stored on the entry (M7a). A new guest also gets it as
+    /// the profile language; a known guest's profile keeps its stored one. An init property, not a parameter default, so the
+    /// shared <c>Language</c> schema in OpenAPI gets no default.
     /// </summary>
     public Language Language { get; init; } = Language.En;
 }
@@ -109,7 +110,7 @@ internal sealed partial class JoinWaitlistHandler(
             db.Guests.Add(guest);
         }
 
-        var joined = WaitlistEntry.Join(command.VenueId, guest.Id, name, PartySize.Of(request.PartySize), request.QuotedWaitMinutes, now);
+        var joined = WaitlistEntry.Join(command.VenueId, guest.Id, name, PartySize.Of(request.PartySize), request.QuotedWaitMinutes, now, request.Language);
         if (joined.IsFailure)
         {
             return joined.Error!;
@@ -121,7 +122,8 @@ internal sealed partial class JoinWaitlistHandler(
 
         var item = new WaitlistItem(
             entry.Id.Value, entry.ContactName.Value, guest.Mobile.Masked(), entry.PartySize.Value, entry.QuotedWaitMinutes,
-            entry.JoinedAt.UtcDateTime, 0, entry.Status, null, null, Overdue: false, entry.Version);
+            entry.JoinedAt.UtcDateTime, 0, entry.Status, null, null, Overdue: false, entry.Version,
+            TableReadyStatus: null, TableReadySentAt: null, TableReadyFailed: false);
         await idempotency.CompleteAsync(command.VenueId, Operation, command.IdempotencyKey, item, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         LogJoined(logger, entry.Id.Value, entry.PartySize.Value);

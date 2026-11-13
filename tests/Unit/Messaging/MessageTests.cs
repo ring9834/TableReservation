@@ -4,10 +4,14 @@ using Reservation.Tests.Unit.Support;
 
 namespace Reservation.Tests.Unit.Messaging;
 
-/// <summary>Message aggregate: Design §3.4 transitions and the §7.1 delivery rules.</summary>
+/// <summary>Message aggregate: Design §3.4 transitions, the §7.1 delivery rules and the §7.2 two clocks.</summary>
 public class MessageTests
 {
+    /// <summary>Business clock (what people see).</summary>
     private static readonly DateTimeOffset _now = TestData.Start.AddMinutes(-30);
+
+    /// <summary>Infrastructure clock (what the worker schedules by): deliberately far from the business clock.</summary>
+    private static readonly DateTimeOffset _queuedAt = _now.AddDays(-3).AddHours(5);
     private static readonly VenueId _venueId = new(Guid.CreateVersion7(TestData.Created));
 
     // ---------- Queue and expiry by purpose ----------
@@ -19,7 +23,9 @@ public class MessageTests
 
         Assert.Equal(MessageStatus.Queued, message.Status);
         Assert.Equal(0, message.Attempts);
-        Assert.Equal(_now, message.NextAttemptAt);
+        Assert.Equal(_now, message.CreatedAt);
+        Assert.Equal(_queuedAt, message.NextAttemptAt);
+        Assert.Null(message.DeliveryDueAt);
         EventAssert.NoneRaised(message, 0);
     }
 
@@ -30,7 +36,7 @@ public class MessageTests
     [InlineData(MessagePurpose.Refund, 24 * 60)]
     public void Queue_SetsExpiryByPurpose(MessagePurpose purpose, int minutes)
     {
-        Assert.Equal(_now.AddMinutes(minutes), Queue(purpose).ExpiresAt);
+        Assert.Equal(_queuedAt.AddMinutes(minutes), Queue(purpose).ExpiresAt);
     }
 
     [Fact]
@@ -39,10 +45,31 @@ public class MessageTests
         var message = Message.Queue(
             _venueId, TestData.GuestId, MessagePurpose.Reminder, MessageChannel.Sms, Language.Zh, "body",
             [new MessageAction("confirm", "https://example.test/c"), new MessageAction("cancel", "https://example.test/x")],
-            Guid.CreateVersion7(_now), _now, bookingStart: TestData.Start);
+            Guid.CreateVersion7(_now), _now, _queuedAt, bookingStart: TestData.Start);
 
-        Assert.Equal(TestData.Start, message.ExpiresAt);
+        // The booking starts 30 minutes from business-clock now, so the reminder expires 30 minutes after it was queued.
+        Assert.Equal(_queuedAt.AddMinutes(30), message.ExpiresAt);
         Assert.Equal(2, message.Actions.Count);
+    }
+
+    [Fact]
+    public void Queue_ReminderForAStartedBooking_ExpiresAtOnce()
+    {
+        var message = Message.Queue(
+            _venueId, TestData.GuestId, MessagePurpose.Reminder, MessageChannel.Sms, Language.En, "body", [],
+            Guid.CreateVersion7(_now), _now, _queuedAt, bookingStart: _now.AddMinutes(-5));
+
+        Assert.Equal(_queuedAt, message.ExpiresAt);
+        Assert.True(message.IsExpired(_queuedAt));
+    }
+
+    [Fact]
+    public void IsExpired_ComparesWithTheInfrastructureClock()
+    {
+        var message = Queue(MessagePurpose.TableReady);
+
+        Assert.False(message.IsExpired(_queuedAt.AddMinutes(10).AddTicks(-1)));
+        Assert.True(message.IsExpired(_queuedAt.AddMinutes(10)));
     }
 
     [Fact]
@@ -66,12 +93,31 @@ public class MessageTests
         Assert.Equal(at, message.SentAt);
         Assert.Equal("prov-1", message.ProviderRef);
         Assert.Equal(1, message.Attempts);
+        Assert.Null(message.DeliveryDueAt);
         var sent = EventAssert.RaisedOnce<MessageSent>(message, 0);
         Assert.Equal(message.Id, sent.MessageId);
         Assert.Equal(MessagePurpose.TableReady, sent.Purpose);
         Assert.Equal(MessageChannel.Sms, sent.Channel);
         Assert.Equal(message.SubjectId, sent.SubjectId);
         Assert.Equal("+64******567", sent.ToMasked);
+    }
+
+    [Fact]
+    public void MarkSent_WithDeliveryDue_StoresIt_AndDeliveredOrFailedClearsIt()
+    {
+        var delivered = Queue(MessagePurpose.Confirmation);
+        var failed = Queue(MessagePurpose.Confirmation);
+        var due = _queuedAt.AddSeconds(1);
+
+        delivered.MarkSent("prov-1", "+64******567", _now, due);
+        failed.MarkSent("prov-2", "+64******567", _now, due);
+        Assert.Equal(due, delivered.DeliveryDueAt);
+
+        delivered.MarkDelivered(_now);
+        failed.MarkFailed("delivery_failed");
+
+        Assert.Null(delivered.DeliveryDueAt);
+        Assert.Null(failed.DeliveryDueAt);
     }
 
     [Fact]
@@ -142,7 +188,7 @@ public class MessageTests
 
         foreach (var (seconds, attempt) in expectedSeconds.Select((s, i) => (s, i + 1)))
         {
-            var now = _now.AddMinutes(attempt * 20);
+            var now = _queuedAt.AddMinutes(attempt * 20);
             Assert.True(message.ScheduleRetry("timeout", now).IsSuccess);
             Assert.Equal(attempt, message.Attempts);
             Assert.Equal(now.AddSeconds(seconds), message.NextAttemptAt);
@@ -156,7 +202,7 @@ public class MessageTests
     {
         var message = Queue(MessagePurpose.TableReady);
 
-        message.ScheduleRetry("timeout", _now.AddMinutes(9).AddSeconds(56));
+        message.ScheduleRetry("timeout", _queuedAt.AddMinutes(9).AddSeconds(56));
 
         Assert.Equal(MessageStatus.Failed, message.Status);
     }
@@ -204,7 +250,7 @@ public class MessageTests
     }
 
     private static Message Queue(MessagePurpose purpose) =>
-        Message.Queue(_venueId, TestData.GuestId, purpose, MessageChannel.Sms, Language.En, "body", [], Guid.CreateVersion7(_now), _now);
+        Message.Queue(_venueId, TestData.GuestId, purpose, MessageChannel.Sms, Language.En, "body", [], Guid.CreateVersion7(_now), _now, _queuedAt);
 
     private static Message InStatus(MessageStatus status)
     {

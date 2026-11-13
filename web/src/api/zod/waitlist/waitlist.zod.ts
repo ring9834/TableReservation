@@ -71,7 +71,10 @@ export const GetWaitlistResponse = zod.object({
   "notifiedAt": zod.iso.datetime({"offset":true}).nullable(),
   "notifiedTableId": zod.uuid().nullable(),
   "overdue": zod.boolean(),
-  "version": zod.int()
+  "version": zod.int(),
+  "tableReadyStatus": zod.union([zod.null(),zod.union([zod.literal('queued'),zod.literal('sent'),zod.literal('delivered'),zod.literal('failed'),zod.literal(null)])]),
+  "tableReadySentAt": zod.iso.datetime({"offset":true}).nullable(),
+  "tableReadyFailed": zod.boolean()
 })),
   "suggestedEntryId": zod.uuid().nullable()
 })
@@ -114,7 +117,10 @@ export const JoinWaitlistResponse = zod.object({
   "notifiedAt": zod.iso.datetime({"offset":true}).nullable(),
   "notifiedTableId": zod.uuid().nullable(),
   "overdue": zod.boolean(),
-  "version": zod.int()
+  "version": zod.int(),
+  "tableReadyStatus": zod.union([zod.null(),zod.union([zod.literal('queued'),zod.literal('sent'),zod.literal('delivered'),zod.literal('failed'),zod.literal(null)])]),
+  "tableReadySentAt": zod.iso.datetime({"offset":true}).nullable(),
+  "tableReadyFailed": zod.boolean()
 })
 
 export const GetQuotedWaitParams = zod.object({

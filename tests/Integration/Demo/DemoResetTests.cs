@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Domain.Guests;
+using Reservation.Domain.Messaging;
 using Reservation.Domain.Waitlist;
 using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Outbox;
@@ -29,6 +30,7 @@ public sealed class DemoResetTests(PostgresFixture postgres)
             Assert.True(await before.Outbox.AnyAsync(Ct));
             Assert.True(await before.Inbox.CountAsync(Ct) > 1);
             Assert.True(await before.Audit.AnyAsync(Ct));
+            Assert.True(await before.Messages.AnyAsync(Ct));
         }
 
         await database.ResetAsync(DemoTime.Now);
@@ -74,7 +76,10 @@ public sealed class DemoResetTests(PostgresFixture postgres)
         var seated = await db.Bookings.SingleAsync(b => b.Reference == BookingReference.Parse("GD2A4K").Value, Ct);
         seated.Complete(CompletionSource.ClearedByHost, null, now);
 
-        db.AddRange(guest, walkIn, waiting);
+        var text = Message.Queue(GoldenDragon.VenueId, guest.Id, MessagePurpose.TableReady, MessageChannel.Sms, Language.En,
+            "Golden Dragon: your table is ready!", [], waiting.Id.Value, now, DemoTime.InfrastructureStart);
+
+        db.AddRange(guest, walkIn, waiting, text);
         db.Inbox.Add(new InboxEntry("pos-webhook", "msg-1", now));
         await db.SaveChangesAsync(Ct);
     }

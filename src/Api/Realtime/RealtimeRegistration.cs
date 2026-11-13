@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.OpenApi;
 using Reservation.Api.Auth;
 using Reservation.Domain.Bookings;
+using Reservation.Infrastructure.Messaging;
 using Reservation.Infrastructure.Outbox;
 
 namespace Reservation.Api.Realtime;
@@ -12,6 +13,9 @@ internal static class RealtimeRegistration
     {
         services.AddSignalR();
         services.AddSingleton<IVenueBroadcaster, HubVenueBroadcaster>();
+
+        // Replaces Infrastructure's no-op: message changes reach the screens after commit (Design §7.2).
+        services.AddSingleton<IMessageChangeNotifier, MessageChangePusher>();
         foreach (var eventType in new EventTypeRegistry().All.Select(e => e.Type))
         {
             services.AddEventHandler(eventType, typeof(RealtimeNotifier<>).MakeGenericType(eventType), idempotent: false);

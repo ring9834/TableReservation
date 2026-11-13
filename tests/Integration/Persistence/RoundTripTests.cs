@@ -98,11 +98,12 @@ public sealed class RoundTripTests(PostgresFixture postgres)
             guest = Guest.Create(GoldenDragon.VenueId, PersonName.Create("周杰 Zhou Jie").Value, PhoneNumber.Create("+64 21 011 0099").Value,
                 "zhou@example.test", Language.Zh, "Peanuts", now);
             guest.RecordVisit(Money.FromNzd(9_900), now);
-            entry = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, guest.Name, PartySize.Of(4), 25, now).Value;
+            entry = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, guest.Name, PartySize.Of(4), 25, now, Language.Zh).Value;
             Check(entry.Notify(GoldenDragon.TableId("T4"), now.AddMinutes(20)));
             message = Message.Queue(GoldenDragon.VenueId, guest.Id, MessagePurpose.TableReady, MessageChannel.Sms, Language.Zh,
                 "您的餐桌已准备好", [new MessageAction("confirm", "https://example.test/c"), new MessageAction("cancel", "https://example.test/x")],
-                entry.Id.Value, now.AddMinutes(20));
+                entry.Id.Value, now.AddMinutes(20), now.AddMinutes(20));
+            Check(message.MarkSent("panel-1", guest.Mobile.Masked(), now.AddMinutes(20), now.AddMinutes(21)));
             db.AddRange(guest, entry, message);
             await db.SaveChangesAsync(Ct);
         }
@@ -114,10 +115,10 @@ public sealed class RoundTripTests(PostgresFixture postgres)
 
         Assert.Equal((guest.Name, guest.Mobile, guest.Email, guest.Language, guest.AllergyNotes, guest.VisitCount, guest.LastBillTotal, guest.LastVisitAt, guest.LastEventSequence),
             (g.Name, g.Mobile, g.Email, g.Language, g.AllergyNotes, g.VisitCount, g.LastBillTotal, g.LastVisitAt, g.LastEventSequence));
-        Assert.Equal((entry.GuestId, entry.PartySize, entry.QuotedWaitMinutes, entry.Status, entry.JoinedAt, entry.NotifiedAt, entry.NotifiedTableId, entry.LastEventSequence),
-            (w.GuestId, w.PartySize, w.QuotedWaitMinutes, w.Status, w.JoinedAt, w.NotifiedAt, w.NotifiedTableId, w.LastEventSequence));
-        Assert.Equal((message.Purpose, message.Channel, message.Language, message.Body, message.SubjectId, message.Status, message.ExpiresAt, message.NextAttemptAt),
-            (m.Purpose, m.Channel, m.Language, m.Body, m.SubjectId, m.Status, m.ExpiresAt, m.NextAttemptAt));
+        Assert.Equal((entry.GuestId, entry.PartySize, entry.QuotedWaitMinutes, entry.Status, entry.JoinedAt, entry.NotifiedAt, entry.NotifiedTableId, entry.Language, entry.LastEventSequence),
+            (w.GuestId, w.PartySize, w.QuotedWaitMinutes, w.Status, w.JoinedAt, w.NotifiedAt, w.NotifiedTableId, w.Language, w.LastEventSequence));
+        Assert.Equal((message.Purpose, message.Channel, message.Language, message.Body, message.SubjectId, message.Status, message.ExpiresAt, message.NextAttemptAt, message.DeliveryDueAt, message.SentAt),
+            (m.Purpose, m.Channel, m.Language, m.Body, m.SubjectId, m.Status, m.ExpiresAt, m.NextAttemptAt, m.DeliveryDueAt, m.SentAt));
         Assert.Equal(message.Actions, m.Actions);
         Assert.NotEqual(0u, g.Version);
     }
@@ -138,6 +139,7 @@ public sealed class RoundTripTests(PostgresFixture postgres)
     {
         Assert.Equal(expected.Id, actual.Id);
         Assert.Equal(expected.VenueId, actual.VenueId);
+        Assert.Equal(expected.Language, actual.Language);
         Assert.Equal(expected.GuestId, actual.GuestId);
         Assert.Equal(expected.Reference, actual.Reference);
         Assert.Equal(expected.Channel, actual.Channel);
