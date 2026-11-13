@@ -15,6 +15,7 @@ type Props = Readonly<{
   onJoin: () => void;
   onDismissSuggestion: () => void;
   onSeated: (tableId: string) => void;
+  onNotified: () => void;
 }>;
 
 /**
@@ -31,6 +32,7 @@ export function WaitlistPanel({
   onJoin,
   onDismissSuggestion,
   onSeated,
+  onNotified,
 }: Props) {
   const { t } = useTranslation();
   const freedTableName = freedTableId ? tableNames.get(freedTableId) : null;
@@ -81,7 +83,9 @@ export function WaitlistPanel({
               tableNames={tableNames}
               suggested={entry.id === suggestedEntryId}
               freedTableId={freedTableId}
+              timeZone={waitlist.timeZone}
               onSeated={onSeated}
+              onNotified={onNotified}
             />
           ))}
         </ol>

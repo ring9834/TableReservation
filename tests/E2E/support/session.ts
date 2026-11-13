@@ -7,6 +7,9 @@ import path from "node:path";
  */
 export const hostSessionPath = path.join(__dirname, "..", ".auth", "host.json");
 
+/** The presenter session, signed in once by global-setup.ts the same way (Design §18.7). Git-ignored too. */
+export const presenterSessionPath = path.join(__dirname, "..", ".auth", "presenter.json");
+
 /** The API the web app calls (CI: http://localhost:5000), for the clean-up, and Golden Dragon's seeded ID. */
 export const apiBaseUrl =
   process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://localhost:5001";

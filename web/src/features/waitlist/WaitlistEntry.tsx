@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSeatWalkIn } from "@/api/endpoints/seating/seating";
@@ -12,6 +13,7 @@ import { invalidateHostQueries } from "@/features/host/hostQueries";
 import { useHostActionError, useIdempotencyKey } from "@/features/host/useHostActionError";
 import { isApiError } from "@/lib/apiFetch";
 import { venueId } from "@/lib/config";
+import { formatInstantTime } from "@/lib/format";
 import styles from "@/features/host/actions.module.css";
 
 type Mode = "seat" | "notify" | null;
@@ -22,16 +24,28 @@ type Props = Readonly<{
   /** This entry is the suggestion for a freed table (AC4.2). */
   suggested: boolean;
   freedTableId: string | null;
+  /** The venue's time zone, for the time the "table ready" text went out. */
+  timeZone: string;
   onSeated: (tableId: string) => void;
+  onNotified: () => void;
 }>;
 
 /**
  * One waiting party (AC3.6, AC3.7, AC4.5, AC4.6): time waited, quote, status, overdue badge, and the host's actions.
- * "Seat" and "Mark notified" choose a table, pre-selecting the notified table, then the freed table if this party is
- * the suggestion, then the API's suggestion. Every action sends the entry's version as shown.
+ * "Seat" and "Notify" choose a table, pre-selecting the notified table, then the freed table if this party is the
+ * suggestion, then the API's suggestion. Notify sends the guest a "table ready" text (M7a); its status shows on the
+ * entry, and a failed text asks the host to call (AC4.4, Design §18.7). Every action sends the entry's version as shown.
  */
-export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSeated }: Props) {
-  const { t } = useTranslation();
+export function WaitlistEntry({
+  entry,
+  tableNames,
+  suggested,
+  freedTableId,
+  timeZone,
+  onSeated,
+  onNotified,
+}: Props) {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const messageFor = useHostActionError();
   const idempotency = useIdempotencyKey();
@@ -95,12 +109,14 @@ export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSe
   };
 
   const notifyForTable = (id: string) =>
-    run(() =>
-      notify.mutateAsync({
-        venueId,
-        id: entry.id,
-        data: { tableId: id, version: entry.version },
-      }),
+    run(
+      () =>
+        notify.mutateAsync({
+          venueId,
+          id: entry.id,
+          data: { tableId: id, version: entry.version },
+        }),
+      onNotified,
     );
 
   const endAs = (outcome: WaitlistOutcome) =>
@@ -111,6 +127,7 @@ export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSe
   const headingId = `waitlist-entry-${entry.id}`;
   const notifiedTable = entry.notifiedTableId ? tableNames.get(entry.notifiedTableId) : null;
   const freedTableName = freedTableId ? tableNames.get(freedTableId) : null;
+  const textStatus = textStatusLine(entry, timeZone, i18n.language, t);
 
   return (
     <li
@@ -141,6 +158,12 @@ export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSe
             {t("waitlist.overdue")}
           </span>
         )}
+        {entry.tableReadyFailed && (
+          <span className={`${styles.statusBadge} ${styles.textFailed}`} data-testid="text-failed">
+            <span aria-hidden="true">⚠ </span>
+            {t("waitlist.textFailed")}
+          </span>
+        )}
         {suggested && freedTableName && (
           <span className={`${styles.statusBadge} ${styles.suggestedBadge}`}>
             <span aria-hidden="true">★ </span>
@@ -148,6 +171,11 @@ export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSe
           </span>
         )}
       </p>
+      {textStatus && (
+        <p className={styles.textStatus} data-testid="text-status">
+          {textStatus}
+        </p>
+      )}
 
       <div className={styles.buttonRow}>
         <button
@@ -199,7 +227,6 @@ export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSe
             legend={t("host.actions.chooseTable")}
             freedTableId={suggested ? freedTableId : null}
           />
-          {mode === "notify" && <p className={styles.hint}>{t("waitlist.notifyHint")}</p>}
           <button
             type="button"
             className={styles.primaryButton}
@@ -220,4 +247,20 @@ export function WaitlistEntry({ entry, tableNames, suggested, freedTableId, onSe
       )}
     </li>
   );
+}
+
+/**
+ * "Notified 6:26 pm · Delivered" from the entry's latest "table ready" text (AC4.4): the time it was sent, or while it
+ * is still queued the time of the Notify. A failed text shows as its own badge instead ("call the guest"); a text
+ * replaced by a newer Notify is never the latest one, so it never shows as failed (Design §7.2).
+ */
+function textStatusLine(entry: WaitlistItem, timeZone: string, language: string, t: TFunction) {
+  const status = entry.tableReadyStatus;
+  if (!status || status === "failed") return null;
+  const at = status === "queued" ? entry.notifiedAt : entry.tableReadySentAt;
+  if (!at) return null;
+  const time = formatInstantTime(at, timeZone, language);
+  const key =
+    status === "queued" ? "textSending" : status === "sent" ? "textSent" : "textDelivered";
+  return t(`waitlist.${key}`, { time });
 }

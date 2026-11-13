@@ -352,6 +352,18 @@
   border: 2px solid #b91c1c;
 }
 
+.textFailed {
+  color: #1c1917;
+  background: #fee2e2;
+  border: 2px solid #b91c1c;
+}
+
+.textStatus {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
 .suggestedBadge {
   color: #1c1917;
   background: #ede9fe;

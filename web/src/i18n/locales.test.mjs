@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { purposes, statusKeys } from "../features/presenter/messageStatus.mjs";
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"));
 const en = load("en.json");
@@ -120,5 +121,16 @@ test("every field rule code the waitlist form can meet has a message", () => {
 test("every waitlist status has a label", () => {
   for (const status of ["waiting", "notified", "seated", "walkedAway", "removed"]) {
     assert.ok(valueAt(en, `waitlistStatus.${status}`), `No label for waitlist status ${status}`);
+  }
+});
+
+test("every message purpose and phone panel status has a label (Design §18.7)", () => {
+  for (const resources of [en, zh]) {
+    for (const purpose of purposes) {
+      assert.ok(valueAt(resources, `phone.purpose.${purpose}`), `No label for purpose ${purpose}`);
+    }
+    for (const key of statusKeys) {
+      assert.ok(valueAt(resources, `phone.status.${key}`), `No label for message status ${key}`);
+    }
   }
 });

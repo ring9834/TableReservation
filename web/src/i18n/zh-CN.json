@@ -181,6 +181,34 @@
       "not_signed_in": "登录已过期，正在前往登录页面…"
     }
   },
+  "presenter": {
+    "documentTitle": "演示 · {{venue}}",
+    "title": "{{venue}} · 演示",
+    "presenterOnly": "此页面仅供演示者使用。请用演示者密码登录以查看手机面板。",
+    "signInAgain": "以演示者身份登录",
+    "openHost": "打开迎宾页面"
+  },
+  "phone": {
+    "heading": "短信",
+    "empty": "暂无短信",
+    "to": "发送至 {{mobile}}",
+    "purpose": {
+      "confirmation": "预订确认",
+      "reminder": "提醒",
+      "tableReady": "餐桌已就绪",
+      "cancellation": "取消",
+      "refund": "退款"
+    },
+    "status": {
+      "sending": "发送中…",
+      "sent": "已发送",
+      "delivered": "已送达",
+      "replaced": "已被替换",
+      "expired": "未发送（已过时）",
+      "senderFailed": "未发送（短信服务出错）",
+      "notSent": "未发送"
+    }
+  },
   "tableState": {
     "free": "空闲",
     "booked": "已预订",
@@ -207,12 +235,11 @@
     "freedTable": "刚空出",
     "suggestion": "{{table}} 已空出：建议 {{name}}（{{count}} 位）。",
     "dismiss": "忽略",
-    "notifyHint": "记录您已告知客人餐桌已准备好。短信功能将在后续版本加入。",
     "joined": "已加入候位名单。",
     "actions": {
       "seat": "入座",
-      "notify": "标记为已通知",
-      "notifyFor": "标记为已通知（{{table}}）",
+      "notify": "通知",
+      "notifyFor": "通知（{{table}}）",
       "walkedAway": "已离开",
       "remove": "移除"
     },
@@ -227,7 +254,12 @@
       "quoteHintEmpty": "输入人数后显示建议等候时间。",
       "submit": "加入候位名单",
       "submitting": "正在加入…"
-    }
+    },
+    "textSending": "已通知 {{time}} · 发送中…",
+    "textSent": "已通知 {{time}} · 已发送",
+    "textDelivered": "已通知 {{time}} · 已送达",
+    "textFailed": "短信未发出：请致电客人",
+    "notifiedAnnouncement": "已发送餐桌就绪短信。"
   },
   "waitlistStatus": {
     "waiting": "等候中",

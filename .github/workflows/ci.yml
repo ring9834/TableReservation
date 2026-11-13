@@ -142,6 +142,7 @@ jobs:
       Demo__HostPasscode: ci-host-passcode
       Demo__PresenterPasscode: ci-presenter-passcode
       E2E_HOST_PASSCODE: ci-host-passcode
+      E2E_PRESENTER_PASSCODE: ci-presenter-passcode
       Cors__AllowedOrigins__0: http://localhost:3000
       # Development: migrations and the Golden Dragon seed run at start-up (Database:MigrateOnStartup), and the
       # business clock is fixed at 18:25 today (Demo:Clock, Design §17).
