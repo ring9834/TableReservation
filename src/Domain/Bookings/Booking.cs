@@ -22,7 +22,7 @@ public sealed class Booking : AggregateRoot<BookingId>
 
     private Booking(
         BookingId id, VenueId venueId, GuestId? guestId, PersonName? contactName, BookingReference reference, BookingChannel channel,
-        PartySize partySize, TimeRange period, BookingTerms terms, string? notes, string? occasion, DateTimeOffset createdAt)
+        PartySize partySize, TimeRange period, BookingTerms terms, string? notes, string? occasion, Language language, DateTimeOffset createdAt)
     {
         Id = id;
         VenueId = venueId;
@@ -35,6 +35,7 @@ public sealed class Booking : AggregateRoot<BookingId>
         Terms = terms;
         Notes = notes;
         Occasion = occasion;
+        Language = language;
         CreatedAt = createdAt;
     }
 
@@ -61,6 +62,12 @@ public sealed class Booking : AggregateRoot<BookingId>
     public string? Notes { get; }
 
     public string? Occasion { get; }
+
+    /// <summary>
+    /// The language chosen for this booking (M7a): the guest's language at submit, or for a walk-in seated from the
+    /// waitlist the entry's. Messages about the booking go out in it; the guest profile keeps its own.
+    /// </summary>
+    public Language Language { get; }
 
     public DateTimeOffset CreatedAt { get; }
 
@@ -104,7 +111,8 @@ public sealed class Booking : AggregateRoot<BookingId>
     /// </summary>
     public static Result<Booking> Create(
         Venue venue, GuestId? guestId, PersonName contactName, BookingReference reference, BookingChannel channel, PartySize partySize,
-        DateTimeOffset startsAt, IReadOnlyCollection<TableId> tableIds, string? notes, string? occasion, DateTimeOffset now)
+        DateTimeOffset startsAt, IReadOnlyCollection<TableId> tableIds, string? notes, string? occasion, DateTimeOffset now,
+        Language language = Language.En)
     {
         ArgumentNullException.ThrowIfNull(venue);
         ArgumentNullException.ThrowIfNull(contactName);
@@ -135,7 +143,7 @@ public sealed class Booking : AggregateRoot<BookingId>
         var terms = BookingTerms.From(settings, venue.SettingsVersion, partySize, now);
         var booking = new Booking(
             BookingId.New(now), venue.Id, guestId, contactName, reference, channel, partySize,
-            TimeRange.FromStart(startsAt, terms.Turn), terms, notes, occasion, now);
+            TimeRange.FromStart(startsAt, terms.Turn), terms, notes, occasion, language, now);
         booking.AssignTables(tableIds);
 
         // Deposits apply to online bookings only; phone bookings never start as PendingPayment (§8.2).
@@ -158,7 +166,7 @@ public sealed class Booking : AggregateRoot<BookingId>
     /// <summary>Walk-in, seated straight away for the turn time (§3.1 row "→ Seated", CreateWalkIn).</summary>
     public static Result<Booking> CreateWalkIn(
         Venue venue, GuestId? guestId, PersonName? contactName, BookingReference reference, PartySize partySize,
-        IReadOnlyCollection<TableId> tableIds, WaitlistEntryId? waitlistEntryId, DateTimeOffset now)
+        IReadOnlyCollection<TableId> tableIds, WaitlistEntryId? waitlistEntryId, DateTimeOffset now, Language language = Language.En)
     {
         ArgumentNullException.ThrowIfNull(venue);
         ArgumentNullException.ThrowIfNull(reference);
@@ -173,7 +181,7 @@ public sealed class Booking : AggregateRoot<BookingId>
         var terms = BookingTerms.From(venue.Settings, venue.SettingsVersion, partySize, now);
         var booking = new Booking(
             BookingId.New(now), venue.Id, guestId, contactName, reference, BookingChannel.WalkIn, partySize,
-            TimeRange.FromStart(now, terms.Turn), terms, notes: null, occasion: null, now)
+            TimeRange.FromStart(now, terms.Turn), terms, notes: null, occasion: null, language, now)
         {
             Status = BookingStatus.Seated,
             SeatedAt = now,

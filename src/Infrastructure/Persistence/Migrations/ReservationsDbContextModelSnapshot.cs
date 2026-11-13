@@ -68,6 +68,11 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("hold_expires_at");
 
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("language");
+
                     b.Property<long>("LastEventSequence")
                         .HasColumnType("bigint")
                         .HasDefaultValue(0L)
@@ -234,6 +239,10 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("delivered_at");
 
+                    b.Property<DateTimeOffset?>("DeliveryDueAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivery_due_at");
+
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
@@ -300,9 +309,19 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_messages");
 
+                    b.HasIndex("DeliveryDueAt")
+                        .HasDatabaseName("ix_messages_delivery_due")
+                        .HasFilter("status = 'Sent'");
+
                     b.HasIndex("NextAttemptAt")
                         .HasDatabaseName("ix_messages_queued")
                         .HasFilter("status = 'Queued'");
+
+                    b.HasIndex("SubjectId")
+                        .HasDatabaseName("ix_messages_subject_id");
+
+                    b.HasIndex("VenueId", "CreatedAt")
+                        .HasDatabaseName("ix_messages_venue_created");
 
                     b.ToTable("messages", (string)null);
                 });
@@ -458,6 +477,11 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("JoinedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("joined_at");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("language");
 
                     b.Property<long>("LastEventSequence")
                         .HasColumnType("bigint")

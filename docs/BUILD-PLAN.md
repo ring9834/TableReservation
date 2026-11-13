@@ -414,7 +414,65 @@ Playwright (step 3, using the shared session):
 Ask before adding packages. Record decisions §18 left open in Design.md.
 ```
 
-### M7 onward
+### M7a Messaging back end
+```
+Milestone M7a: messaging back end (Design §3.4, §7, §7.1, §10.3, §15, §16; Requirements AC1.6, AC4.3, AC4.4).
+API, workers and tests only; the presenter phone panel and the host screen change come in M7b.
+Read CLAUDE.md first, including rule 14 (two clocks).
+
+1. Docs first. In docs/BUILD-PLAN.md add an "M7a" prompt block containing this prompt (minus the last
+   two lines) above "M7 onward", and rename that heading "M8 onward". Note decisions in Design.md as a
+   new §7.2 Build notes (M7a) table.
+
+2. Creating messages. A NotificationHandler (an outbox handler, inbox-idempotent, own savepoint) creates
+   Message rows as Queued; it never calls a sender.
+   - BookingCreated → Confirmation, only for online and phone bookings created as Booked (not walk-ins,
+     not seated-from-waitlist, not PendingPayment; deposit bookings get theirs on DepositCaptured in M8).
+     No manage-booking link yet: that is M10 (GuestLinkSigner, token in the query string).
+   - WaitlistNotified → TableReady, to the entry's guest, in the language chosen when joining (M6b).
+   - MessageComposer + ITemplateStore: per purpose and language, English and Simplified Chinese, in the
+     API's resource files. Language comes from the booking/entry, not the screen. Keep bodies short, SMS-like;
+     include the venue name; TableReady says the table is ready and to come to the host stand.
+   - Say what a repeated Notify does (same table, different table) and test it.
+
+3. Delivering messages: MessageDeliveryWorker as §7.1 (signal or 1 s, LIMIT 20, FOR UPDATE SKIP LOCKED,
+   backoff 5 s/30 s/2 min/10 min, expiry by purpose, permanent errors Failed at once, message ID passed as
+   the provider reference). IMessageSender with PhonePanelSender for the demo.
+   - Two clocks: the worker's loop, claiming due rows, next_attempt_at, expires_at and the delivery delay use
+     the "infrastructure" clock. With the business clock fixed at 18:25, texts must still go out, retry and
+     expire. Times people see (sent at, delivered at, the waitlist "time sent") come from the business clock.
+     Compare against a clock value passed in, not SQL now(), so tests control it.
+   - PhonePanelSender marks Delivered about 1 s after Sent. No Task.Delay fire-and-forget: e.g. the worker
+     also picks up Sent rows whose delivery is due. Delivered survives a restart.
+   - MarkSent raises MessageSent through the outbox. Every status change pushes messageLogChanged {messageIds}
+     to venue:{id}, only after the transaction commits. Handlers signal the worker after commit too.
+   - A TableReady that ends Failed is flagged on the waitlist entry (§7.1 Visibility).
+   - Never log bodies, names or phone numbers: message ID, purpose, status, attempts only.
+
+4. API (regenerate docs/api/openapi.json and the orval client):
+   - GET /venues/{venueId}/messages: Presenter role. Today's messages, newest last, at most 100: id, purpose,
+     language, body, masked mobile, status, sentAt, deliveredAt, lastError for failed, subject (booking or
+     waitlist entry ID). Check the presenter session has the venue_ids claim and joins the hub group.
+   - Waitlist entries (GET /waitlist) gain the TableReady message's status and sentAt, plus the failed flag
+     (AC4.4). Additive only.
+   - Demo reset and ResetIfStale also clear messages. The seed creates no messages.
+
+5. Tests first (Testcontainers, TestClock with manual timers):
+   - Composer: every purpose used here × en/zh-CN; no missing template.
+   - Handlers: each event delivered twice → one message; walk-ins and PendingPayment get no confirmation.
+   - Worker: Queued → Sent → Delivered with the business clock fixed; backoff steps; expiry (TableReady
+     10 min); permanent error → Failed at once with no retry; two workers in parallel never send a message
+     twice; a crash after send then retry reuses the same provider reference; messageLogChanged only after
+     commit.
+   - End to end in the API: create an online booking → Confirmation Delivered; notify a zh-CN waitlist entry →
+     Chinese TableReady, and GET /waitlist shows its status and sentAt.
+   - Log scrubbing: extend LogScrubbingTests so no body or full number reaches the logs.
+
+Verification: dotnet build, dotnet test, web lint/type-check/build with the regenerated client
+(M6b screens must still compile), and the Playwright suite still green.
+```
+
+### M8 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse

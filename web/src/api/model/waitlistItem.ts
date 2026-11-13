@@ -4,6 +4,7 @@
  * Reservation demo API
  * OpenAPI spec version: v1
  */
+import type { MessageStatus } from './messageStatus';
 import type { WaitlistStatus } from './waitlistStatus';
 
 export interface WaitlistItem {
@@ -22,4 +23,8 @@ export interface WaitlistItem {
   notifiedTableId: string | null;
   overdue: boolean;
   version: number;
+  tableReadyStatus: null | MessageStatus;
+  /** @nullable */
+  tableReadySentAt: string | null;
+  tableReadyFailed: boolean;
 }

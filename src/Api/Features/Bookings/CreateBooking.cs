@@ -225,7 +225,7 @@ internal sealed partial class BookingCreator(
 
         var created = Booking.Create(
             venue, guest.Id, PersonName.Create(request.Name).Value, await BookingReferences.NewAsync(db, cancellationToken), channel, partySize, startsAt, tableIds,
-            Blank(request.Notes), Blank(request.Occasion), now);
+            Blank(request.Notes), Blank(request.Occasion), now, request.Language);
         if (created.IsFailure)
         {
             return created.Error!;

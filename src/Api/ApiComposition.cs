@@ -6,6 +6,7 @@ using Reservation.Api.Auth;
 using Reservation.Api.Common;
 using Reservation.Api.Features.Bookings;
 using Reservation.Api.Features.Bookings.Availability;
+using Reservation.Api.Messaging;
 using Reservation.Api.Pipeline;
 using Reservation.Api.Realtime;
 
@@ -71,6 +72,7 @@ internal static class ApiComposition
         });
 
         services.AddRealtime();
+        services.AddMessages();
 
         services.AddValidatorsFromAssemblyContaining<CreateBookingRequestValidator>(includeInternalTypes: true);
         services.AddFeatures(typeof(ApiComposition).Assembly);

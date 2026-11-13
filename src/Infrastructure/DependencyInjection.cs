@@ -6,6 +6,7 @@ using Npgsql;
 using Reservation.Infrastructure.Audit;
 using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Idempotency;
+using Reservation.Infrastructure.Messaging;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
@@ -15,8 +16,9 @@ public static class DependencyInjection
 {
     /// <summary>
     /// The two clocks, the database (one <see cref="NpgsqlDataSource"/>, shared with the health checks), the EF Core
-    /// context with the outbox interceptor, the outbox workers and the audit consumer, the request venue context,
-    /// idempotency keys and the demo seed and reset. Needs <c>IConfiguration</c> for the <c>Outbox</c> options.
+    /// context with the outbox and message interceptors, the outbox workers and the audit consumer, message delivery,
+    /// the request venue context, idempotency keys and the demo seed and reset. Needs <c>IConfiguration</c> for the
+    /// <c>Outbox</c> and <c>Messaging</c> options.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="connectionString">PostgreSQL connection string; ignored when a data source is already registered.</param>
@@ -39,7 +41,9 @@ public static class DependencyInjection
         services.AddDbContext<ReservationsDbContext>((provider, options) =>
         {
             options.UseReservationsDatabase(provider.GetRequiredService<NpgsqlDataSource>())
-                .AddInterceptors(provider.GetRequiredService<OutboxSaveChangesInterceptor>());
+                .AddInterceptors(
+                    provider.GetRequiredService<OutboxSaveChangesInterceptor>(),
+                    provider.GetRequiredService<MessageChangeInterceptor>());
             configureDatabase?.Invoke(options);
         });
 
@@ -52,11 +56,31 @@ public static class DependencyInjection
         services.AddHostedService(provider => provider.GetRequiredService<IdempotencyHousekeeping>());
 
         AddOutbox(services);
+        AddMessaging(services);
 
         services.AddScoped<DemoSeeder>();
         services.AddScoped<DemoReset>();
         services.AddScoped<DatabaseInitializer>();
         return services;
+    }
+
+    /// <summary>
+    /// Message delivery (Design §7.1, §7.2): the worker, its signal, the demo phone-panel sender and a notifier that pushes
+    /// nothing. The API replaces the notifier with its SignalR push; tests may replace the sender.
+    /// </summary>
+    private static void AddMessaging(IServiceCollection services)
+    {
+        services.AddOptions<MessagingOptions>()
+            .BindConfiguration(MessagingOptions.Section)
+            .Validate(o => o.IsValid, "Messaging:PollInterval and Messaging:BatchSize must be positive; Messaging:PhonePanelDeliveryDelay not negative.")
+            .ValidateOnStart();
+
+        services.AddSingleton<MessageSignal>();
+        services.AddScoped<MessageChangeInterceptor>();
+        services.TryAddSingleton<IMessageChangeNotifier, NullMessageChangeNotifier>();
+        services.TryAddScoped<IMessageSender, PhonePanelSender>();
+        services.AddSingleton<MessageDeliveryWorker>();
+        services.AddHostedService(provider => provider.GetRequiredService<MessageDeliveryWorker>());
     }
 
     /// <summary>The provider settings every <see cref="ReservationsDbContext"/> uses (also in tests).</summary>

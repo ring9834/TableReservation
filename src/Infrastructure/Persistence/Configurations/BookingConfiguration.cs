@@ -24,6 +24,7 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(x => x.Status);
         builder.Property(x => x.Notes);
         builder.Property(x => x.Occasion);
+        builder.Property(x => x.Language);
         builder.Property(x => x.CreatedAt);
         builder.Property(x => x.HoldExpiresAt);
         builder.Property(x => x.SeatedAt);

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Reservation.Domain.Common;
 using Reservation.Infrastructure;
+using Reservation.Infrastructure.Messaging;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
@@ -20,7 +21,7 @@ namespace Reservation.Tests.Integration.Support;
 /// </summary>
 public sealed class EventHarness : IAsyncDisposable
 {
-    private EventHarness(TestDatabase database)
+    private EventHarness(TestDatabase database, Action<IServiceCollection>? configure)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -48,6 +49,11 @@ public sealed class EventHarness : IAsyncDisposable
             services.AddEventHandler(eventType, typeof(ProbeHandler<>).MakeGenericType(eventType), idempotent: false);
         }
 
+        // Message changes and sends, recorded (tests may replace the sender with their own).
+        services.AddSingleton(Notifier);
+        services.AddSingleton<IMessageChangeNotifier>(Notifier);
+        configure?.Invoke(services);
+
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
@@ -59,13 +65,30 @@ public sealed class EventHarness : IAsyncDisposable
 
     public EventRecorder Recorder { get; } = new();
 
+    /// <summary>Every <c>messageLogChanged</c> the message interceptor would push, after commit.</summary>
+    public RecordingMessageChangeNotifier Notifier { get; } = new();
+
+    public MessageDeliveryWorker MessageWorker => Services.GetRequiredService<MessageDeliveryWorker>();
+
+    public MessageSignal MessageSignal => Services.GetRequiredService<MessageSignal>();
+
     public ServiceProvider Services { get; }
 
     public OutboxDispatcher Dispatcher => Services.GetRequiredService<OutboxDispatcher>();
 
     public OutboxSignal Signal => Services.GetRequiredService<OutboxSignal>();
 
-    public static EventHarness Create(TestDatabase database) => new(database);
+    public static EventHarness Create(TestDatabase database, Action<IServiceCollection>? configure = null) => new(database, configure);
+
+    /// <summary>A second, independent message worker sharing the same services (two workers at once, or a restart).</summary>
+    public MessageDeliveryWorker NewMessageWorker() => new(
+        Services.GetRequiredService<IServiceScopeFactory>(),
+        MessageSignal,
+        Services.GetRequiredService<IOptions<MessagingOptions>>(),
+        Services.GetRequiredService<IOptions<OutboxOptions>>(),
+        BusinessClock,
+        InfrastructureClock,
+        Services.GetRequiredService<ILogger<MessageDeliveryWorker>>());
 
     /// <summary>A second, independent dispatcher sharing the same services (two workers at once).</summary>
     public OutboxDispatcher NewDispatcher() => new(
@@ -92,6 +115,24 @@ public sealed class EventHarness : IAsyncDisposable
     public AsyncServiceScope Scope() => Services.CreateAsyncScope();
 
     public ValueTask DisposeAsync() => Services.DisposeAsync();
+}
+
+/// <summary>The message changes <see cref="MessageChangeInterceptor"/> handed on after each commit.</summary>
+public sealed class RecordingMessageChangeNotifier : IMessageChangeNotifier
+{
+    private readonly ConcurrentQueue<MessageChanges> _changes = new();
+
+    public IReadOnlyList<MessageChanges> Changes => [.. _changes];
+
+    public IReadOnlyList<Guid> MessageIds => [.. _changes.SelectMany(c => c.MessageIds)];
+
+    public void Clear() => _changes.Clear();
+
+    public Task NotifyAsync(MessageChanges changes, CancellationToken cancellationToken)
+    {
+        _changes.Enqueue(changes);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>What the test consumers saw, and which aggregates make the failing consumer throw.</summary>

@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Reservation.Domain.Common;
+using Reservation.Domain.Messaging;
 using Reservation.Infrastructure;
 using Reservation.Infrastructure.Demo;
 using Reservation.Tests.Integration.Support;
@@ -21,12 +23,14 @@ public sealed class DatabaseInitializerTests(PostgresFixture postgres)
     public async Task Stale_data_is_reset_for_today_when_ResetIfStale_is_on()
     {
         await using var database = await TestDatabase.CreateAsync(postgres); // seeded for DemoTime.Tonight
+        await AddMessageAsync(database);
         var nextDay = DemoTime.Now.AddDays(1);
         var logs = new LogCapture();
 
         await InitializeAsync(database, nextDay, resetIfStale: true, logs);
 
         await using var db = database.Context();
+        Assert.Equal(0, await db.Messages.CountAsync(Ct));
         var starts = await db.Bookings.Select(b => b.Period).ToListAsync(Ct);
         Assert.Equal(11, starts.Count);
         Assert.All(starts, p => Assert.Equal(DemoTime.Tonight.AddDays(1), GoldenDragon.ServiceDate(p.Start)));
@@ -104,6 +108,16 @@ public sealed class DatabaseInitializerTests(PostgresFixture postgres)
         using var provider = services.BuildServiceProvider();
 
         Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<DemoClockOptions>>().Value);
+    }
+
+    /// <summary>Yesterday's text (M7a): a stale reset clears messages with everything else.</summary>
+    private static async Task AddMessageAsync(TestDatabase database)
+    {
+        await using var db = database.Context();
+        var booking = await db.Bookings.FirstAsync(b => b.GuestId != null, Ct);
+        db.Messages.Add(Message.Queue(GoldenDragon.VenueId, booking.GuestId!.Value, MessagePurpose.Confirmation, MessageChannel.Sms,
+            Language.En, "Golden Dragon: you're booked.", [], booking.Id.Value, DemoTime.Now, DemoTime.InfrastructureStart));
+        await db.SaveChangesAsync(Ct);
     }
 
     private static async Task InitializeAsync(TestDatabase database, DateTimeOffset now, bool resetIfStale, LogCapture logs)

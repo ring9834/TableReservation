@@ -118,6 +118,31 @@ export const ensureSeated = async (tableName: string, partySize: number) =>
     return ((await seat.json()) as { reference: string }).reference;
   });
 
+type TableSuggestion = { table: { id: string; name: string; seats: number } | null };
+
+/**
+ * Seats an "E2E stand-in" walk-in of `partySize` on every table the API still suggests for that party now
+ * (GET …/tables/suggestion, then POST …/walk-ins), until it suggests none, so "no table fits" holds whatever was
+ * cleared by hand since the last reset. Returns the stand-ins' references for the clean-up. Stops after `limit`
+ * seatings in case the API keeps suggesting a table.
+ */
+export const seatStandInsUntilNoTable = async (partySize: number, limit = 20) =>
+  withHostApi(async (api) => {
+    const references: string[] = [];
+    for (let i = 0; i < limit; i++) {
+      const answer = await api.get(`${venuePath}/tables/suggestion?partySize=${partySize}`);
+      expect(answer.ok(), `table suggestion answered ${answer.status()}`).toBe(true);
+      const { table } = (await answer.json()) as TableSuggestion;
+      if (!table) return references;
+      const seat = await api.post(`${venuePath}/walk-ins`, {
+        data: { partySize, tableId: table.id, name: "E2E stand-in" },
+      });
+      expect(seat.ok(), `stand-in walk-in on ${table.name} answered ${seat.status()}`).toBe(true);
+      references.push(((await seat.json()) as { reference: string }).reference);
+    }
+    throw new Error(`the API still suggested a table for ${partySize} after ${limit} stand-ins`);
+  });
+
 /** The quoted wait the API gives a party now (GET …/waitlist/quote, BR-08, Design §11.5). */
 export const quotedWait = async (partySize: number) =>
   withHostApi(async (api) => {

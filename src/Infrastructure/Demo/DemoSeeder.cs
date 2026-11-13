@@ -101,7 +101,8 @@ public sealed class DemoSeeder(TimeProvider timeProvider)
             [GoldenDragon.TableId(spec.Table)],
             notes: null,
             spec.Occasion,
-            now).Value;
+            now,
+            guest.Language).Value;
 
     private static void Check(Result result)
     {
