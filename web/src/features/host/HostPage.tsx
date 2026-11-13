@@ -63,7 +63,7 @@ export function HostPage() {
       setFreed({ tableId: notice.freedTableId, entryId: notice.suggestedEntryId });
     }
   }, []);
-  const connection = useVenueConnection(venueId, goToSignIn, onWaitlistChanged);
+  const connection = useVenueConnection(venueId, goToSignIn, { onWaitlistChanged });
 
   const answered = !!freed && waitlist.isSuccess && !waitlist.isPlaceholderData;
   const suggestedEntryId: string | null = resolveSuggestedEntryId(freed, waitlist.data, answered);
@@ -195,6 +195,7 @@ export function HostPage() {
             onJoin={() => setDialog({ kind: "joinWaitlist" })}
             onDismissSuggestion={() => setFreed(null)}
             onSeated={onSeated}
+            onNotified={() => setAnnouncement(t("waitlist.notifiedAnnouncement"))}
           />
           <section aria-labelledby="list-heading">
             <h2 id="list-heading" className={styles.sectionHeading}>

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
+import { openPresenterScreen, phoneMessages, presenterContext } from "../support/screens";
 import { cancelBookings } from "../support/session";
 
 // Requirements step 1 (AC1.1–AC1.4, AC1.6, AC1.8) and BR-04 through the real page, API and database.
@@ -6,6 +7,9 @@ import { cancelBookings } from "../support/session";
 // venue's "today" (from getVenue, on the API's business clock), so the browser's own clock and zone do not matter.
 // The bookings a run makes are cancelled afterwards with the shared host session (global-setup.ts), like
 // host.spec.ts, so reruns against one database never fill tomorrow's slots.
+// With the presenter screen open, each confirmation text reaches the phone panel within 2 s (AC1.6, Design §18.7),
+// in the language the guest booked in. Bodies are not hard-coded: the reference, the venue name and a few template
+// words are enough.
 
 /** References this file booked, and the venue-local date they are on. */
 const created: string[] = [];
@@ -19,8 +23,16 @@ test.afterAll(async () => {
 const rememberBooking = async (page: Page, day: string) => {
   const reference = page.getByTestId("booking-reference");
   await expect(reference).toHaveText(referencePattern);
-  created.push((await reference.textContent())!.trim());
+  const text = (await reference.textContent())!.trim();
+  created.push(text);
   bookedDay = day;
+  return text;
+};
+
+/** The presenter's screen with the phone panel, opened before the guest books. */
+const openPhonePanel = async (browser: Browser, baseURL: string | undefined) => {
+  const context = await presenterContext(browser, baseURL);
+  return { context, presenter: await openPresenterScreen(context) };
 };
 
 const referencePattern = /^[A-HJ-NP-Z2-9]{6}$/; // BookingReference: 6 characters, no 0/O/1/I
@@ -42,7 +54,10 @@ const openBookingPage = async (page: Page, dateLabel: string) => {
 
 test("a guest books a table for 2 tomorrow at 19:30 in English", async ({
   page,
+  browser,
+  baseURL,
 }) => {
+  const { context, presenter } = await openPhonePanel(browser, baseURL);
   const tomorrow = await openBookingPage(page, "Date");
   await expect(
     page.getByRole("heading", { level: 1, name: "Book a table" }),
@@ -64,13 +79,25 @@ test("a guest books a table for 2 tomorrow at 19:30 in English", async ({
   await expect(
     page.getByRole("heading", { name: "You're booked!" }),
   ).toBeVisible();
-  await rememberBooking(page, tomorrow);
+  const reference = await rememberBooking(page, tomorrow);
   await expect(page.getByTestId("booking-details")).toContainText("2 guests");
+
+  // AC1.6: the confirmation text is on the phone within 2 s, in English, then delivered.
+  const text = phoneMessages(presenter, reference);
+  await expect(text).toBeVisible({ timeout: 2_000 });
+  await expect(text).toHaveAttribute("data-purpose", "confirmation");
+  await expect(text).toContainText("Golden Dragon");
+  await expect(text).toContainText("booked");
+  await expect(text.getByTestId("message-status")).toHaveText(/Delivered/, { timeout: 5_000 });
+  await context.close();
 });
 
 test("a guest books in Chinese and the confirmation is in Chinese", async ({
   page,
+  browser,
+  baseURL,
 }) => {
+  const { context, presenter } = await openPhonePanel(browser, baseURL);
   const tomorrow = await openBookingPage(page, "Date");
 
   await page.getByRole("button", { name: "中文" }).click();
@@ -91,8 +118,16 @@ test("a guest books in Chinese and the confirmation is in Chinese", async ({
   await expect(page.getByRole("heading", { name: "预订成功！" })).toBeVisible();
   await expect(page.getByText("预订编号")).toBeVisible();
   await expect(page.getByTestId("booking-details")).toContainText("2 位");
-  await rememberBooking(page, tomorrow);
+  const reference = await rememberBooking(page, tomorrow);
   await expect(page.getByText("You're booked!")).toHaveCount(0);
+
+  // The text goes out in the language the guest booked in, whatever the presenter screen shows.
+  const text = phoneMessages(presenter, reference);
+  await expect(text).toBeVisible({ timeout: 2_000 });
+  await expect(text).toHaveAttribute("data-purpose", "confirmation");
+  await expect(text).toContainText("Golden Dragon");
+  await expect(text).toContainText("预订号");
+  await context.close();
 });
 
 test("a party of 9 is asked to call (BR-04)", async ({ page }) => {

@@ -1,0 +1,77 @@
+/* The presenter screen (Design §18.7): a laptop or projector; the phone on the left, the rest free for M9 and M11. */
+
+.page {
+  min-height: 100vh;
+  padding: 0.75rem 1.5rem 2rem;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.banner {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  color: #1c1917;
+  background: #fef3c7;
+  border: 2px solid #b45309;
+  font-weight: 600;
+}
+
+.forbidden {
+  max-width: 36rem;
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--border);
+  border-left: 6px solid var(--accent);
+  border-radius: 0.5rem;
+  background: var(--surface-muted);
+}
+
+.forbidden p {
+  margin: 0;
+}
+
+.forbidden .links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+
+.links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.layout {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  justify-items: center;
+}
+
+.rest {
+  min-width: 0;
+}
+
+@media (min-width: 800px) {
+  .layout {
+    grid-template-columns: 380px 1fr;
+    align-items: start;
+    justify-items: stretch;
+  }
+}

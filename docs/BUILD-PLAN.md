@@ -472,6 +472,62 @@ Verification: dotnet build, dotnet test, web lint/type-check/build with the rege
 (M6b screens must still compile), and the Playwright suite still green.
 ```
 
+### M7b Presenter phone panel and Notify on the host screen
+```
+Milestone M7b: phone panel and Notify on the host screen (Design §7, §7.2, §15, §17, §18;
+Requirements AC1.6, AC4.3, AC4.4; demo script steps 3 and 9). Front end + E2E + docs only. M7a
+shipped the API (GET /venues/{id}/messages, waitlist tableReady* fields, messageLogChanged). No API
+change expected: if one turns out to be needed, stop and ask. No new packages.
+Read CLAUDE.md first. Never commit secrets or put a passcode in the repo.
+
+1. Docs first. In docs/BUILD-PLAN.md add an "M7b" prompt block with this prompt (minus the last two
+   lines) after the M7a block. Note decisions in Design.md as a new §18.7 Build notes (M7b) table.
+
+2. Presenter screen (/presenter/):
+   - Signing in at /demo-login with the presenter passcode lands on /presenter/; the host passcode
+     still lands on /host/. Check how M5b does this; if the redirect by role is missing, add it. A
+     host session opening /presenter/ (403 from the API) shows a clear "presenter only" message, not
+     an error page. English / 中文 switch as on the host screen.
+   - Layout for a laptop or projector: phone panel on the left (about 380 px wide, drawn as a phone);
+     the rest of the page is left free for the POS log (M9) and the demo controls (M11). No
+     placeholder text for those.
+
+3. Phone panel (features/presenter/PhonePanel.tsx):
+   - useGetMessages(venueId); messageLogChanged invalidates it; reconnect invalidates everything
+     (reuse useVenueConnection with an onMessageLogChanged option, as M6b did for waitlistChanged).
+   - Shown like an SMS app: oldest at the top, newest at the bottom, auto-scroll to the newest unless
+     the presenter has scrolled up. Each bubble: "To +64 21 *** 456" (masked, as the API sends it),
+     a small purpose label (Confirmation / Table ready), the body exactly as sent (never translated),
+     the time in the venue's zone from the response's timeZone, and the status:
+     Sent ✓, Delivered ✓✓, Failed with its reason in plain words. lastError "superseded" shows as
+     "Replaced" in grey, not as an error (Design §7.2); "expired" shows "Not sent (too late)".
+   - A new message is visible within 2 s of the event (AC1.6, AC4.3); it briefly highlights.
+   - role="log" with polite announcements; empty state "No messages yet".
+
+4. Host screen:
+   - "Mark notified…" becomes "Notify…": it picks the table as before and now sends the text. Drop
+     the hint "texts come in a later version".
+   - Waitlist entry, from the API fields (AC4.4): "Notified 18:26 · Sent" / "· Delivered"; a failed
+     text shows "Text not sent: call the guest" (colour + text), unless it was superseded by a newer
+     one. Overdue badge unchanged.
+   - Every new string in en.json and zh-CN.json.
+
+5. Playwright:
+   - global-setup also signs in a presenter (E2E_PRESENTER_PASSCODE, same handling as the host one;
+     mind the 5/min demo-login limit) and saves a second storageState. Add the variable to the CI E2E
+     job the same way E2E_HOST_PASSCODE is supplied there, and to the README/E2E notes.
+   - booking.spec: with a presenter page open, the English booking's confirmation appears in the phone
+     panel within 2 s with its reference; the Chinese booking's confirmation is in Chinese.
+   - walk-in.spec, step 4: the party of 4 joins in 中文; after T4 is cleared, Notify on the entry
+     (T4 pre-selected) → the phone panel shows the Chinese "table ready" text within 2 s and both host
+     screens show "Notified … · Delivered"; then seat them. Keep the stand-in set-up and clean-up.
+   - Don't hard-code bodies: match on the reference / venue name and a few words from the template.
+
+Verification: dotnet build and dotnet test (unchanged API), web lint/typecheck/format:check/npm test/
+build, generate:api leaves src/api unchanged. Playwright: I run it myself with both passcodes set;
+don't read user secrets. Manual look in English and 中文.
+```
+
 ### M8 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 

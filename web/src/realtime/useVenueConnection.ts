@@ -10,8 +10,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getGetFloorPlanQueryKey } from "@/api/endpoints/floor-plan/floor-plan";
 import { getGetTonightBookingsQueryKey } from "@/api/endpoints/bookings/bookings";
+import { getGetMessagesQueryKey } from "@/api/endpoints/messages/messages";
 import { getGetWaitlistQueryKey } from "@/api/endpoints/waitlist/waitlist";
-import type { WaitlistChangedNotice } from "@/api/model";
+import type { MessageLogChangedNotice, WaitlistChangedNotice } from "@/api/model";
 import { apiBaseUrl } from "@/lib/apiFetch";
 import { createSignalRLogger } from "./signalrLogger.mjs";
 
@@ -29,6 +30,14 @@ const retryPolicy: IRetryPolicy = {
     retryDelays[previousRetryCount] ?? 5_000,
 };
 
+/** What a screen wants to hear about besides the query invalidation the hook always does. */
+export type VenueConnectionOptions = Readonly<{
+  /** The host screen highlights a suggested party for a freed table (AC4.2, Design §18.6). */
+  onWaitlistChanged?: (notice: WaitlistChangedNotice) => void;
+  /** The presenter's phone panel (Design §18.7). */
+  onMessageLogChanged?: (notice: MessageLogChangedNotice) => void;
+}>;
+
 /** The negotiate request answered 401: the demo session is missing or has ended. */
 const isUnauthorized = (error: unknown) =>
   error instanceof Error && /Status code '401'/.test(error.message);
@@ -41,6 +50,8 @@ const isUnauthorized = (error: unknown) =>
  *   ends its suggestion); the hooks refetch (ADR-002).
  * - `waitlistChanged` invalidates the waitlist and is passed to `onWaitlistChanged`, which highlights a suggested
  *   party for a freed table (AC4.2, Design §18.6).
+ * - `messageLogChanged` invalidates the message log (the presenter's phone panel) and is passed to
+ *   `onMessageLogChanged` (Design §18.7).
  * - After any reconnect every query is invalidated once, so nothing missed while away stays missing (AC2.5).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
  *   again. An open WebSocket can outlive a lost network for a while, and the browser knows sooner.
@@ -51,15 +62,15 @@ const isUnauthorized = (error: unknown) =>
 export function useVenueConnection(
   venueId: string,
   onSignedOut: () => void,
-  onWaitlistChanged?: (notice: WaitlistChangedNotice) => void,
+  options: VenueConnectionOptions = {},
 ): ConnectionStatus {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   // Read through a ref, so a new callback never restarts the connection.
-  const waitlistChangedRef = useRef(onWaitlistChanged);
+  const optionsRef = useRef(options);
   useEffect(() => {
-    waitlistChangedRef.current = onWaitlistChanged;
-  }, [onWaitlistChanged]);
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(() => {
     let disposed = false;
@@ -92,7 +103,12 @@ export function useVenueConnection(
 
     connection.on("waitlistChanged", (notice: WaitlistChangedNotice) => {
       void queryClient.invalidateQueries({ queryKey: getGetWaitlistQueryKey(venueId) });
-      waitlistChangedRef.current?.(notice);
+      optionsRef.current.onWaitlistChanged?.(notice);
+    });
+
+    connection.on("messageLogChanged", (notice: MessageLogChangedNotice) => {
+      void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(venueId) });
+      optionsRef.current.onMessageLogChanged?.(notice);
     });
 
     connection.onreconnecting(() => {

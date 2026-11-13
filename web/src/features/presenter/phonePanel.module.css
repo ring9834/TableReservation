@@ -1,0 +1,163 @@
+/* The phone panel (Design §18.7): drawn as a phone, about 380 px wide, messages scroll inside the screen. */
+
+.phone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 380px;
+  height: min(760px, calc(100vh - 6rem));
+  min-height: 420px;
+  padding: 2rem 0.75rem 1rem;
+  border: 10px solid #1c1917;
+  border-radius: 2.5rem;
+  background: var(--surface-muted);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  --fresh-background: #fef3c7;
+}
+
+.notch {
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  width: 5.5rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: #1c1917;
+  transform: translateX(-50%);
+}
+
+.top {
+  padding: 0 0.25rem 0.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.top h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sender {
+  margin: 0;
+  font-weight: 700;
+}
+
+.messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.75rem 0.25rem;
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+
+.messages:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.state {
+  margin: 0.75rem 0.25rem 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.bubble {
+  max-width: 88%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 1rem 1rem 1rem 0.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.fresh {
+  animation: arrive 2s ease-out;
+}
+
+@keyframes arrive {
+  0% {
+    background: var(--fresh-background);
+    box-shadow: 0 0 0 3px #f59e0b;
+  }
+  100% {
+    background: var(--surface);
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fresh {
+    animation: none;
+    box-shadow: 0 0 0 2px #f59e0b;
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.purpose {
+  padding: 0 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.ok {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.footer .error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .phone {
+    border-color: #0c0a09;
+    --fresh-background: #78350f;
+  }
+
+  .ok {
+    color: #86efac;
+  }
+}

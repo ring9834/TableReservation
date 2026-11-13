@@ -181,6 +181,34 @@
       "not_signed_in": "Your session has ended. Going to sign-in…"
     }
   },
+  "presenter": {
+    "documentTitle": "Presenter · {{venue}}",
+    "title": "{{venue}} · presenter",
+    "presenterOnly": "This screen is for the presenter. Sign in with the presenter passcode to see the phone panel.",
+    "signInAgain": "Sign in as presenter",
+    "openHost": "Open the host screen"
+  },
+  "phone": {
+    "heading": "Messages",
+    "empty": "No messages yet",
+    "to": "To {{mobile}}",
+    "purpose": {
+      "confirmation": "Confirmation",
+      "reminder": "Reminder",
+      "tableReady": "Table ready",
+      "cancellation": "Cancellation",
+      "refund": "Refund"
+    },
+    "status": {
+      "sending": "Sending…",
+      "sent": "Sent",
+      "delivered": "Delivered",
+      "replaced": "Replaced",
+      "expired": "Not sent (too late)",
+      "senderFailed": "Not sent (the text service failed)",
+      "notSent": "Not sent"
+    }
+  },
   "tableState": {
     "free": "Free",
     "booked": "Booked",
@@ -207,12 +235,11 @@
     "freedTable": "Just freed",
     "suggestion": "{{table}} is free: suggested party {{name}} ({{count}}).",
     "dismiss": "Dismiss",
-    "notifyHint": "Records that you told the guest their table is ready. Text messages are added in a later version.",
     "joined": "Added to the waitlist.",
     "actions": {
       "seat": "Seat",
-      "notify": "Mark notified",
-      "notifyFor": "Mark notified for {{table}}",
+      "notify": "Notify",
+      "notifyFor": "Notify for {{table}}",
       "walkedAway": "Walked away",
       "remove": "Remove"
     },
@@ -227,7 +254,12 @@
       "quoteHintEmpty": "Enter the party size to get a suggested wait.",
       "submit": "Add to waitlist",
       "submitting": "Adding…"
-    }
+    },
+    "textSending": "Notified {{time}} · Sending…",
+    "textSent": "Notified {{time}} · Sent",
+    "textDelivered": "Notified {{time}} · Delivered",
+    "textFailed": "Text not sent: call the guest",
+    "notifiedAnnouncement": "Table-ready text sent."
   },
   "waitlistStatus": {
     "waiting": "Waiting",
