@@ -38,7 +38,7 @@ public class AggregateRootTests
             .Where(t => t.IsSubclassOf(typeof(DomainEvent)) && !t.IsAbstract)
             .ToList();
 
-        Assert.Equal(13, eventTypes.Count);
+        Assert.Equal(14, eventTypes.Count); // the §4.2 catalogue, with LatePaymentReceived since M8a
         Assert.All(eventTypes, t =>
         {
             var metadata = (EventMetadataAttribute?)Attribute.GetCustomAttribute(t, typeof(EventMetadataAttribute));

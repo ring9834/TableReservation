@@ -128,4 +128,73 @@ public sealed class LogScrubbingTests(PostgresFixture postgres) : ApiTestBase(po
             Assert.DoesNotContain(secret, log, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    [Fact]
+    public async Task Deposits_webhooks_and_refunds_leave_no_secrets_bodies_names_or_mobiles_in_the_logs()
+    {
+        const string name = "Ysolde Marrowgate";
+        const string mobile = "021 011 0170";
+        const string cardholder = "Scrub-cardholder-5e2c";
+        var booking = await ReadAsync<CreateBookingResponse>(
+            await PostAsync(Client, Venue + "/bookings", BookingBody(DemoTime.Tonight.AddDays(1), 19, 0, 6, name, mobile), "scrub-deposit"),
+            HttpStatusCode.Created);
+        await ReadAsync<CreateBookingResponse>(
+            await PostAsync(Client, Venue + "/bookings", BookingBody(DemoTime.Tonight.AddDays(1), 19, 0, 6, name, mobile), "scrub-deposit"),
+            HttpStatusCode.Created);
+        var intent = booking.ClientSecret!.Replace("_secret_fake", string.Empty, StringComparison.Ordinal);
+
+        var paid = StripeEvents.PaymentSucceeded(
+            intent, booking.BookingId, Reservation.Infrastructure.Demo.GoldenDragon.VenueId.Value, 12_000, cardholderName: cardholder);
+        var forgedSignature = StripeEvents.Sign(paid, "whsec_forged_scrub", DateTimeOffset.UtcNow);
+        await SendWebhookAsync(paid, forgedSignature);
+        var goodSignature = StripeEvents.Sign(paid, ApiFactory.WebhookSecret, DateTimeOffset.UtcNow);
+        Assert.Equal(HttpStatusCode.OK, (await SendWebhookAsync(paid, goodSignature)).StatusCode);
+
+        await SignInAsync(Client);
+        var version = (await ReadAsync<BookingListResponse>(await Client.GetAsync($"{Venue}/bookings?day={DemoTime.Tonight.AddDays(1):yyyy-MM-dd}", Ct)))
+            .Items.Single(i => i.Id == booking.BookingId).Version;
+        await ReadAsync<BookingStateResponse>(await PostAsync(Client, $"{Venue}/bookings/{booking.BookingId}/cancel", new { version }));
+        await DispatchAndDeliverAsync();
+        var refunded = StripeEvents.ChargeRefunded(intent, 12_000);
+        Assert.Equal(HttpStatusCode.OK, (await SendWebhookAsync(refunded, StripeEvents.Sign(refunded, ApiFactory.WebhookSecret, DateTimeOffset.UtcNow))).StatusCode);
+        await DispatchAndDeliverAsync();
+
+        var log = string.Join('\n', Factory.Logs.Lines.Select(l => l.Text));
+        Assert.Contains("Stripe webhook rejected", log, StringComparison.Ordinal); // the forged one, by code only
+        Assert.Contains("Refund requested for booking", log, StringComparison.Ordinal);
+        string[] secrets =
+        [
+            booking.ClientSecret, "_secret_", ApiFactory.WebhookSecret, "whsec_", forgedSignature, goodSignature, "v1=",
+            cardholder, "payment_intent.succeeded\"", "\"amount_received\"", "\"metadata\"",
+            name, "Marrowgate", booking.Reference, "is cancelled", "refunded your deposit", "NZ$",
+            "021 011 0170", "0210110170", "+64210110170", "210110170", "__Host-demo-session",
+        ];
+        foreach (var secret in secrets)
+        {
+            Assert.DoesNotContain(secret, log, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private Task<HttpResponseMessage> SendWebhookAsync(string body, string signature)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhooks/stripe")
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+        };
+        request.Headers.TryAddWithoutValidation("Stripe-Signature", signature);
+        return NewClient().SendAsync(request, Ct);
+    }
+
+    private async Task DispatchAndDeliverAsync()
+    {
+        var dispatcher = Factory.Services.GetRequiredService<OutboxDispatcher>();
+        var worker = Factory.Services.GetRequiredService<MessageDeliveryWorker>();
+        while (await dispatcher.DispatchBatchAsync(Ct) > 0)
+        {
+        }
+
+        while (await worker.DeliverBatchAsync(Ct) > 0)
+        {
+        }
+    }
 }

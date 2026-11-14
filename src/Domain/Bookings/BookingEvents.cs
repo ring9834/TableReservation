@@ -18,6 +18,13 @@ public sealed record DepositCaptured(
     BookingId BookingId, string PaymentIntentId, long AmountCents)
     : DomainEvent(EventId, OccurredAt, VenueId);
 
+/// <summary>A payment arrived after the hold expiry had cancelled the booking; it is refunded in full (M8a, Design §8.4).</summary>
+[EventMetadata("LatePaymentReceived", Version = 1, AggregateType = "Booking")]
+public sealed record LatePaymentReceived(
+    Guid EventId, DateTimeOffset OccurredAt, VenueId VenueId,
+    BookingId BookingId, string PaymentIntentId, long AmountCents)
+    : DomainEvent(EventId, OccurredAt, VenueId);
+
 [EventMetadata("BookingConfirmed", Version = 1, AggregateType = "Booking")]
 public sealed record BookingConfirmed(
     Guid EventId, DateTimeOffset OccurredAt, VenueId VenueId,

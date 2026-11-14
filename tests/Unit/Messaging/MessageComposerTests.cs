@@ -5,13 +5,14 @@ using Reservation.Domain.Messaging;
 namespace Reservation.Tests.Unit.Messaging;
 
 /// <summary>
-/// <see cref="MessageComposer"/> and the resource templates (Design §7, §7.2): every purpose M7a sends, in English and
+/// <see cref="MessageComposer"/> and the resource templates (Design §7, §7.2, §8.4): every purpose sent so far, in English and
 /// Simplified Chinese, short, with the venue name and no placeholder left over.
 /// </summary>
 public class MessageComposerTests
 {
-    /// <summary>The purposes M7a queues. M8 (deposit, cancellation, refund) and M10 (reminder) add theirs.</summary>
-    public static readonly TheoryData<MessagePurpose, Language> UsedNow = Combine([MessagePurpose.Confirmation, MessagePurpose.TableReady]);
+    /// <summary>The purposes queued so far: M7a, and M8a's cancellation and refund. M10 adds the reminder.</summary>
+    public static readonly TheoryData<MessagePurpose, Language> UsedNow = Combine(
+        [MessagePurpose.Confirmation, MessagePurpose.TableReady, MessagePurpose.Cancellation, MessagePurpose.Refund]);
 
     private static readonly TimeZoneInfo _auckland = TimeZoneInfo.FindSystemTimeZoneById("Pacific/Auckland");
 
@@ -74,6 +75,35 @@ public class MessageComposerTests
             _composer.Compose(MessagePurpose.TableReady, Language.Zh, new TemplateModel("Golden Dragon", _auckland)).Body);
     }
 
+    [Fact]
+    public void Cancellation_names_the_booking_in_both_languages()
+    {
+        Assert.Equal(
+            "Golden Dragon: your booking for 4 on Sat 14 Nov at 7:30 pm (ref GD7K4P) is cancelled.",
+            _composer.Compose(MessagePurpose.Cancellation, Language.En, Model()).Body);
+        Assert.Equal(
+            "Golden Dragon：您11月14日（周六） 19:30的4位预订（预订号 GD7K4P）已取消。",
+            _composer.Compose(MessagePurpose.Cancellation, Language.Zh, Model()).Body);
+    }
+
+    [Fact]
+    public void Refund_names_the_amount_in_both_languages()
+    {
+        Assert.Equal(
+            "Golden Dragon: we've refunded your deposit of NZ$120.00 (ref GD7K4P).",
+            _composer.Compose(MessagePurpose.Refund, Language.En, Model()).Body);
+        Assert.Equal(
+            "Golden Dragon：您的订金 NZ$120.00 已退还（预订号 GD7K4P）。",
+            _composer.Compose(MessagePurpose.Refund, Language.Zh, Model()).Body);
+    }
+
+    [Theory]
+    [InlineData(12_000, "NZ$120.00")]
+    [InlineData(2_005, "NZ$20.05")]
+    [InlineData(0, "NZ$0.00")]
+    public void Amounts_are_formatted_in_dollars_and_cents(long cents, string expected) =>
+        Assert.Equal(expected, MessageComposer.FormatAmount(Money.FromNzd(cents)));
+
     [Theory]
     [InlineData(0, 5, "12:05 am", "0:05")]
     [InlineData(12, 0, "12:00 pm", "12:00")]
@@ -93,7 +123,7 @@ public class MessageComposerTests
         Assert.Empty(_composer.Compose(MessagePurpose.Confirmation, Language.En, Model()).Actions);
     }
 
-    private static TemplateModel Model() => new("Golden Dragon", _auckland, "GD7K4P", 4, _startsAt);
+    private static TemplateModel Model() => new("Golden Dragon", _auckland, "GD7K4P", 4, _startsAt, Money.FromNzd(12_000));
 
     private static TheoryData<MessagePurpose, Language> Combine(MessagePurpose[] purposes)
     {

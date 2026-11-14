@@ -32,20 +32,28 @@ const bookTonight = async (page: Page, time: string, name: string) => {
 };
 
 /**
- * The booking is in tonight's list and on the floor plan. On the plan a tile names the party seated there or the next
- * one, so the check taps the booking's table and reads the side panel, which works whichever table it got.
+ * The test's booking, found by its reference, is in tonight's list with its guest and a table, and that table opens
+ * on the floor plan. The check doesn't depend on other bookings: the side panel shows only a table's current and next
+ * booking, so with an earlier booking on the same table (one made by hand, say) it would show that one instead.
+ * The list and the floor plan refetch on the same `floorPlanChanged` notice (Design §15).
  */
-const expectBookingShown = async (page: Page, name: string, timeout: number) => {
+const expectBookingShown = async (page: Page, reference: string, name: string, timeout: number) => {
   const deadline = Date.now() + timeout;
   const left = () => Math.max(1, deadline - Date.now());
-  // The row itself, not the "Seat" button beside a booked row (M6b), whose label names the guest too.
-  const row = page.getByTestId("tonight-list").locator('[data-testid^="booking-"]').filter({ hasText: name });
+  // The row itself (data-testid booking-{reference}), not the "Seat" button beside a booked row (M6b).
+  const row = page.getByTestId("tonight-list").getByTestId(`booking-${reference}`);
   await expect(row).toBeVisible({ timeout: left() });
+  await expect(row).toContainText(name, { timeout: left() });
+  await expect(row).toContainText(/· [A-Z]+\d+/, { timeout: left() });
   const tableName = (await row.textContent())?.match(/· ([A-Z]+\d+)/)?.[1];
   expect(tableName, "the booking has a table").toBeTruthy();
 
-  await page.getByTestId(`table-${tableName}`).click();
-  await expect(page.getByTestId("table-panel")).toContainText(name, { timeout: left() });
+  // Tapping the row selects its table on the floor plan.
+  await row.click();
+  await expect(page.getByTestId(`table-${tableName}`)).toBeVisible({ timeout: left() });
+  await expect(page.getByTestId("table-panel").getByRole("heading", { level: 2 })).toContainText(tableName!, {
+    timeout: left(),
+  });
 };
 
 /**
@@ -87,11 +95,12 @@ test.describe("host screens", () => {
     const [screenA, screenB] = await Promise.all([openHostScreen(hostA), openHostScreen(hostB)]);
     const name = uniqueGuestName();
 
-    created.push(await bookTonight(await guest.newPage(), "20:00:00", name));
+    const reference = await bookTonight(await guest.newPage(), "20:00:00", name);
+    created.push(reference);
 
     await Promise.all([
-      expectBookingShown(screenA, name, 2_000),
-      expectBookingShown(screenB, name, 2_000),
+      expectBookingShown(screenA, reference, name, 2_000),
+      expectBookingShown(screenB, reference, name, 2_000),
     ]);
     expect(signalRConsoleErrors, "SignalR console errors on the host screens").toEqual([]);
     await Promise.all([hostA.close(), hostB.close(), guest.close()]);
@@ -114,12 +123,13 @@ test.describe("host screens", () => {
     await expect(banner).toBeVisible();
     await expect(banner).toHaveText("Connection lost. Reconnecting…");
 
-    created.push(await bookTonight(await guest.newPage(), "20:15:00", name));
+    const reference = await bookTonight(await guest.newPage(), "20:15:00", name);
+    created.push(reference);
     await screen.waitForTimeout(Math.max(0, 10_000 - (Date.now() - offlineAt)));
     await expect(screen.getByTestId("tonight-list").getByText(name)).toHaveCount(0);
 
     await host.setOffline(false);
-    await expectBookingShown(screen, name, 5_000);
+    await expectBookingShown(screen, reference, name, 5_000);
     await expect(banner).toBeHidden();
     expect(signalRConsoleErrors, "SignalR console errors while offline and reconnecting").toEqual([]);
     await Promise.all([host.close(), guest.close()]);

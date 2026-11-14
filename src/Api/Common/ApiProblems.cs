@@ -13,6 +13,10 @@ internal static class ProblemCodes
     public const string MethodNotAllowed = "method_not_allowed";
     public const string PaymentProviderError = "payment_provider_error";
     public const string IdempotencyKeyReused = "idempotency_key_reused";
+
+    // Stripe webhook (M8a, Design §8.4): a bad or missing Stripe-Signature (401), a body over 64 KB (413).
+    public const string InvalidSignature = "invalid_signature";
+    public const string PayloadTooLarge = "payload_too_large";
 }
 
 /// <summary>
@@ -39,6 +43,8 @@ internal static class ApiProblems
         [ErrorCodes.InvalidTransition] = "The record is not in a state that allows this action",
         [ProblemCodes.TooManyRequests] = "Too many requests",
         [ProblemCodes.PaymentProviderError] = "The payment provider failed",
+        [ProblemCodes.InvalidSignature] = "The signature is not valid",
+        [ProblemCodes.PayloadTooLarge] = "The request body is too large",
         [ProblemCodes.Unexpected] = "An unexpected error occurred",
     };
 

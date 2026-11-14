@@ -109,10 +109,14 @@ public sealed class Booking : AggregateRoot<BookingId>
     /// Checks the online party limit (BR-04) and the slot (BR-01), copies the terms (§2.6)
     /// and, for online bookings only, applies the deposit rule (BR-06).
     /// </summary>
+    /// <param name="holdClockNow">
+    /// The infrastructure clock's now (M8a, Design §8.4): the payment hold is measured in real time, so it still runs out
+    /// while the demo's business clock stands still. Defaults to <paramref name="now"/>.
+    /// </param>
     public static Result<Booking> Create(
         Venue venue, GuestId? guestId, PersonName contactName, BookingReference reference, BookingChannel channel, PartySize partySize,
         DateTimeOffset startsAt, IReadOnlyCollection<TableId> tableIds, string? notes, string? occasion, DateTimeOffset now,
-        Language language = Language.En)
+        Language language = Language.En, DateTimeOffset? holdClockNow = null)
     {
         ArgumentNullException.ThrowIfNull(venue);
         ArgumentNullException.ThrowIfNull(contactName);
@@ -151,7 +155,7 @@ public sealed class Booking : AggregateRoot<BookingId>
         if (depositDue is { } amount)
         {
             booking.Deposit = new Deposit(amount);
-            booking.HoldExpiresAt = now.AddMinutes(settings.PaymentHoldMinutes);
+            booking.HoldExpiresAt = (holdClockNow ?? now).AddMinutes(settings.PaymentHoldMinutes);
             booking.Status = BookingStatus.PendingPayment;
         }
         else
@@ -198,8 +202,11 @@ public sealed class Booking : AggregateRoot<BookingId>
     /// <summary>
     /// Stripe reported the deposit paid (§3.1 CaptureDeposit rows, D7).
     /// <paramref name="tableStillFree"/> is the handler's re-check of the table; it matters only once the hold has expired.
+    /// The hold is compared with <paramref name="holdClockNow"/> (infrastructure clock, M8a); <paramref name="now"/> is the
+    /// business-clock time of the event.
     /// </summary>
-    public Result CaptureDeposit(string paymentIntentId, Money amount, bool tableStillFree, DateTimeOffset now)
+    public Result CaptureDeposit(
+        string paymentIntentId, Money amount, bool tableStillFree, DateTimeOffset now, DateTimeOffset? holdClockNow = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
 
@@ -212,13 +219,18 @@ public sealed class Booking : AggregateRoot<BookingId>
                 return Result.Success();
 
             case BookingStatus.PendingPayment:
-                if (amount != Deposit!.Amount)
+                if (Deposit!.PaymentIntentId is { } attached && attached != paymentIntentId)
+                {
+                    return Error.Rule(ErrorCodes.PaymentIntentMismatch);
+                }
+
+                if (amount != Deposit.Amount)
                 {
                     return Error.Rule(ErrorCodes.DepositAmountMismatch);
                 }
 
                 Deposit.Capture(paymentIntentId);
-                var holdExpired = HoldExpiresAt is { } expiry && now >= expiry;
+                var holdExpired = HoldExpiresAt is { } expiry && (holdClockNow ?? now) >= expiry;
                 if (!holdExpired || tableStillFree)
                 {
                     Status = BookingStatus.Booked;
@@ -236,15 +248,75 @@ public sealed class Booking : AggregateRoot<BookingId>
         }
     }
 
-    /// <summary>The 10-minute payment hold ended before payment (§3.1 ExpireHold).</summary>
-    public Result ExpireHold(DateTimeOffset now)
+    /// <summary>
+    /// The payment intent created for the deposit (M8a, Design §8.4). Stored so <c>charge.refunded</c> can find the booking
+    /// and a payment for another intent is refused. Raises no event. The same ID again is a no-op; another one is a conflict.
+    /// </summary>
+    public Result AttachPaymentIntent(string paymentIntentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
+
+        if (Deposit is null)
+        {
+            return Error.InvalidTransition;
+        }
+
+        if (Deposit.PaymentIntentId is { } attached)
+        {
+            return attached == paymentIntentId ? Result.Success() : Error.Rule(ErrorCodes.PaymentIntentMismatch);
+        }
+
+        Deposit.AttachIntent(paymentIntentId);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// A payment that arrived after the hold expiry had already cancelled the booking (M8a, Design §8.4). The booking stays
+    /// <c>Cancelled</c>; the deposit records the money Stripe now holds (<c>Released → Captured</c>), and
+    /// <see cref="LatePaymentReceived"/> asks for the refund through the outbox, so <c>charge.refunded</c> later marks
+    /// the deposit <c>Refunded</c>. The same payment again is a no-op.
+    /// </summary>
+    public Result RecordLatePayment(string paymentIntentId, Money amount, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
+
+        if (Status != BookingStatus.Cancelled || CancellationReason != CancelReason.HoldExpired || Deposit is null)
+        {
+            return Error.InvalidTransition;
+        }
+
+        if (Deposit.Status is DepositStatus.Captured or DepositStatus.Refunded)
+        {
+            return Deposit.PaymentIntentId == paymentIntentId ? Result.Success() : Error.Rule(ErrorCodes.PaymentIntentMismatch);
+        }
+
+        if (Deposit.PaymentIntentId is { } attached && attached != paymentIntentId)
+        {
+            return Error.Rule(ErrorCodes.PaymentIntentMismatch);
+        }
+
+        if (amount != Deposit.Amount)
+        {
+            return Error.Rule(ErrorCodes.DepositAmountMismatch);
+        }
+
+        Deposit.Capture(paymentIntentId);
+        Raise(new LatePaymentReceived(DomainEvent.NewEventId(now), now, VenueId, Id, paymentIntentId, amount.Cents));
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The payment hold ended before payment (§3.1 ExpireHold). The hold is compared with <paramref name="holdClockNow"/>
+    /// (infrastructure clock, M8a); <paramref name="now"/> is the business-clock time of the event.
+    /// </summary>
+    public Result ExpireHold(DateTimeOffset now, DateTimeOffset? holdClockNow = null)
     {
         if (Status == BookingStatus.Cancelled)
         {
             return Result.Success();
         }
 
-        if (Status != BookingStatus.PendingPayment || HoldExpiresAt is not { } expiry || now < expiry)
+        if (Status != BookingStatus.PendingPayment || HoldExpiresAt is not { } expiry || (holdClockNow ?? now) < expiry)
         {
             return Error.InvalidTransition;
         }

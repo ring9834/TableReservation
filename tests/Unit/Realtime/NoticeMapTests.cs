@@ -16,7 +16,7 @@ public sealed class NoticeMapTests
     private static readonly TableId _table = new(Guid.NewGuid());
     private static readonly WaitlistEntryId _entry = new(Guid.NewGuid());
 
-    public static TheoryData<string> BookingEventsWithoutTables => ["DepositCaptured", "BookingConfirmed", "BookingCancelled", "DepositRefunded", "BookingCompleted"];
+    public static TheoryData<string> BookingEventsWithoutTables => ["DepositCaptured", "BookingConfirmed", "BookingCancelled", "DepositRefunded", "BookingCompleted", "LatePaymentReceived"];
 
     [Fact]
     public void Every_catalogue_event_maps_to_a_notice()
@@ -116,6 +116,7 @@ public sealed class NoticeMapTests
     [
         Created(),
         new DepositCaptured(Guid.NewGuid(), _now, _venue, _booking, "pi_1", 12000),
+        new LatePaymentReceived(Guid.NewGuid(), _now, _venue, _booking, "pi_1", 12000),
         new BookingConfirmed(Guid.NewGuid(), _now, _venue, _booking, Actor.ForSystem()),
         new BookingCancelled(Guid.NewGuid(), _now, _venue, _booking, CancelReason.GuestRequest, Actor.ForSystem(), RefundDecision.Full),
         new DepositRefunded(Guid.NewGuid(), _now, _venue, _booking, "re_1", 12000),

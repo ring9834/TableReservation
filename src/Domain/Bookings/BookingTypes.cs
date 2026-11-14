@@ -139,6 +139,9 @@ public sealed class Deposit
         PaymentIntentId = paymentIntentId;
     }
 
+    /// <summary>The payment intent created for this deposit (M8a); set once, before payment.</summary>
+    internal void AttachIntent(string paymentIntentId) => PaymentIntentId = paymentIntentId;
+
     internal void Release() => Status = DepositStatus.Released;
 
     internal void Refund(string refundId)

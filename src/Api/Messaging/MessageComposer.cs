@@ -7,14 +7,15 @@ namespace Reservation.Api.Messaging;
 
 /// <summary>
 /// What a template may use. <see cref="StartsAt"/> is shown in <see cref="TimeZone"/>; fields a purpose doesn't use are
-/// ignored.
+/// ignored. <see cref="Amount"/> fills <c>{amount}</c> (the refund text, M8a).
 /// </summary>
 internal sealed record TemplateModel(
     string VenueName,
     TimeZoneInfo TimeZone,
     string? Reference = null,
     int? PartySize = null,
-    DateTimeOffset? StartsAt = null);
+    DateTimeOffset? StartsAt = null,
+    Money? Amount = null);
 
 internal sealed record ComposedMessage(string Body, IReadOnlyList<MessageAction> Actions);
 
@@ -40,6 +41,7 @@ internal sealed class MessageComposer(ITemplateStore templates)
             .Replace("{party}", model.PartySize?.ToString(CultureInfo.InvariantCulture))
             .Replace("{date}", local is { } d ? FormatDate(d, language) : null)
             .Replace("{time}", local is { } t ? FormatTime(t, language) : null)
+            .Replace("{amount}", model.Amount is { } amount ? FormatAmount(amount) : null)
             .ToString();
         return new ComposedMessage(body, []);
     }
@@ -47,6 +49,13 @@ internal sealed class MessageComposer(ITemplateStore templates)
     public static string FormatDate(DateTimeOffset local, Language language) => language == Language.Zh
         ? string.Create(CultureInfo.InvariantCulture, $"{local.Month}月{local.Day}日（{_chineseDays[(int)local.DayOfWeek]}）")
         : string.Create(CultureInfo.InvariantCulture, $"{_englishDays[(int)local.DayOfWeek]} {local.Day} {_englishMonths[local.Month - 1]}");
+
+    /// <summary>An amount as <c>NZ$120.00</c> in both languages (M8a); other currencies as <c>120.00 AUD</c>.</summary>
+    public static string FormatAmount(Money amount)
+    {
+        var value = string.Create(CultureInfo.InvariantCulture, $"{amount.Cents / 100}.{Math.Abs(amount.Cents % 100):00}");
+        return amount.Currency == Money.Nzd ? "NZ$" + value : value + " " + amount.Currency;
+    }
 
     public static string FormatTime(DateTimeOffset local, Language language)
     {

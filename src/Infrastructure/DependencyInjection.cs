@@ -8,6 +8,7 @@ using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Idempotency;
 using Reservation.Infrastructure.Messaging;
 using Reservation.Infrastructure.Outbox;
+using Reservation.Infrastructure.Payments;
 using Reservation.Infrastructure.Persistence;
 
 namespace Reservation.Infrastructure;
@@ -57,6 +58,7 @@ public static class DependencyInjection
 
         AddOutbox(services);
         AddMessaging(services);
+        AddPayments(services);
 
         services.AddScoped<DemoSeeder>();
         services.AddScoped<DemoReset>();
@@ -81,6 +83,42 @@ public static class DependencyInjection
         services.TryAddScoped<IMessageSender, PhonePanelSender>();
         services.AddSingleton<MessageDeliveryWorker>();
         services.AddHostedService(provider => provider.GetRequiredService<MessageDeliveryWorker>());
+    }
+
+    /// <summary>
+    /// Payments (Design §8, §8.4): the provider chosen by <c>Payments:Provider</c> (Stripe or Fake, validated at start-up,
+    /// with Stripe's two secrets required for Stripe), the webhook verifier and the hold expiry job. Tests may replace
+    /// <see cref="IPaymentProvider"/>.
+    /// </summary>
+    private static void AddPayments(IServiceCollection services)
+    {
+        services.AddOptions<PaymentOptions>()
+            .BindConfiguration(PaymentOptions.Section)
+            .Validate(o => o.Provider is PaymentProviderKind.Stripe or PaymentProviderKind.Fake,
+                "Payments:Provider must be Stripe or Fake (Fake in Development and tests).")
+            .ValidateOnStart();
+        services.AddOptions<StripeOptions>()
+            .BindConfiguration(StripeOptions.Section)
+            .Validate<IOptions<PaymentOptions>>(
+                (o, payments) => payments.Value.Provider != PaymentProviderKind.Stripe || !string.IsNullOrWhiteSpace(o.SecretKey),
+                "Payments:Provider is Stripe, so Stripe:SecretKey must be set (dotnet user-secrets locally, Secrets Manager in AWS).")
+            .Validate<IOptions<PaymentOptions>>(
+                (o, payments) => payments.Value.Provider != PaymentProviderKind.Stripe || !string.IsNullOrWhiteSpace(o.WebhookSecret),
+                "Payments:Provider is Stripe, so Stripe:WebhookSecret must be set (dotnet user-secrets locally, Secrets Manager in AWS).")
+            .Validate(o => o.SignatureTolerance > TimeSpan.Zero, "Stripe:SignatureTolerance must be positive.")
+            .ValidateOnStart();
+        services.AddOptions<PaymentHoldExpiryOptions>()
+            .BindConfiguration(PaymentHoldExpiryOptions.Section)
+            .Validate(o => o.Interval > TimeSpan.Zero, "Payments:HoldExpiry:Interval must be positive.")
+            .ValidateOnStart();
+
+        services.TryAddSingleton<IPaymentProvider>(provider =>
+            provider.GetRequiredService<IOptions<PaymentOptions>>().Value.Provider == PaymentProviderKind.Stripe
+                ? new StripePaymentProvider(provider.GetRequiredService<IOptions<StripeOptions>>())
+                : new FakePaymentProvider());
+        services.AddSingleton<StripeWebhookVerifier>();
+        services.AddSingleton<PaymentHoldExpiryJob>();
+        services.AddHostedService(provider => provider.GetRequiredService<PaymentHoldExpiryJob>());
     }
 
     /// <summary>The provider settings every <see cref="ReservationsDbContext"/> uses (also in tests).</summary>
