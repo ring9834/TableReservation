@@ -5,6 +5,8 @@
  * OpenAPI spec version: v1
  */
 import type { BookingStatus } from './bookingStatus';
+import type { DepositStatus } from './depositStatus';
+import type { MoneyDto } from './moneyDto';
 
 export interface TableBookingSummary {
   bookingId: string;
@@ -17,4 +19,6 @@ export interface TableBookingSummary {
   guestName: string | null;
   hasAllergy: boolean;
   version: number;
+  deposit: null | MoneyDto;
+  depositStatus: null | DepositStatus;
 }

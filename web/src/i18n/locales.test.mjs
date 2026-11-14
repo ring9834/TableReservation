@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { depositLabelKeys } from "../features/booking/payment.mjs";
 import { purposes, statusKeys } from "../features/presenter/messageStatus.mjs";
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"));
@@ -47,6 +48,7 @@ test("every API error code the pages can meet has a message", () => {
     "validation_failed",
     "too_many_requests",
     "not_signed_in",
+    "payment_provider_error",
     "unexpected",
   ];
   for (const code of codes) {
@@ -78,8 +80,10 @@ test("every field rule code the sign-in form can meet has a message", () => {
 });
 
 test("every table state and booking status has a label", () => {
-  for (const state of ["free", "booked", "arrivingSoon", "seated"]) {
+  // awaitingDeposit is the host screen's own state for a table held by a booking waiting for its deposit (M8b).
+  for (const state of ["free", "booked", "arrivingSoon", "seated", "awaitingDeposit"]) {
     assert.ok(valueAt(en, `tableState.${state}`), `No label for table state ${state}`);
+    assert.ok(valueAt(en, `host.tile.status.${state}`), `No tile label for table state ${state}`);
   }
   const statuses = ["pendingPayment", "booked", "confirmed", "seated", "completed", "cancelled"];
   for (const status of statuses) {
@@ -131,6 +135,14 @@ test("every message purpose and phone panel status has a label (Design §18.7)",
     }
     for (const key of statusKeys) {
       assert.ok(valueAt(resources, `phone.status.${key}`), `No label for message status ${key}`);
+    }
+  }
+});
+
+test("every deposit wording the host screens can show has a label (Design §18.8)", () => {
+  for (const resources of [en, zh]) {
+    for (const key of depositLabelKeys) {
+      assert.ok(valueAt(resources, `deposit.status.${key}`), `No label for deposit ${key}`);
     }
   }
 });

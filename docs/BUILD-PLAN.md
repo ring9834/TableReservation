@@ -603,6 +603,87 @@ Verification: dotnet build, dotnet test, has-pending-model-changes, refresh open
 generate:api, web lint/typecheck/build. Playwright: I run it. Don't read user secrets.
 ```
 
+### M8b Guest payment step, host cancel and refund status
+```
+Milestone M8b: guest payment step, host cancel and refund status (Design §8, §8.4, §10.1, §18;
+Requirements AC1.5, AC1.7, AC1.8, AC5.5 on screen; ADR-004 CC2 card details only in Stripe's frame).
+Mostly front end + E2E; the small API additions below are allowed. Read CLAUDE.md first.
+
+0. Packages: ask me before adding @stripe/stripe-js and @stripe/react-stripe-js (official). Nothing else.
+
+1. Docs first: an "M8b" block with this prompt (minus the last two lines) after M8a in BUILD-PLAN.md;
+   decisions in a new Design §18.8 Build notes (M8b).
+
+2. API additions (regenerate openapi.json + orval client):
+   - GET /api/v1/payments/config (anonymous): {provider: "stripe" | "fake", publishableKey?}. The
+     publishable key comes from Stripe:PublishableKey (required when the provider is Stripe, start-up
+     message naming it like the others). One web build then works in every environment.
+   - The status endpoint also returns holdSecondsRemaining (worked out by the server on the
+     infrastructure clock), so the countdown doesn't depend on the guest's own clock.
+   - Simulate payment, only when Payments:Provider = Fake AND Demo:Enabled = true (otherwise not
+     mapped): POST /api/v1/demo/payments/{bookingId}/succeed builds a payment_intent.succeeded event
+     for that booking's intent, signs it with Stripe:WebhookSecret and sends it through the SAME
+     webhook processing as /webhooks/stripe (signature check, inbox, CaptureDeposit). Not a shortcut
+     that sets Booked directly. Likewise the Fake's RefundAsync must lead to a signed charge.refunded
+     through the same path (after commit, never inside the request), so a refund reaches Refunded in
+     CI too. Integration tests for both, plus a test that the route is absent with the Stripe provider
+     and with Demo:Enabled false.
+   - Floor plan and tonight's list items gain depositCents and depositStatus (additive) for the host.
+
+3. Guest payment step (features/booking): after the details step, a 201 with clientSecret shows the
+   payment step instead of the current "Payment step coming next" box.
+   - Header: "Deposit NZ$120.00 for 6 guests" and a countdown "We'll hold your table for 9:41" from
+     holdSecondsRemaining (refreshed by each status poll, ticking locally between polls). Never show a
+     clock time for the hold: the demo story's time differs from real time. At 0: "Your hold has
+     ended" + "Start again", no form.
+   - Stripe provider: Stripe Elements PaymentElement with the clientSecret, appearance from our colour
+     tokens, Stripe locale following the page language (en / zh). "Pay NZ$120.00" →
+     stripe.confirmPayment({redirect: "if_required", return_url: /book/?bookingId=…}). Handle coming
+     back from a redirect (3-D Secure) on /book/: read bookingId and Stripe's payment_intent params,
+     go straight to polling. Card errors show Stripe's message.
+   - Fake provider: no card form; a clearly labelled "Simulate payment (test mode)" button calling the
+     demo endpoint. A plain note says no real card is taken.
+   - Then poll GET status every 2 s (ADR-002) until Booked: confirmation screen with reference and
+     "Deposit paid NZ$120.00". Cancelled (HoldExpired) → "Your hold ended before payment; any payment
+     will be refunded". Still waiting after 60 s → "Still confirming your payment…" with the reference.
+   - 502 payment_provider_error on create → "Payment service unavailable" + "Try again", which resends
+     the same request with the same Idempotency-Key (M8a replay).
+   - Every new string in en and zh-CN; keyboard and screen-reader friendly (the countdown announces
+     only at 5 min, 1 min and 0, not every second).
+   - (Agreed addition) Disable "Pay NZ$…" and "Simulate payment" while a payment is in progress (label
+     "Paying…"), so a double tap can't confirm twice, and hide the payment form and buttons as soon as
+     the countdown reaches 0. Cover both in the payment.mjs logic or the Playwright spec.
+
+4. Host screen:
+   - A PendingPayment booking shows as held: tile status "Awaiting deposit" / 待付订金 (colour + text,
+     its own legend entry), and the same in tonight's list.
+   - "Cancel booking" on a Booked/Confirmed/PendingPayment booking in the table panel and tonight's
+     list. Destructive, so it opens a confirm dialog ("Cancel 6 guests at 7:00 pm? The deposit of
+     NZ$120.00 will be refunded in full."), then POST …/cancel {version}. Errors through
+     useHostActionError.
+   - Deposit line wherever the booking shows: "Deposit NZ$120.00 · Paid" / "· Refund pending" /
+     "· Refunded" / "· Kept (cancelled late)" / "· Released". Refund pending → Refunded arrives live
+     (floorPlanChanged), no reload.
+   - Cancelled bookings stay in tonight's list, greyed, with their deposit line.
+
+5. CSP: if the app or API sets a Content-Security-Policy, allow js.stripe.com and Stripe's frames and
+   API, nothing wider (ADR-004).
+
+6. Playwright (deposit.spec.ts), reads /payments/config:
+   - Fake (CI): book 6 tonight → countdown visible, no clock time → "Simulate payment" → confirmation
+     with "Deposit paid" within 5 s → the host shows it Booked with "Paid" and the phone panel shows
+     the Confirmation → host cancels it → "Refund pending" then "Refunded" on the host, Cancellation
+     and Refund texts on the phone panel.
+   - Stripe (my machine): same flow, filling Stripe test card 4242 4242 4242 4242 in the
+     PaymentElement iframe; needs `stripe listen` running, so skip with a clear message if no webhook
+     arrives within 15 s.
+   - Clean-up: cancel anything the spec booked that is still active.
+   Add Payments__Provider: Fake and Demo__Enabled: true to the CI e2e env if not already there.
+
+Verification: dotnet build/test, has-pending-model-changes, web lint/typecheck/format:check/test/
+build, generate:api. Playwright and the manual checks: I run them. Don't read user secrets or .env files.
+```
+
 ### M9 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 

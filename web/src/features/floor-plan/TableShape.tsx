@@ -4,7 +4,7 @@ import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { FloorTableDto } from "@/api/model";
 import { formatInstantTime } from "@/lib/format";
-import { shownBooking } from "./tableText";
+import { displayState, shownBooking } from "./tableText";
 import { layoutTile, personIconEm } from "./tileLayout.mjs";
 import styles from "./floorPlan.module.css";
 
@@ -49,8 +49,9 @@ export function TableShape({ table, timeZone, selected, highlighted = false, onS
   const cx = x + width / 2;
   const cy = y + height / 2;
   const booking = shownBooking(table);
+  const shown = displayState(table);
   const time = booking ? formatInstantTime(booking.startsAt, timeZone, i18n.language) : null;
-  const state = t(`tableState.${table.state}`);
+  const state = t(`tableState.${shown}`);
   const guests = booking
     ? booking.partySize === 1
       ? t("host.tile.guestsOne")
@@ -86,8 +87,15 @@ export function TableShape({ table, timeZone, selected, highlighted = false, onS
             { text: "★" },
           ]
         : [
-            { text: t(`host.tile.status.${table.state}`) },
-            { text: t(`host.tile.status.${table.state}`), scale: 0.85 },
+            { text: t(`host.tile.status.${shown}`) },
+            { text: t(`host.tile.status.${shown}`), scale: 0.85 },
+            // "Awaiting deposit" is long: the two-seat tables fall back to "Unpaid" (M8b).
+            ...(shown === "awaitingDeposit"
+              ? [
+                  { text: t("host.tile.statusShort.awaitingDeposit") },
+                  { text: t("host.tile.statusShort.awaitingDeposit"), scale: 0.85 },
+                ]
+              : []),
           ],
     },
     ...(booking && guests && time
@@ -121,9 +129,9 @@ export function TableShape({ table, timeZone, selected, highlighted = false, onS
       aria-label={label}
       aria-pressed={selected}
       data-testid={`table-${table.name}`}
-      data-state={table.state}
+      data-state={shown}
       data-highlighted={highlighted || undefined}
-      className={`${styles.table} ${styles[table.state]} ${selected ? styles.selected : ""} ${highlighted ? styles.highlighted : ""}`}
+      className={`${styles.table} ${styles[shown]} ${selected ? styles.selected : ""} ${highlighted ? styles.highlighted : ""}`}
       onClick={() => onSelect(table.id)}
       onKeyDown={onKeyDown}
     >

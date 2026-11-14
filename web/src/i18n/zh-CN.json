@@ -53,14 +53,36 @@
   },
   "confirmation": {
     "heading": "预订成功！",
-    "headingPending": "已为您保留餐桌",
     "reference": "预订编号",
     "when": "时间",
     "party": "人数",
-    "depositHeading": "需支付订金",
-    "depositText": "6 位或以上的预订需支付订金 {{amount}}。我们将为您保留餐桌至 {{time}}。",
-    "paymentNext": "下一步为付款：在线付款将在本演示的后续版本中加入。",
+    "deposit": "订金",
+    "depositPaid": "已支付订金 {{amount}}",
+    "depositPaidNoAmount": "已支付订金",
     "bookAnother": "再订一桌"
+  },
+  "pay": {
+    "heading": "支付订金",
+    "depositFor": "{{party}}的订金：{{amount}}",
+    "holdFor": "我们将为您保留餐桌：",
+    "why": "6 位或以上的预订需支付订金。如在用餐前至少 2 小时取消，订金全额退还。",
+    "pay": "支付 {{amount}}",
+    "paying": "正在支付…",
+    "simulate": "模拟支付（测试模式）",
+    "testModeNote": "测试模式：不会使用真实银行卡，也不会产生任何扣款。",
+    "cardFailed": "支付未成功，请检查银行卡信息后重试。",
+    "returnFailed": "您的银行未确认此次支付，请重试或换一张卡。",
+    "confirmingHeading": "正在确认支付",
+    "confirming": "正在确认您的支付…",
+    "stillConfirming": "仍在确认您的支付…可能需要多一点时间。请保留您的预订号，确认后我们会短信通知您。",
+    "holdEndedHeading": "保留时间已结束",
+    "holdEnded": "保留时间已结束",
+    "holdEndedText": "支付订金的时间已到，餐桌已释放。请重新开始预订。",
+    "holdEndedAfterPayment": "保留时间在支付完成前已结束；已支付的款项将全额退还。",
+    "cancelledText": "此预订已取消。",
+    "startAgain": "重新开始",
+    "announceFiveMinutes": "还剩 5 分钟支付订金。",
+    "announceOneMinute": "还剩 1 分钟支付订金。"
   },
   "errors": {
     "slot_taken": "抱歉，该时间刚刚被订走。请选择其他时间。",
@@ -70,7 +92,8 @@
     "validation_failed": "部分信息有误，请检查表单。",
     "too_many_requests": "尝试次数过多，请稍等一分钟后再试。",
     "unexpected": "系统出现问题，请重试。",
-    "not_signed_in": "密码不正确，请重试。"
+    "not_signed_in": "密码不正确，请重试。",
+    "payment_provider_error": "支付服务暂时不可用。您的餐桌会保留几分钟，请重试。"
   },
   "fieldErrors": {
     "name_length": "请输入您的姓名（最多 80 个字符）。",
@@ -118,7 +141,11 @@
         "free": "空闲",
         "booked": "已预订",
         "arrivingSoon": "即将到店",
-        "seated": "已入座"
+        "seated": "已入座",
+        "awaitingDeposit": "待付订金"
+      },
+      "statusShort": {
+        "awaitingDeposit": "待付"
       }
     },
     "zoom": {
@@ -131,6 +158,8 @@
       "close": "关闭",
       "current": "当前入座",
       "next": "下一个预订",
+      "selected": "所选预订",
+      "bookingHeading": "预订 {{reference}}",
       "nothingTonight": "这张桌今晚没有预订。",
       "guest": "客人",
       "time": "时间",
@@ -140,7 +169,8 @@
       "mobile": "手机",
       "occasion": "场合",
       "notes": "备注",
-      "allergyInList": "详情请看今晚预订列表。"
+      "allergyInList": "详情请看今晚预订列表。",
+      "deposit": "订金"
     },
     "list": {
       "heading": "今晚预订",
@@ -169,7 +199,16 @@
       "noOtherTable": "目前没有适合 {{count}} 位的空闲餐桌。",
       "seatedAt": "已在 {{table}} 入座。",
       "clear": "清台",
-      "clearing": "正在清台…"
+      "clearing": "正在清台…",
+      "cancel": "取消预订",
+      "cancelling": "正在取消…",
+      "cancelTitle": "取消此预订？",
+      "cancelQuestion": "取消 {{time}} 的{{party}}预订？",
+      "cancelRefund": "订金 {{amount}} 将全额退还。",
+      "cancelNoDeposit": "尚未收取订金。",
+      "keepBooking": "保留预订",
+      "confirmCancel": "确认取消",
+      "cancelled": "预订 {{reference}} 已取消。"
     },
     "errors": {
       "slot_taken": "该餐桌已不再空闲。楼面已刷新，请重新选择。",
@@ -213,15 +252,27 @@
     "free": "空闲",
     "booked": "已预订",
     "arrivingSoon": "即将到店",
-    "seated": "已入座"
+    "seated": "已入座",
+    "awaitingDeposit": "待付订金"
   },
   "bookingStatus": {
-    "pendingPayment": "待付款",
+    "pendingPayment": "待付订金",
     "booked": "已预订",
     "confirmed": "已确认",
     "seated": "已入座",
     "completed": "已完成",
     "cancelled": "已取消"
+  },
+  "deposit": {
+    "line": "订金 {{amount}} · {{status}}",
+    "status": {
+      "awaiting": "待支付",
+      "paid": "已支付",
+      "refundPending": "退款处理中",
+      "refunded": "已退款",
+      "kept": "不予退还（取消过晚）",
+      "released": "已释放"
+    }
   },
   "waitlist": {
     "heading": "候位名单",

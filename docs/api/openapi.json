@@ -978,6 +978,80 @@
         }
       }
     },
+    "/api/v1/demo/payments/{bookingId}/succeed": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "simulatePayment",
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/config": {
+      "get": {
+        "tags": [
+          "Payments"
+        ],
+        "operationId": "getPaymentConfig",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentConfigResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/venues/{venueId}/messages": {
       "get": {
         "tags": [
@@ -1879,7 +1953,8 @@
           "notes",
           "deposit",
           "depositStatus",
-          "version"
+          "version",
+          "refundDecision"
         ],
         "type": "object",
         "properties": {
@@ -1970,6 +2045,16 @@
           "version": {
             "type": "integer",
             "format": "uint32"
+          },
+          "refundDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundDecision"
+              }
+            ]
           }
         }
       },
@@ -2044,7 +2129,8 @@
           "status",
           "depositStatus",
           "cancelReason",
-          "holdExpiresAt"
+          "holdExpiresAt",
+          "holdSecondsRemaining"
         ],
         "type": "object",
         "properties": {
@@ -2081,6 +2167,13 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "holdSecondsRemaining": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -2660,6 +2753,30 @@
           }
         }
       },
+      "PaymentConfigResponse": {
+        "required": [
+          "provider",
+          "publishableKey"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/PaymentProviderName"
+          },
+          "publishableKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "PaymentProviderName": {
+        "enum": [
+          "stripe",
+          "fake"
+        ]
+      },
       "PosLogChangedNotice": {
         "required": [
           "posMessageIds"
@@ -2846,7 +2963,9 @@
           "endsAt",
           "guestName",
           "hasAllergy",
-          "version"
+          "version",
+          "deposit",
+          "depositStatus"
         ],
         "type": "object",
         "properties": {
@@ -2884,6 +3003,26 @@
           "version": {
             "type": "integer",
             "format": "uint32"
+          },
+          "deposit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MoneyDto"
+              }
+            ]
+          },
+          "depositStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DepositStatus"
+              }
+            ]
           }
         }
       },
@@ -3285,13 +3424,16 @@
       "name": "Seating"
     },
     {
+      "name": "Demo"
+    },
+    {
+      "name": "Payments"
+    },
+    {
       "name": "Messages"
     },
     {
       "name": "Bookings"
-    },
-    {
-      "name": "Demo"
     }
   ]
 }

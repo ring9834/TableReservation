@@ -120,6 +120,12 @@
   border-color: #be123c;
 }
 
+.swatch.awaitingDeposit {
+  background: #ede9fe;
+  border-color: #6d28d9;
+  border-style: dotted;
+}
+
 .allergySwatch {
   display: inline-grid;
   place-items: center;

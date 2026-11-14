@@ -19,7 +19,9 @@ internal sealed record TablePositionDto(decimal X, decimal Y, decimal Width, dec
 /// <summary>A short summary of a booking on a table, for the host screens only.</summary>
 /// <param name="GuestName">The name given with this booking (its contact name, M6a); <c>null</c> for a walk-in without a name.</param>
 /// <param name="HasAllergy">The guest has allergy notes (AC2.6); the notes themselves are in the host list.</param>
-/// <param name="Version">The booking's row version; send it back to seat or clear (M6a).</param>
+/// <param name="Version">The booking's row version; send it back to seat, clear or cancel (M6a).</param>
+/// <param name="Deposit">The deposit the booking takes, if any (M8b).</param>
+/// <param name="DepositStatus">The deposit's state, if the booking takes one (M8b).</param>
 internal sealed record TableBookingSummary(
     Guid BookingId,
     string Reference,
@@ -29,7 +31,9 @@ internal sealed record TableBookingSummary(
     DateTime EndsAt,
     string? GuestName,
     bool HasAllergy,
-    uint Version);
+    uint Version,
+    MoneyDto? Deposit,
+    DepositStatus? DepositStatus);
 
 /// <param name="State">Derived by <see cref="TableStateRule"/> at <c>at</c> (Design §2.5).</param>
 /// <param name="Current">The booking seated at the table, if any.</param>
@@ -91,6 +95,8 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
                 b.GuestId,
                 b.ContactName,
                 b.Version,
+                DepositAmount = b.Deposit == null ? (Money?)null : b.Deposit.Amount,
+                DepositStatus = b.Deposit == null ? (DepositStatus?)null : b.Deposit.Status,
                 TableIds = b.Tables.Where(t => t.Active).Select(t => t.TableId).ToList(),
             })
             .ToListAsync(cancellationToken);
@@ -113,7 +119,9 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
                 r.Period.End.UtcDateTime,
                 r.ContactName?.Value,
                 !string.IsNullOrWhiteSpace(guest?.AllergyNotes),
-                r.Version);
+                r.Version,
+                r.DepositAmount is { } amount ? MoneyDto.From(amount) : null,
+                r.DepositStatus);
             return (r.TableIds, View: new TableBookingView(r.Status, r.Period), Summary: summary);
         }).ToList();
 

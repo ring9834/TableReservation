@@ -3,7 +3,7 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import type { CreateBookingResponse, VenueResponse } from "@/api/model";
-import { formatInstant, formatInstantTime, formatMoney } from "@/lib/format";
+import { formatInstant, formatMoney } from "@/lib/format";
 import { partyLabel } from "./party";
 import { useFocusHeading } from "./useFocusHeading";
 import styles from "./booking.module.css";
@@ -11,14 +11,16 @@ import styles from "./booking.module.css";
 type Props = Readonly<{
   venue: VenueResponse;
   booking: CreateBookingResponse;
+  /** The deposit was paid on the payment step (M8b): shows "Deposit paid NZ$120.00". */
+  paid?: boolean;
   onBookAnother: () => void;
 }>;
 
 /**
- * The booking reference (AC1.6) and its details in venue time. A party of 6+ is `pendingPayment` with a deposit and
- * a hold (BR-06); the payment step arrives in M8, so this says it is coming next.
+ * The booking reference (AC1.6) and its details in venue time. A party of 6+ reaches it from the payment step once
+ * the deposit is paid (AC1.5). Coming back from 3-D Secure without the stored summary, only what is known shows.
  */
-export function Confirmation({ venue, booking, onBookAnother }: Props) {
+export function Confirmation({ venue, booking, paid = false, onBookAnother }: Props) {
   const { t, i18n } = useTranslation();
   const headingRef = useFocusHeading<HTMLHeadingElement>(true);
   const id = useId();
@@ -28,39 +30,42 @@ export function Confirmation({ venue, booking, onBookAnother }: Props) {
   return (
     <section aria-labelledby={`${id}-heading`} className={styles.step}>
       <h2 id={`${id}-heading`} ref={headingRef} tabIndex={-1}>
-        {deposit ? t("confirmation.headingPending") : t("confirmation.heading")}
+        {t("confirmation.heading")}
       </h2>
       <dl className={styles.details} data-testid="booking-details">
-        <div>
-          <dt>{t("confirmation.reference")}</dt>
-          <dd className={styles.reference} data-testid="booking-reference">
-            {booking.reference}
-          </dd>
-        </div>
-        <div>
-          <dt>{t("confirmation.when")}</dt>
-          <dd>{formatInstant(booking.startsAt, venue.timeZone, language)}</dd>
-        </div>
-        <div>
-          <dt>{t("confirmation.party")}</dt>
-          <dd>{partyLabel(t, booking.partySize)}</dd>
-        </div>
+        {booking.reference && (
+          <div>
+            <dt>{t("confirmation.reference")}</dt>
+            <dd className={styles.reference} data-testid="booking-reference">
+              {booking.reference}
+            </dd>
+          </div>
+        )}
+        {booking.startsAt && (
+          <div>
+            <dt>{t("confirmation.when")}</dt>
+            <dd>{formatInstant(booking.startsAt, venue.timeZone, language)}</dd>
+          </div>
+        )}
+        {booking.partySize > 0 && (
+          <div>
+            <dt>{t("confirmation.party")}</dt>
+            <dd>{partyLabel(t, booking.partySize)}</dd>
+          </div>
+        )}
+        {paid && (
+          <div>
+            <dt>{t("confirmation.deposit")}</dt>
+            <dd data-testid="deposit-paid">
+              {deposit
+                ? t("confirmation.depositPaid", {
+                    amount: formatMoney(deposit.amountCents, deposit.currency, language),
+                  })
+                : t("confirmation.depositPaidNoAmount")}
+            </dd>
+          </div>
+        )}
       </dl>
-
-      {deposit && (
-        <div className={styles.notice}>
-          <h3>{t("confirmation.depositHeading")}</h3>
-          <p>
-            {t("confirmation.depositText", {
-              amount: formatMoney(deposit.amountCents, deposit.currency, language),
-              time: booking.holdExpiresAt
-                ? formatInstantTime(booking.holdExpiresAt, venue.timeZone, language)
-                : "",
-            })}
-          </p>
-          <p>{t("confirmation.paymentNext")}</p>
-        </div>
-      )}
 
       <button type="button" className={styles.secondary} onClick={onBookAnother}>
         {t("confirmation.bookAnother")}

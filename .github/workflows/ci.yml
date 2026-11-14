@@ -144,8 +144,12 @@ jobs:
       E2E_HOST_PASSCODE: ci-host-passcode
       E2E_PRESENTER_PASSCODE: ci-presenter-passcode
       Cors__AllowedOrigins__0: http://localhost:3000
-      # No Stripe keys in CI: deposits use the in-process Fake provider (Design §8.4).
+      # No Stripe keys in CI: deposits use the in-process Fake provider (Design §8.4). With Demo:Enabled the guest page's
+      # "Simulate payment (test mode)" and the Fake's refunds are signed Stripe events (Design §18.8); this signing
+      # secret is a CI-only value for a throwaway run, not a secret (CLAUDE.md rule 11).
       Payments__Provider: Fake
+      Demo__Enabled: "true"
+      Stripe__WebhookSecret: whsec_ci_only_not_a_secret
       # Development: migrations and the Golden Dragon seed run at start-up (Database:MigrateOnStartup), and the
       # business clock is fixed at 18:25 today (Demo:Clock, Design §17).
       ASPNETCORE_ENVIRONMENT: Development

@@ -28,7 +28,74 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getDemoLoginUrl = () => {
+export const getSimulatePaymentUrl = (bookingId: string,) => {
+
+
+
+
+  return `/api/v1/demo/payments/${bookingId}/succeed`
+}
+
+export const simulatePayment = async (bookingId: string, options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getSimulatePaymentUrl(bookingId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSimulatePaymentMutationKey = () => ['simulatePayment'] as const;
+
+export const getSimulatePaymentMutationOptions = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof simulatePayment>>, TError,SimulatePaymentMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof simulatePayment>>, TError,SimulatePaymentMutationVariables, TContext> => {
+
+const mutationKey = getSimulatePaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof simulatePayment>>, SimulatePaymentMutationVariables> = (props) => {
+          const {bookingId} = props ?? {};
+
+          return  simulatePayment(bookingId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SimulatePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof simulatePayment>>>
+
+    export type SimulatePaymentMutationError = ErrorType<ApiProblem>
+    export type SimulatePaymentMutationVariables = {bookingId: string}
+
+    export const useSimulatePayment = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof simulatePayment>>, TError,SimulatePaymentMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof simulatePayment>>,
+        TError,
+        SimulatePaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSimulatePaymentMutationOptions(options), queryClient);
+    }
+    export const getDemoLoginUrl = () => {
 
 
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Reservation.Api.Common;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
+using Reservation.Infrastructure;
 using Reservation.Infrastructure.Persistence;
 
 namespace Reservation.Api.Features.Bookings;
@@ -13,17 +14,24 @@ namespace Reservation.Api.Features.Bookings;
 /// <param name="DepositStatus">The deposit's state, when the booking takes one.</param>
 /// <param name="CancelReason">Why the booking was cancelled, once it is.</param>
 /// <param name="HoldExpiresAt">When an unpaid hold is released, while the booking waits for payment.</param>
+/// <param name="HoldSecondsRemaining">
+/// Whole seconds left on the hold (rounded up, never negative), worked out on the server's infrastructure clock while
+/// the booking waits for payment (M8b): the guest's countdown never depends on the guest's own clock.
+/// </param>
 internal sealed record BookingStatusResponse(
     Guid BookingId,
     BookingStatus Status,
     DepositStatus? DepositStatus,
     CancelReason? CancelReason,
-    DateTime? HoldExpiresAt);
+    DateTime? HoldExpiresAt,
+    int? HoldSecondsRemaining);
 
 internal sealed record GetBookingStatus(VenueId VenueId, BookingId BookingId);
 
 /// <summary>Reads the states straight into the response; the venue filter limits the lookup to the route's venue.</summary>
-internal sealed class GetBookingStatusHandler(ReservationsDbContext db) : IQueryHandler<GetBookingStatus, BookingStatusResponse>
+internal sealed class GetBookingStatusHandler(
+    ReservationsDbContext db,
+    [FromKeyedServices(Clocks.Infrastructure)] TimeProvider infrastructureClock) : IQueryHandler<GetBookingStatus, BookingStatusResponse>
 {
     public async Task<Result<BookingStatusResponse>> Handle(GetBookingStatus query, CancellationToken cancellationToken)
     {
@@ -34,10 +42,22 @@ internal sealed class GetBookingStatusHandler(ReservationsDbContext db) : IQuery
                 b.Status,
                 b.Deposit == null ? null : b.Deposit.Status,
                 b.CancellationReason,
-                b.Status == BookingStatus.PendingPayment && b.HoldExpiresAt != null ? b.HoldExpiresAt.Value.UtcDateTime : null))
+                b.Status == BookingStatus.PendingPayment && b.HoldExpiresAt != null ? b.HoldExpiresAt.Value.UtcDateTime : null,
+                (int?)null))
             .SingleOrDefaultAsync(cancellationToken);
-        return status is null ? Error.NotFound() : status;
+        if (status is null)
+        {
+            return Error.NotFound();
+        }
+
+        return status.HoldExpiresAt is { } expiresAt
+            ? status with { HoldSecondsRemaining = SecondsLeft(new DateTimeOffset(expiresAt, TimeSpan.Zero), infrastructureClock.GetUtcNow()) }
+            : status;
     }
+
+    /// <summary>Whole seconds from <paramref name="now"/> to <paramref name="expiresAt"/>, rounded up, at least 0.</summary>
+    public static int SecondsLeft(DateTimeOffset expiresAt, DateTimeOffset now) =>
+        (int)Math.Max(0, Math.Ceiling((expiresAt - now).TotalSeconds));
 }
 
 /// <summary>

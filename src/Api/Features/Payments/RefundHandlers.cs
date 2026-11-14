@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Reservation.Api.Auth;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Infrastructure.Outbox;
@@ -80,6 +82,18 @@ internal static class PaymentsRegistration
     public static IServiceCollection AddPaymentHandlers(this IServiceCollection services)
     {
         services.AddScoped<StripeWebhookHandler>();
+        services.AddScoped<StripeWebhookProcessor>();
+
+        // M8b (Design §18.8): with the Fake provider the demo signs its simulated payment and refund events, so a
+        // webhook secret is needed whenever the demo endpoints are mapped.
+        services.AddOptions<StripeOptions>()
+            .Validate<IOptions<PaymentOptions>, IOptions<DemoOptions>>(
+                (o, payments, demo) => payments.Value.Provider != PaymentProviderKind.Fake || !demo.Value.Enabled
+                    || !string.IsNullOrWhiteSpace(o.WebhookSecret),
+                "Payments:Provider is Fake and Demo:Enabled is true, so Stripe:WebhookSecret must be set (any value locally: it signs the simulated payment and refund events; dotnet user-secrets).")
+            .ValidateOnStart();
+        services.AddSingleton<FakeRefundReporter>();
+        services.AddHostedService(provider => provider.GetRequiredService<FakeRefundReporter>());
         services.AddEventHandler<BookingCancelled, RefundOnCancelHandler>();
         services.AddEventHandler<LatePaymentReceived, LatePaymentRefundHandler>();
         return services;

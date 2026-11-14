@@ -12,6 +12,10 @@ internal sealed record TableRef(Guid Id, string Name);
 
 /// <param name="MobileMasked">Country code and last 3 digits only.</param>
 /// <param name="Version">Row version; send it back with confirm or cancel.</param>
+/// <param name="RefundDecision">
+/// What a cancellation decided about the deposit (M8b): <c>full</c> (a refund is due or done), <c>none</c> (kept,
+/// cancelled late) or <c>notApplicable</c>; <c>null</c> while the booking is not cancelled.
+/// </param>
 internal sealed record BookingListItem(
     Guid Id,
     string Reference,
@@ -29,7 +33,8 @@ internal sealed record BookingListItem(
     string? Notes,
     MoneyDto? Deposit,
     DepositStatus? DepositStatus,
-    uint Version);
+    uint Version,
+    RefundDecision? RefundDecision);
 
 /// <param name="Day">The venue-local service day.</param>
 /// <param name="Items">Bookings starting that day, in time order, every status. One day is not paged.</param>
@@ -73,6 +78,7 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                 DepositStatus = b.Deposit == null ? (DepositStatus?)null : b.Deposit.Status,
                 TableIds = b.Tables.Select(t => t.TableId).ToList(),
                 b.Version,
+                b.CancellationRefund,
             })
             .ToListAsync(cancellationToken);
 
@@ -106,7 +112,8 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                     r.Notes,
                     r.DepositAmount is { } amount ? MoneyDto.From(amount) : null,
                     r.DepositStatus,
-                    r.Version);
+                    r.Version,
+                    r.CancellationRefund);
             })
             .ToList();
         return new BookingListResponse(day, venue.TimeZone, items);

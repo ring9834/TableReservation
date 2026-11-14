@@ -15,4 +15,6 @@ export interface BookingStatusResponse {
   cancelReason: null | CancelReason;
   /** @nullable */
   holdExpiresAt: string | null;
+  /** @nullable */
+  holdSecondsRemaining: number | null;
 }
