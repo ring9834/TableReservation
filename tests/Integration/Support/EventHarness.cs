@@ -28,6 +28,7 @@ public sealed class EventHarness : IAsyncDisposable
             {
                 ["Outbox:PollInterval"] = "00:00:01",
                 ["Outbox:BatchSize"] = "50",
+                ["Payments:Provider"] = "Fake",
             })
             .Build();
 

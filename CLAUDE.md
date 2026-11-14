@@ -44,6 +44,8 @@ docker compose up -d                     # PostgreSQL only (the mock POS runs in
 dotnet user-secrets set ConnectionStrings:Reservations "Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=local_dev_only" --project src/Api   # once
 dotnet user-secrets set Demo:HostPasscode "<host passcode>" --project src/Api             # once; the API refuses to start in Development without both
 dotnet user-secrets set Demo:PresenterPasscode "<presenter passcode>" --project src/Api   # once; must differ from the host passcode
+dotnet user-secrets set Payments:Provider Stripe --project src/Api   # optional: real Stripe test mode (Development uses Fake); then also set Stripe:SecretKey (sk_test_…) and Stripe:WebhookSecret (whsec_… from stripe listen); the API refuses to start without them
+stripe listen --forward-to https://localhost:5001/api/v1/webhooks/stripe   # with Stripe test mode only: forwards Stripe webhooks to the API (Design §8.4)
 dotnet build                             # .NET 10 SDK pinned in global.json; warnings are errors
 dotnet test                              # unit + integration on Microsoft.Testing.Platform (Docker must be running)
 dotnet run --project src/Api             # https://localhost:5001; /health/live, /health/ready, /openapi/v1.json; in Development applies migrations + seed (Database:MigrateOnStartup)

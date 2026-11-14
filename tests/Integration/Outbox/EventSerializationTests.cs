@@ -14,12 +14,12 @@ public sealed class EventSerializationTests
     private readonly EventEnvelopeSerializer _serializer = new(new EventTypeRegistry());
 
     [Fact]
-    public void Registry_knows_the_13_catalogue_events_by_unique_name()
+    public void Registry_knows_the_14_catalogue_events_by_unique_name()
     {
         var registry = new EventTypeRegistry();
 
-        Assert.Equal(13, registry.All.Count);
-        Assert.Equal(13, registry.All.Select(e => e.Name).Distinct().Count());
+        Assert.Equal(14, registry.All.Count); // LatePaymentReceived since M8a
+        Assert.Equal(14, registry.All.Select(e => e.Name).Distinct().Count());
         Assert.Equal(typeof(BookingSeated), registry.Resolve("BookingSeated", 1));
         Assert.Equal(new EventMetadata("MessageSent", 1, "Message", typeof(MessageSent)), registry.MetadataOf(typeof(MessageSent)));
         Assert.Throws<InvalidOperationException>(() => registry.Resolve("BookingSeated", 2));
@@ -32,6 +32,7 @@ public sealed class EventSerializationTests
         new BookingConfirmed(Guid.CreateVersion7(_now), _now, _venue, new BookingId(Guid.CreateVersion7()), Actor.ForGuest(new GuestId(Guid.CreateVersion7()))),
         new BookingSeated(Guid.CreateVersion7(_now), _now, _venue, new BookingId(Guid.CreateVersion7()),
             [new TableId(Guid.CreateVersion7()), new TableId(Guid.CreateVersion7())], 4, SeatSource.WalkIn, new WaitlistEntryId(Guid.CreateVersion7()), _now),
+        new LatePaymentReceived(Guid.CreateVersion7(_now), _now, _venue, new BookingId(Guid.CreateVersion7()), "pi_test_late", 12_000),
         new MessageSent(Guid.CreateVersion7(_now), _now, _venue, new MessageId(Guid.CreateVersion7()), MessagePurpose.TableReady,
             MessageChannel.Sms, Guid.CreateVersion7(), "•••• 099"),
     };

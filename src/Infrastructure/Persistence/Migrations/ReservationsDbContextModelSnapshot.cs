@@ -133,6 +133,10 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.HasIndex("GuestId")
                         .HasDatabaseName("ix_bookings_guest_id");
 
+                    b.HasIndex("HoldExpiresAt")
+                        .HasDatabaseName("ix_bookings_hold_expiry")
+                        .HasFilter("status = 'PendingPayment'");
+
                     b.HasIndex("VenueId", "Reference")
                         .IsUnique()
                         .HasDatabaseName("ix_bookings_venue_id_reference");
@@ -893,6 +897,11 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                                 .HasColumnName("deposit_status");
 
                             b1.HasKey("BookingId");
+
+                            b1.HasIndex("PaymentIntentId")
+                                .IsUnique()
+                                .HasDatabaseName("ux_bookings_payment_intent_id")
+                                .HasFilter("payment_intent_id IS NOT NULL");
 
                             b1.ToTable("bookings");
 

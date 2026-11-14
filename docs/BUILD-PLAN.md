@@ -528,7 +528,82 @@ build, generate:api leaves src/api unchanged. Playwright: I run it myself with b
 don't read user secrets. Manual look in English and 中文.
 ```
 
-### M8 onward
+### M8a Payments back end
+```
+Milestone M8a: payments back end (Design §2.6, §3.1, §3.3, §5.5, §8, §10.1, §10.4, §14; Requirements
+AC1.5, AC5.5 (API side), BR-06, BR-07; ADR-004 CC2). API, workers, tests. The guest payment step and the
+host cancel button come in M8b. Read CLAUDE.md first, including rule 14 (two clocks).
+
+0. Package: ask me before adding Stripe.net (official). Nothing else new.
+
+1. Docs first: add an "M8a" block with this prompt (minus the last two lines) to BUILD-PLAN.md after
+   M7b, and rename "M8 onward" to "M9 onward". Decisions go in a new Design §8.4 Build notes (M8a).
+
+2. Configuration: Payments:Provider = Stripe | Fake. Stripe needs Stripe:SecretKey and
+   Stripe:WebhookSecret (user secrets locally, Secrets Manager in AWS), validated at start-up with a
+   clear message naming the missing setting. Fake is used by integration tests and CI (no Stripe keys
+   there). Never log keys, client secrets or webhook payloads; extend LogScrubbingTests.
+
+3. Taking a deposit (AC1.5, BR-06): online bookings of 6+ only (phone bookings take none). The amount
+   comes from booking.Terms.Deposit, in NZD cents.
+   - Save the booking (PendingPayment, BookingCreated) and COMMIT first. Never call Stripe while holding
+     the pacing advisory lock or table locks.
+   - Then IPaymentProvider.CreateDepositIntent with Stripe idempotency key "deposit:{bookingId}",
+     currency nzd, metadata bookingId + venueId + reference; store payment_intent_id on the booking.
+   - 201 returns clientSecret and holdExpiresAt. A replay with the same Idempotency-Key must return the
+     same clientSecret (the stored response must not hold the secret; recreate it idempotently on
+     replay). Stripe down → 502 payment_provider_error; the booking stays PendingPayment and its hold
+     expires normally. Say how the guest can retry.
+   - GET /venues/{venueId}/bookings/{id}/status (guest, anonymous, rate-limited): status only, nothing
+     personal.
+
+4. Payment hold: measure the 10 minutes in real time, i.e. on the infrastructure clock, so a hold
+   still expires while the business clock is fixed at 18:25 and the guest's browser countdown matches.
+   PaymentHoldExpiryJob (30 s, infrastructure clock) calls ExpireHold → Cancelled (reason HoldExpired),
+   deposit Released, table freed, floorPlanChanged. Document this in §8.4 as a rule-14 decision.
+
+5. Webhook POST /webhooks/stripe (§5.5): anonymous, exempt from the anonymous rate limit, body-size
+   limit, signature verified with Stripe:WebhookSecret (bad signature → 401, nothing saved). Accept
+   events in the account's API version (with Stripe.net: don't throw on an API-version mismatch; read
+   only the fields we need). Inbox row consumer 'stripe-webhook' + Stripe event ID; a repeat → 200,
+   no change. Report the exact path including any base path, for `stripe listen --forward-to`.
+   - payment_intent.succeeded → CaptureDeposit (find the booking by metadata bookingId, check the intent
+     ID and amount match). Hold expired but table still free → capture. Hold expired and table taken →
+     cancel the booking and refund in full (§8.1 CaptureDepositHandler). Amount mismatch → recorded,
+     no capture.
+   - charge.refunded → RecordRefund → deposit Refunded, DepositRefunded.
+   - Other event types → 200, ignored, inbox row kept.
+
+6. Cancelling and refunds (BR-07, §8.3): if a host cancel endpoint doesn't exist yet, add
+   POST /venues/{venueId}/bookings/{id}/cancel {version} (Host). Booking.Cancel decides the refund once
+   via RefundPolicy and booking.Terms; BookingCancelled carries it. RefundOnCancelHandler (outbox,
+   inbox-idempotent) calls Refund only when the decision is full, Stripe idempotency key
+   "{eventId}:refund"; Stripe errors → handler retry with backoff. The deposit becomes Refunded only
+   when charge.refunded arrives. The guest cancel link is M10 and must reuse the same Cancel.
+
+7. Texts (extends M7a NotificationHandler, en + zh-CN templates): DepositCaptured → the Confirmation
+   (deposit bookings get no confirmation at BookingCreated); BookingCancelled by guest or host →
+   Cancellation (none for HoldExpired); DepositRefunded → Refund with the amount. Bodies short, no
+   links yet (M10).
+
+8. Tests first (FakePaymentProvider; Stripe webhooks signed in tests with a test secret):
+   - Deposit amount per party size 1–8; phone booking of 6 takes none; terms are the booking's, not
+     the venue's current settings.
+   - Stripe never called while locks are held; Stripe failure → 502 and the hold still expires;
+     replayed create → same intent, same clientSecret, one intent.
+   - Webhooks: bad signature 401; duplicate event once; succeeded → Booked + Confirmation; late success
+     with table free → Booked, with table taken → Cancelled + refund requested; amount mismatch; unknown
+     type 200; API-version mismatch still parsed.
+   - Hold expiry with the business clock fixed and only the infrastructure clock moved.
+   - Refund decisions: guest ≥ 2 h full, < 2 h kept, host always full, hold expired not applicable;
+     handler run twice → one refund call, same key; refund recorded only on charge.refunded.
+   - Messages: Confirmation after capture, Cancellation, Refund, in en and zh-CN.
+
+Verification: dotnet build, dotnet test, has-pending-model-changes, refresh openapi.json +
+generate:api, web lint/typecheck/build. Playwright: I run it. Don't read user secrets.
+```
+
+### M9 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse

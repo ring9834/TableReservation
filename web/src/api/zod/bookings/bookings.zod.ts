@@ -203,3 +203,16 @@ export const GetAvailabilityResponse = zod.object({
 }))
 })
 
+export const GetBookingStatusParams = zod.object({
+  "venueId": zod.uuid(),
+  "id": zod.uuid()
+})
+
+export const GetBookingStatusResponse = zod.object({
+  "bookingId": zod.uuid(),
+  "status": zod.enum(['pendingPayment', 'booked', 'confirmed', 'seated', 'completed', 'cancelled']),
+  "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])]),
+  "cancelReason": zod.union([zod.null(),zod.union([zod.literal('guestRequest'),zod.literal('hostRequest'),zod.literal('holdExpired'),zod.literal(null)])]),
+  "holdExpiresAt": zod.iso.datetime({"offset":true}).nullable()
+})
+

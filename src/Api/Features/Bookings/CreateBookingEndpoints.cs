@@ -9,7 +9,8 @@ namespace Reservation.Api.Features.Bookings;
 
 /// <summary>
 /// <c>POST /venues/{venueId}/bookings</c>: online booking by a guest (public, 10 a minute per IP). A party of 6 or
-/// more is created as <c>pendingPayment</c> with the deposit due; capture arrives with payments (M8).
+/// more is created as <c>pendingPayment</c> with the deposit due and a Stripe client secret (M8a); 502
+/// <c>payment_provider_error</c> when Stripe fails (retry with the same <c>Idempotency-Key</c>).
 /// </summary>
 internal sealed class CreateOnlineBookingEndpoint : IEndpoint
 {
@@ -23,7 +24,7 @@ internal sealed class CreateOnlineBookingEndpoint : IEndpoint
             .Produces<CreateBookingResponse>(StatusCodes.Status201Created)
             .ProducesApiProblem(
                 StatusCodes.Status404NotFound, StatusCodes.Status409Conflict, StatusCodes.Status422UnprocessableEntity,
-                StatusCodes.Status429TooManyRequests);
+                StatusCodes.Status429TooManyRequests, StatusCodes.Status502BadGateway);
 
     private static Task<IResult> HandleAsync(
         Guid venueId,

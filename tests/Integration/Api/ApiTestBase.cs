@@ -32,10 +32,18 @@ public abstract class ApiTestBase(PostgresFixture postgres) : IAsyncLifetime
 
     protected virtual IReadOnlyDictionary<string, string?> Settings => new Dictionary<string, string?>();
 
+    /// <summary>An infrastructure clock for the API; <c>null</c> keeps the system clock.</summary>
+    protected virtual TestClock? InfrastructureClock => null;
+
     public virtual async ValueTask InitializeAsync()
     {
         Database = await TestDatabase.CreateAsync(postgres);
-        Factory = new ApiFactory(Database.ConnectionString) { Settings = Settings, ExtraServices = ConfigureServices };
+        Factory = new ApiFactory(Database.ConnectionString)
+        {
+            Settings = Settings,
+            ExtraServices = ConfigureServices,
+            InfrastructureClock = InfrastructureClock,
+        };
         Client = Factory.CreateApiClient();
     }
 

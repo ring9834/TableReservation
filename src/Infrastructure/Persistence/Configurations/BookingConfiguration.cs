@@ -38,6 +38,9 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Ignore(x => x.IsActive);
 
         builder.HasIndex(x => new { x.VenueId, x.Reference }).IsUnique();
+
+        // M8a (§8.4): PaymentHoldExpiryJob reads only pending holds.
+        builder.HasIndex(x => x.HoldExpiresAt).HasDatabaseName("ix_bookings_hold_expiry").HasFilter("status = 'PendingPayment'");
         builder.HasOne<Venue>().WithMany().HasForeignKey(x => x.VenueId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Guest>().WithMany().HasForeignKey(x => x.GuestId).OnDelete(DeleteBehavior.Restrict);
 
@@ -48,6 +51,10 @@ internal sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
             deposit.Property(d => d.Status).HasColumnName("deposit_status");
             deposit.Property(d => d.PaymentIntentId).HasColumnName("payment_intent_id");
             deposit.Property(d => d.RefundId).HasColumnName("refund_id");
+
+            // M8a (§8.4): charge.refunded finds the booking by its intent; one booking per intent.
+            deposit.HasIndex(d => d.PaymentIntentId).IsUnique()
+                .HasDatabaseName("ux_bookings_payment_intent_id").HasFilter("payment_intent_id IS NOT NULL");
         });
 
         builder.OwnsMany(x => x.Tables, assignment =>

@@ -49,6 +49,7 @@ internal static class NoticeMap
         BookingConfirmed e => FloorPlan([], e.BookingId, sequence),
         BookingCancelled e => FloorPlan([], e.BookingId, sequence),
         DepositRefunded e => FloorPlan([], e.BookingId, sequence),
+        LatePaymentReceived e => FloorPlan([], e.BookingId, sequence),
         BookingSeated e => FloorPlan(e.TableIds, e.BookingId, sequence),
         BookingCompleted e => FloorPlan([], e.BookingId, sequence),
         TableCleared e => FloorPlan(e.TableIds, e.BookingId, sequence),

@@ -43,6 +43,7 @@ public static class ErrorCodes
     public const string OutsideLateMatchWindow = "outside_late_match_window";
     public const string ReminderNotAllowed = "reminder_not_allowed";
     public const string TableTooSmall = "table_too_small";
+    public const string PaymentIntentMismatch = "payment_intent_mismatch";
 }
 
 /// <summary>An expected failure: stable code, translation key, kind and optional field errors.</summary>

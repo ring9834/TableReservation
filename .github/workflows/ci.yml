@@ -144,6 +144,8 @@ jobs:
       E2E_HOST_PASSCODE: ci-host-passcode
       E2E_PRESENTER_PASSCODE: ci-presenter-passcode
       Cors__AllowedOrigins__0: http://localhost:3000
+      # No Stripe keys in CI: deposits use the in-process Fake provider (Design §8.4).
+      Payments__Provider: Fake
       # Development: migrations and the Golden Dragon seed run at start-up (Database:MigrateOnStartup), and the
       # business clock is fixed at 18:25 today (Demo:Clock, Design §17).
       ASPNETCORE_ENVIRONMENT: Development

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Message templates in Simplified Chinese (Design §7, §7.2). Keys are MessagePurpose names. Placeholders in braces:
-     {venue}, {party}, {date}, {time}, {reference}. Keep bodies short and SMS-like; every key here must exist in the other
+     {venue}, {party}, {date}, {time}, {reference}, {amount} (M8a). Keep bodies short and SMS-like; every key here must exist in the other
      language too (MessageComposerTests). -->
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
@@ -9,4 +9,6 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="Confirmation" xml:space="preserve"><value>{venue}：已为您预订{date} {time}，{party}位。预订号 {reference}。期待您的光临！</value></data>
   <data name="TableReady" xml:space="preserve"><value>{venue}：您的餐桌已准备好！请到迎宾台。</value></data>
+  <data name="Cancellation" xml:space="preserve"><value>{venue}：您{date} {time}的{party}位预订（预订号 {reference}）已取消。</value></data>
+  <data name="Refund" xml:space="preserve"><value>{venue}：您的订金 {amount} 已退还（预订号 {reference}）。</value></data>
 </root>

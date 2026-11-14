@@ -12,6 +12,9 @@ internal static class MessagingRegistration
         services.AddSingleton<ITemplateStore, ResxTemplateStore>();
         services.AddSingleton<MessageComposer>();
         services.AddEventHandler<BookingCreated, NotificationHandler>();
+        services.AddEventHandler<DepositCaptured, NotificationHandler>();
+        services.AddEventHandler<BookingCancelled, NotificationHandler>();
+        services.AddEventHandler<DepositRefunded, NotificationHandler>();
         services.AddEventHandler<WaitlistNotified, NotificationHandler>();
         return services;
     }

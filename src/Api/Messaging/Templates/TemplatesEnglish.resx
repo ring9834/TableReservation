@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Message templates in English (Design §7, §7.2). Keys are MessagePurpose names. Placeholders in braces:
-     {venue}, {party}, {date}, {time}, {reference}. Keep bodies short and SMS-like; every key here must exist in the other
+     {venue}, {party}, {date}, {time}, {reference}, {amount} (M8a). Keep bodies short and SMS-like; every key here must exist in the other
      language too (MessageComposerTests). -->
 <root>
   <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
@@ -9,4 +9,6 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="Confirmation" xml:space="preserve"><value>{venue}: you're booked for {party} on {date} at {time}. Ref {reference}. See you soon!</value></data>
   <data name="TableReady" xml:space="preserve"><value>{venue}: your table is ready! Please come to the host stand.</value></data>
+  <data name="Cancellation" xml:space="preserve"><value>{venue}: your booking for {party} on {date} at {time} (ref {reference}) is cancelled.</value></data>
+  <data name="Refund" xml:space="preserve"><value>{venue}: we've refunded your deposit of {amount} (ref {reference}).</value></data>
 </root>

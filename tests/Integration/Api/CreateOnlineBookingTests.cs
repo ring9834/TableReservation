@@ -42,15 +42,18 @@ public sealed class CreateOnlineBookingTests(PostgresFixture postgres) : ApiTest
     [Fact]
     public async Task Party_of_6_is_pending_payment_with_the_deposit_due_AC1_5_BR_06()
     {
+        var before = DateTimeOffset.UtcNow;
         var created = await ReadAsync<CreateBookingResponse>(
             await PostAsync(Client, Venue + Path, BookingBody(DemoTime.Tonight, 20, 0, 6)), HttpStatusCode.Created);
+        var after = DateTimeOffset.UtcNow;
 
         Assert.Equal(BookingStatus.PendingPayment, created.Status);
         Assert.Equal(12_000, created.Deposit!.AmountCents); // 6 × NZD 20
         Assert.Equal("NZD", created.Deposit.Currency);
-        Assert.Equal(DemoTime.Now.AddMinutes(10).UtcDateTime, created.HoldExpiresAt);
+        // M8a: the hold is 10 minutes of real time (infrastructure clock), not of the fixed demo clock.
+        Assert.InRange(created.HoldExpiresAt!.Value, before.AddMinutes(10).UtcDateTime, after.AddMinutes(10).UtcDateTime);
         Assert.Equal([GoldenDragon.TableId("T10").Value], created.TableIds);
-        Assert.Null(created.ClientSecret); // payments arrive in M8
+        Assert.StartsWith("pi_fake_", created.ClientSecret, StringComparison.Ordinal); // the Fake provider (M8a)
     }
 
     [Fact]
