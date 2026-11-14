@@ -53,14 +53,36 @@
   },
   "confirmation": {
     "heading": "You're booked!",
-    "headingPending": "Your table is held",
     "reference": "Booking reference",
     "when": "When",
     "party": "Party",
-    "depositHeading": "Deposit needed",
-    "depositText": "Parties of 6 or more pay a deposit of {{amount}}. We hold your table until {{time}}.",
-    "paymentNext": "Payment step coming next: online payment is added in a later version of this demo.",
+    "deposit": "Deposit",
+    "depositPaid": "Deposit paid {{amount}}",
+    "depositPaidNoAmount": "Deposit paid",
     "bookAnother": "Book another table"
+  },
+  "pay": {
+    "heading": "Pay your deposit",
+    "depositFor": "Deposit {{amount}} for {{party}}",
+    "holdFor": "We'll hold your table for",
+    "why": "Parties of 6 or more pay a deposit. It is refunded in full if you cancel at least 2 hours before.",
+    "pay": "Pay {{amount}}",
+    "paying": "Paying…",
+    "simulate": "Simulate payment (test mode)",
+    "testModeNote": "Test mode: no real card is taken and no money moves.",
+    "cardFailed": "The payment didn't go through. Please check your card details and try again.",
+    "returnFailed": "Your bank didn't confirm the payment. Please try again or use another card.",
+    "confirmingHeading": "Confirming your payment",
+    "confirming": "Confirming your payment…",
+    "stillConfirming": "Still confirming your payment… This can take a little longer. Keep your booking reference: we'll text you when it's confirmed.",
+    "holdEndedHeading": "Your hold has ended",
+    "holdEnded": "Your hold has ended",
+    "holdEndedText": "The time to pay the deposit is up, so the table has been released. Please start again.",
+    "holdEndedAfterPayment": "Your hold ended before payment; any payment will be refunded.",
+    "cancelledText": "This booking has been cancelled.",
+    "startAgain": "Start again",
+    "announceFiveMinutes": "5 minutes left to pay the deposit.",
+    "announceOneMinute": "1 minute left to pay the deposit."
   },
   "errors": {
     "slot_taken": "Sorry, that time was just taken. Please choose another time.",
@@ -70,7 +92,8 @@
     "validation_failed": "Some details aren't right. Please check the form.",
     "too_many_requests": "Too many attempts. Please wait a minute and try again.",
     "unexpected": "Something went wrong on our side. Please try again.",
-    "not_signed_in": "That passcode isn't right. Please try again."
+    "not_signed_in": "That passcode isn't right. Please try again.",
+    "payment_provider_error": "Payment service unavailable. Your table is held for a few minutes; please try again."
   },
   "fieldErrors": {
     "name_length": "Please enter your name (up to 80 characters).",
@@ -118,7 +141,11 @@
         "free": "Free",
         "booked": "Booked",
         "arrivingSoon": "Arriving",
-        "seated": "Seated"
+        "seated": "Seated",
+        "awaitingDeposit": "Awaiting deposit"
+      },
+      "statusShort": {
+        "awaitingDeposit": "Unpaid"
       }
     },
     "zoom": {
@@ -131,6 +158,8 @@
       "close": "Close",
       "current": "Seated now",
       "next": "Next booking",
+      "selected": "Selected booking",
+      "bookingHeading": "Booking {{reference}}",
       "nothingTonight": "No bookings for this table tonight.",
       "guest": "Guest",
       "time": "Time",
@@ -140,7 +169,8 @@
       "mobile": "Mobile",
       "occasion": "Occasion",
       "notes": "Notes",
-      "allergyInList": "See tonight's list for details."
+      "allergyInList": "See tonight's list for details.",
+      "deposit": "Deposit"
     },
     "list": {
       "heading": "Tonight's bookings",
@@ -169,7 +199,16 @@
       "noOtherTable": "No free table fits a party of {{count}} right now.",
       "seatedAt": "Seated at {{table}}.",
       "clear": "Clear table",
-      "clearing": "Clearing…"
+      "clearing": "Clearing…",
+      "cancel": "Cancel booking",
+      "cancelling": "Cancelling…",
+      "cancelTitle": "Cancel this booking?",
+      "cancelQuestion": "Cancel {{party}} at {{time}}?",
+      "cancelRefund": "The deposit of {{amount}} will be refunded in full.",
+      "cancelNoDeposit": "No deposit has been taken.",
+      "keepBooking": "Keep booking",
+      "confirmCancel": "Cancel booking",
+      "cancelled": "Booking {{reference}} cancelled."
     },
     "errors": {
       "slot_taken": "That table is no longer free. The floor has been refreshed; please choose again.",
@@ -213,15 +252,27 @@
     "free": "Free",
     "booked": "Booked",
     "arrivingSoon": "Arriving soon",
-    "seated": "Seated"
+    "seated": "Seated",
+    "awaitingDeposit": "Awaiting deposit"
   },
   "bookingStatus": {
-    "pendingPayment": "Awaiting payment",
+    "pendingPayment": "Awaiting deposit",
     "booked": "Booked",
     "confirmed": "Confirmed",
     "seated": "Seated",
     "completed": "Completed",
     "cancelled": "Cancelled"
+  },
+  "deposit": {
+    "line": "Deposit {{amount}} · {{status}}",
+    "status": {
+      "awaiting": "Awaiting payment",
+      "paid": "Paid",
+      "refundPending": "Refund pending",
+      "refunded": "Refunded",
+      "kept": "Kept (cancelled late)",
+      "released": "Released"
+    }
   },
   "waitlist": {
     "heading": "Waitlist",

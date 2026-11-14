@@ -33,6 +33,50 @@
   border: 2px solid var(--accent);
 }
 
+/* Destructive (M8b "Cancel booking"): a red outline to open the question, solid red to confirm. Fixed colours, so the
+   text keeps its contrast in both themes. */
+.dangerButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  border: 2px solid #b91c1c;
+  cursor: pointer;
+}
+
+.dangerButton {
+  color: #ffffff;
+  background: #b91c1c;
+}
+
+/* "Cancel booking" in a booking's details: quiet, smaller than Seat, at the bottom behind a divider (M8b). */
+.cancelRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.quietDangerButton {
+  min-height: 2.75rem; /* still a comfortable touch target */
+  padding: 0 0.25rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--error);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.dangerButton:disabled,
 .primaryButton:disabled,
 .secondaryButton:disabled {
   opacity: 0.6;

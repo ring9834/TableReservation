@@ -216,3 +216,23 @@
   font-weight: 700;
   letter-spacing: 0.08em;
 }
+
+/* M8b payment step */
+.countdown {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.countdownTime {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

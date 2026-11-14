@@ -217,13 +217,56 @@ internal sealed partial class StripeWebhookHandler(
     private static partial void LogOutcome(ILogger logger, string stripeEventId, string stripeEventType, WebhookOutcome outcome, string? code);
 }
 
+/// <summary>Why a webhook body was not processed.</summary>
+internal enum WebhookRejection
+{
+    /// <summary>Missing, wrong or stale <c>Stripe-Signature</c>, or no webhook secret configured.</summary>
+    InvalidSignature,
+
+    /// <summary>Signed, but not an event the verifier can read.</summary>
+    InvalidPayload,
+}
+
+/// <summary>What happened to one webhook body: either the handler's outcome or why it was rejected.</summary>
+internal sealed record WebhookProcessing(WebhookOutcome? Outcome, WebhookRejection? Rejection);
+
+/// <summary>
+/// The one path a Stripe event takes (Design §8.4, §18.8): signature check by <see cref="StripeWebhookVerifier"/>, then
+/// <see cref="StripeWebhookHandler"/> (inbox, command, commit). Used by <c>POST /webhooks/stripe</c> and, with the Fake
+/// provider, by the demo's simulated payment and the fake refund reports, so neither can skip a step. The body is never
+/// logged.
+/// </summary>
+internal sealed partial class StripeWebhookProcessor(
+    StripeWebhookVerifier verifier,
+    StripeWebhookHandler handler,
+    ILogger<StripeWebhookProcessor> logger)
+{
+    /// <summary>Processes a signed body: the handler's outcome, or why it was rejected (nothing saved then).</summary>
+    public async Task<WebhookProcessing> ProcessAsync(string body, string? signature, CancellationToken cancellationToken)
+    {
+        var parsed = verifier.Parse(body, signature);
+        if (parsed.IsFailure)
+        {
+            var code = parsed.Error!.Fields is null ? parsed.Error.Code : StripeWebhookVerifier.InvalidPayload;
+            LogRejected(logger, code);
+            return new WebhookProcessing(
+                null, code == StripeWebhookVerifier.InvalidPayload ? WebhookRejection.InvalidPayload : WebhookRejection.InvalidSignature);
+        }
+
+        return new WebhookProcessing(await handler.HandleAsync(parsed.Value, cancellationToken), null);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Stripe webhook rejected: {Code}")]
+    private static partial void LogRejected(ILogger logger, string code);
+}
+
 /// <summary>
 /// <c>POST /webhooks/stripe</c> (Design §5.5, §14): public, not rate limited (Stripe sends bursts and retries), not in
 /// the OpenAPI document (it is for Stripe, not the web client). The body is read up to <see cref="MaxBodyBytes"/>
 /// (larger → 413) and checked against the <c>Stripe-Signature</c> header (bad → 401, nothing saved). The body is never
 /// logged. With the Stripe CLI: <c>stripe listen --forward-to https://localhost:5001/api/v1/webhooks/stripe</c>.
 /// </summary>
-internal sealed partial class StripeWebhookEndpoint : IEndpoint
+internal sealed class StripeWebhookEndpoint : IEndpoint
 {
     public const int MaxBodyBytes = 64 * 1024;
     public const string SignatureHeader = "Stripe-Signature";
@@ -237,9 +280,7 @@ internal sealed partial class StripeWebhookEndpoint : IEndpoint
 
     private static async Task<IResult> HandleAsync(
         HttpRequest request,
-        StripeWebhookVerifier verifier,
-        StripeWebhookHandler handler,
-        ILogger<StripeWebhookEndpoint> logger,
+        StripeWebhookProcessor processor,
         CancellationToken cancellationToken)
     {
         var body = await ReadBodyAsync(request, cancellationToken);
@@ -248,18 +289,13 @@ internal sealed partial class StripeWebhookEndpoint : IEndpoint
             return ApiProblems.Result(StatusCodes.Status413PayloadTooLarge, ProblemCodes.PayloadTooLarge);
         }
 
-        var parsed = verifier.Parse(body, request.Headers[SignatureHeader].FirstOrDefault());
-        if (parsed.IsFailure)
+        var processed = await processor.ProcessAsync(body, request.Headers[SignatureHeader].FirstOrDefault(), cancellationToken);
+        return processed.Rejection switch
         {
-            var code = parsed.Error!.Fields is null ? parsed.Error.Code : StripeWebhookVerifier.InvalidPayload;
-            LogRejected(logger, code);
-            return code == StripeWebhookVerifier.InvalidPayload
-                ? ApiProblems.Result(StatusCodes.Status400BadRequest, ErrorCodes.ValidationFailed)
-                : ApiProblems.Result(StatusCodes.Status401Unauthorized, ProblemCodes.InvalidSignature);
-        }
-
-        await handler.HandleAsync(parsed.Value, cancellationToken);
-        return TypedResults.Ok();
+            WebhookRejection.InvalidPayload => ApiProblems.Result(StatusCodes.Status400BadRequest, ErrorCodes.ValidationFailed),
+            WebhookRejection.InvalidSignature => ApiProblems.Result(StatusCodes.Status401Unauthorized, ProblemCodes.InvalidSignature),
+            _ => TypedResults.Ok(),
+        };
     }
 
     /// <summary>The body as text, or <c>null</c> when it is larger than <see cref="MaxBodyBytes"/>.</summary>
@@ -285,7 +321,4 @@ internal sealed partial class StripeWebhookEndpoint : IEndpoint
 
         return read > MaxBodyBytes ? null : Encoding.UTF8.GetString(buffer, 0, read);
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Stripe webhook rejected: {Code}")]
-    private static partial void LogRejected(ILogger logger, string code);
 }

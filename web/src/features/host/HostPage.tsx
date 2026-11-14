@@ -43,6 +43,12 @@ export function HostPage() {
   const router = useRouter();
   const messageFor = useApiError();
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  // A booking picked from tonight's list (M8b): its table's panel opens, or a panel of its own without a table.
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const selectTable = useCallback((tableId: string | null) => {
+    setSelectedTableId(tableId);
+    setSelectedBookingId(null);
+  }, []);
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [freed, setFreed] = useState<Freed | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -80,6 +86,7 @@ export function HostPage() {
     [tonight.data],
   );
   const selectedTable = plan.data?.tables.find((table) => table.id === selectedTableId) ?? null;
+  const selectedBooking = selectedBookingId ? (bookingsById.get(selectedBookingId) ?? null) : null;
   const tableNames = useMemo(
     () => new Map((plan.data?.tables ?? []).map((table) => [table.id, table.name])),
     [plan.data],
@@ -88,10 +95,10 @@ export function HostPage() {
 
   const onSeated = useCallback(
     (tableId: string) => {
-      setSelectedTableId(tableId);
+      selectTable(tableId);
       setAnnouncement(t("host.actions.seatedAt", { table: tableNames.get(tableId) ?? "" }));
     },
-    [t, tableNames],
+    [t, tableNames, selectTable],
   );
 
   if (signedOut) {
@@ -167,7 +174,7 @@ export function HostPage() {
                   plan={plan.data}
                   selectedTableId={selectedTableId}
                   highlightedTableId={highlightedTableId}
-                  onSelect={setSelectedTableId}
+                  onSelect={selectTable}
                   label={t("host.planHeading")}
                 />
               </ZoomPanContainer>
@@ -177,12 +184,13 @@ export function HostPage() {
         </section>
 
         <aside className={styles.side}>
-          {selectedTable && plan.data && (
+          {(selectedTable || selectedBooking) && plan.data && (
             <TableDetailsPanel
               table={selectedTable}
+              selectedBooking={selectedBooking}
               timeZone={plan.data.timeZone}
               bookingsById={bookingsById}
-              onClose={() => setSelectedTableId(null)}
+              onClose={() => selectTable(null)}
             />
           )}
           <WaitlistPanel
@@ -206,8 +214,11 @@ export function HostPage() {
               <TonightList
                 items={tonight.data.items}
                 timeZone={tonight.data.timeZone}
-                selectedTableId={selectedTableId}
-                onSelectTable={setSelectedTableId}
+                selectedBookingId={selectedBookingId}
+                onSelectBooking={(item) => {
+                  setSelectedTableId(item.tables[0]?.id ?? null);
+                  setSelectedBookingId(item.id);
+                }}
               />
             )}
           </section>
@@ -238,7 +249,7 @@ export function HostPage() {
   );
 }
 
-const legendStates = ["free", "booked", "arrivingSoon", "seated"] as const;
+const legendStates = ["free", "booked", "arrivingSoon", "awaitingDeposit", "seated"] as const;
 
 function Legend() {
   const { t } = useTranslation();

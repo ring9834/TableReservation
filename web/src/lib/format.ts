@@ -41,11 +41,15 @@ export const formatInstantTime = (instant: string, timeZone: string, language: s
     timeZone,
   }).format(new Date(instant));
 
-/** Money in whole cents (BR-11). */
+/**
+ * Money in whole cents (BR-11). NZD always reads "NZ$120.00", as in the texts the API sends (Design §8.4): English
+ * (en-NZ) would otherwise print a bare "$".
+ */
 export const formatMoney = (amountCents: number, currency: string, language: string) =>
-  new Intl.NumberFormat(intlLocale(language), { style: "currency", currency }).format(
-    amountCents / 100,
-  );
+  new Intl.NumberFormat(intlLocale(language), { style: "currency", currency })
+    .formatToParts(amountCents / 100)
+    .map((part) => (part.type === "currency" && currency === "NZD" ? "NZ$" : part.value))
+    .join("");
 
 /** `"2026-11-12"` plus `days`, as a date string. Calendar arithmetic only: no time zone involved. */
 export const addDays = (date: string, days: number) => {

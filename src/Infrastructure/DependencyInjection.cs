@@ -105,6 +105,9 @@ public static class DependencyInjection
             .Validate<IOptions<PaymentOptions>>(
                 (o, payments) => payments.Value.Provider != PaymentProviderKind.Stripe || !string.IsNullOrWhiteSpace(o.WebhookSecret),
                 "Payments:Provider is Stripe, so Stripe:WebhookSecret must be set (dotnet user-secrets locally, Secrets Manager in AWS).")
+            .Validate<IOptions<PaymentOptions>>(
+                (o, payments) => payments.Value.Provider != PaymentProviderKind.Stripe || !string.IsNullOrWhiteSpace(o.PublishableKey),
+                "Payments:Provider is Stripe, so Stripe:PublishableKey must be set (dotnet user-secrets locally, Secrets Manager in AWS).")
             .Validate(o => o.SignatureTolerance > TimeSpan.Zero, "Stripe:SignatureTolerance must be positive.")
             .ValidateOnStart();
         services.AddOptions<PaymentHoldExpiryOptions>()
@@ -112,10 +115,11 @@ public static class DependencyInjection
             .Validate(o => o.Interval > TimeSpan.Zero, "Payments:HoldExpiry:Interval must be positive.")
             .ValidateOnStart();
 
+        services.AddSingleton<FakeRefundQueue>();
         services.TryAddSingleton<IPaymentProvider>(provider =>
             provider.GetRequiredService<IOptions<PaymentOptions>>().Value.Provider == PaymentProviderKind.Stripe
                 ? new StripePaymentProvider(provider.GetRequiredService<IOptions<StripeOptions>>())
-                : new FakePaymentProvider());
+                : new FakePaymentProvider(provider.GetRequiredService<FakeRefundQueue>()));
         services.AddSingleton<StripeWebhookVerifier>();
         services.AddSingleton<PaymentHoldExpiryJob>();
         services.AddHostedService(provider => provider.GetRequiredService<PaymentHoldExpiryJob>());

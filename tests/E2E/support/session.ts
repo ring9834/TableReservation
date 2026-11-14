@@ -153,3 +153,26 @@ export const quotedWait = async (partySize: number) =>
     expect(quote.ok(), `quote answered ${quote.status()}`).toBe(true);
     return ((await quote.json()) as { quotedWaitMinutes: number }).quotedWaitMinutes;
   });
+
+/** The payment provider the API runs with (GET /payments/config, public, M8b): `fake` in CI, `stripe` in test mode. */
+export const paymentConfig = async () => {
+  const api = await request.newContext({ baseURL: apiBaseUrl, ignoreHTTPSErrors: true });
+  try {
+    const response = await api.get("/api/v1/payments/config");
+    expect(response.ok(), `payments/config answered ${response.status()}`).toBe(true);
+    return (await response.json()) as { provider: "stripe" | "fake"; publishableKey: string | null };
+  } finally {
+    await api.dispose();
+  }
+};
+
+/** A booking of the day (default today) by its reference, from the host list. */
+export const bookingByReference = (reference: string, day?: string) =>
+  withHostApi(async (api) => {
+    const list = await api.get(`${venuePath}/bookings${day ? `?day=${day}` : ""}`);
+    expect(list.ok(), `host list answered ${list.status()}`).toBe(true);
+    const { items } = (await list.json()) as { items: HostListItem[] };
+    const item = items.find((i) => i.reference === reference);
+    expect(item, `booking ${reference} in the host list`).toBeDefined();
+    return item!;
+  });

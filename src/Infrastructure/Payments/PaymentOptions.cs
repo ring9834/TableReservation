@@ -32,8 +32,13 @@ public sealed class StripeOptions
     /// <summary>Secret API key (<c>sk_test_…</c>).</summary>
     public string? SecretKey { get; set; }
 
-    /// <summary>Webhook signing secret (<c>whsec_…</c>).</summary>
+    /// <summary>Webhook signing secret (<c>whsec_…</c>). With the Fake provider and <c>Demo:Enabled</c> it also signs the
+    /// simulated payment and refund events (M8b, Design §18.8).</summary>
     public string? WebhookSecret { get; set; }
+
+    /// <summary>Publishable key (<c>pk_test_…</c>) the guest page loads Stripe.js with, from <c>GET /payments/config</c>
+    /// (M8b). Not a secret, but configured beside the others.</summary>
+    public string? PublishableKey { get; set; }
 
     /// <summary>How old a signed webhook may be (Stripe's default).</summary>
     public TimeSpan SignatureTolerance { get; set; } = TimeSpan.FromMinutes(5);

@@ -125,7 +125,8 @@ export const GetTonightBookingsResponse = zod.object({
   "currency": zod.string()
 })]),
   "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])]),
-  "version": zod.int()
+  "version": zod.int(),
+  "refundDecision": zod.union([zod.null(),zod.union([zod.literal('full'),zod.literal('none'),zod.literal('notApplicable'),zod.literal(null)])])
 }))
 })
 
@@ -213,6 +214,7 @@ export const GetBookingStatusResponse = zod.object({
   "status": zod.enum(['pendingPayment', 'booked', 'confirmed', 'seated', 'completed', 'cancelled']),
   "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])]),
   "cancelReason": zod.union([zod.null(),zod.union([zod.literal('guestRequest'),zod.literal('hostRequest'),zod.literal('holdExpired'),zod.literal(null)])]),
-  "holdExpiresAt": zod.iso.datetime({"offset":true}).nullable()
+  "holdExpiresAt": zod.iso.datetime({"offset":true}).nullable(),
+  "holdSecondsRemaining": zod.int().nullable()
 })
 

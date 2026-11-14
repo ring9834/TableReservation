@@ -8,6 +8,7 @@ import type { BookingChannel } from './bookingChannel';
 import type { BookingStatus } from './bookingStatus';
 import type { DepositStatus } from './depositStatus';
 import type { MoneyDto } from './moneyDto';
+import type { RefundDecision } from './refundDecision';
 import type { TableRef } from './tableRef';
 
 export interface BookingListItem {
@@ -33,4 +34,5 @@ export interface BookingListItem {
   deposit: null | MoneyDto;
   depositStatus: null | DepositStatus;
   version: number;
+  refundDecision: null | RefundDecision;
 }

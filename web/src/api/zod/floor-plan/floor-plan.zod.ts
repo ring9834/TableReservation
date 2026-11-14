@@ -44,7 +44,12 @@ export const GetFloorPlanResponse = zod.object({
   "endsAt": zod.iso.datetime({"offset":true}),
   "guestName": zod.string().nullable(),
   "hasAllergy": zod.boolean(),
-  "version": zod.int()
+  "version": zod.int(),
+  "deposit": zod.union([zod.null(),zod.object({
+  "amountCents": zod.int(),
+  "currency": zod.string()
+})]),
+  "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])])
 })]),
   "next": zod.union([zod.null(),zod.object({
   "bookingId": zod.uuid(),
@@ -55,7 +60,12 @@ export const GetFloorPlanResponse = zod.object({
   "endsAt": zod.iso.datetime({"offset":true}),
   "guestName": zod.string().nullable(),
   "hasAllergy": zod.boolean(),
-  "version": zod.int()
+  "version": zod.int(),
+  "deposit": zod.union([zod.null(),zod.object({
+  "amountCents": zod.int(),
+  "currency": zod.string()
+})]),
+  "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])])
 })])
 }))
 })

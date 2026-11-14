@@ -46,6 +46,8 @@ export * from './messageStatus';
 export * from './messageSubjectType';
 export * from './moneyDto';
 export * from './notifyWaitlistRequest';
+export * from './paymentConfigResponse';
+export * from './paymentProviderName';
 export * from './posLogChangedNotice';
 export * from './refundDecision';
 export * from './seatBookingRequest';

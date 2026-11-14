@@ -7,6 +7,12 @@
 import * as zod from 'zod';
 
 
+export const SimulatePaymentParams = zod.object({
+  "bookingId": zod.uuid()
+})
+
+export const SimulatePaymentResponse = zod.void()
+
 export const demoLoginBodyPasscodeMax = 200;
 
 

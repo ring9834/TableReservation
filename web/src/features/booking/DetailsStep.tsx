@@ -84,6 +84,9 @@ export function DetailsStep({ slot, onBack, onSlotTaken, onBooked }: Props) {
   const headingRef = useFocusHeading<HTMLHeadingElement>(true);
   const baseId = useId();
   const [failure, setFailure] = useState<string | null>(null);
+  // 502 payment_provider_error (M8a): the booking exists and holds its table; "Try again" resends the same request,
+  // so keyFor reuses the same Idempotency-Key and the API replays it and asks the payment service again.
+  const [canRetry, setCanRetry] = useState(false);
   const language = i18n.resolvedLanguage ?? "en";
 
   // One Idempotency-Key per submission: reused when the same request is sent again (a retry after a lost answer),
@@ -112,6 +115,7 @@ export function DetailsStep({ slot, onBack, onSlotTaken, onBooked }: Props) {
 
   const onSubmit = async (values: FormValues) => {
     setFailure(null);
+    setCanRetry(false);
     const request: CreateBookingRequest = {
       startsAt: slot.startsAt,
       partySize: slot.partySize,
@@ -151,6 +155,7 @@ export function DetailsStep({ slot, onBack, onSlotTaken, onBooked }: Props) {
       );
       if (formFields.length === 0 || formFields.length < fieldErrors.length) {
         setFailure(messageFor(error));
+        setCanRetry(isApiError(error) && error.code === "payment_provider_error");
       }
     }
   };
@@ -273,8 +278,18 @@ export function DetailsStep({ slot, onBack, onSlotTaken, onBooked }: Props) {
           </p>
         )}
         {failure && (
-          <div role="alert" className={styles.alert}>
+          <div role="alert" className={styles.alert} data-testid="booking-failure">
             <p>{failure}</p>
+            {canRetry && (
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={create.isPending}
+                onClick={() => void handleSubmit(onSubmit)()}
+              >
+                {t("common.retry")}
+              </button>
+            )}
           </div>
         )}
 

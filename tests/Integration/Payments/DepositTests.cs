@@ -165,7 +165,7 @@ public sealed class DepositTests(PostgresFixture postgres) : PaymentTestBase(pos
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = JsonDocument.Parse(body);
         Assert.Equal(
-            ["bookingId", "status", "depositStatus", "cancelReason", "holdExpiresAt"],
+            ["bookingId", "status", "depositStatus", "cancelReason", "holdExpiresAt", "holdSecondsRemaining"],
             json.RootElement.EnumerateObject().Select(p => p.Name));
         Assert.Equal("pendingPayment", json.RootElement.GetProperty("status").GetString());
         Assert.Equal("pending", json.RootElement.GetProperty("depositStatus").GetString());

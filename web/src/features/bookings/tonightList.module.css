@@ -11,7 +11,8 @@
   grid-template-columns: 4.5rem 1fr auto;
   grid-template-areas:
     "time name status"
-    "time meta status";
+    "time meta status"
+    "time deposit status";
   align-items: center;
   gap: 0 0.75rem;
   width: 100%;
@@ -28,10 +29,6 @@
 
 .row[aria-pressed="true"] {
   border: 2px solid var(--focus);
-}
-
-.row:disabled {
-  cursor: default;
 }
 
 .time {
@@ -59,6 +56,19 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.deposit {
+  grid-area: deposit;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* M8b: a booking held while its deposit is paid, as on the floor plan (colour + dotted border + text). */
+.pendingPayment .status {
+  color: #1c1917;
+  background: #ede9fe;
+  border: 2px dotted #6d28d9;
 }
 
 .cancelled .row,

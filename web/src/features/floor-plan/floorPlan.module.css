@@ -95,6 +95,14 @@
   stroke: #be123c;
 }
 
+/* M8b: held for a booking that hasn't paid its deposit yet. */
+.awaitingDeposit .shape {
+  fill: #ede9fe;
+  stroke: #6d28d9;
+  stroke-dasharray: 2 4;
+  stroke-linecap: round;
+}
+
 /* Tile text: the size comes from the tile's layout (tileLayout.mjs), which fits it inside the outline. */
 .tileName {
   fill: #1c1917;
@@ -186,6 +194,12 @@
 .stateBadge.seated {
   background: #ffe4e6;
   border-color: #be123c;
+}
+
+.stateBadge.awaitingDeposit {
+  background: #ede9fe;
+  border-color: #6d28d9;
+  border-style: dotted;
 }
 
 .booking h3 {
