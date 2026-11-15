@@ -18,6 +18,7 @@ import type {
   ApiProblem,
   DemoLoginRequest,
   DemoLoginResponse,
+  SendRemindersResponse,
   SetMockPosOnlineRequest,
   SimulateBillPaidRequest,
   SimulateBillPaidResponse
@@ -31,7 +32,74 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 
-export const getSetMockPosOnlineUrl = () => {
+export const getSendRemindersNowUrl = () => {
+
+
+
+
+  return `/api/v1/demo/reminders/send-now`
+}
+
+export const sendRemindersNow = async ( options?: Parameters<typeof apiFetch>[1]): Promise<SendRemindersResponse> => {
+
+  return apiFetch<SendRemindersResponse>(getSendRemindersNowUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendRemindersNowMutationKey = () => ['sendRemindersNow'] as const;
+
+export const getSendRemindersNowMutationOptions = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendRemindersNow>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendRemindersNow>>, TError,void, TContext> => {
+
+const mutationKey = getSendRemindersNowMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendRemindersNow>>, void> = () => {
+
+
+          return  sendRemindersNow(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendRemindersNowMutationResult = NonNullable<Awaited<ReturnType<typeof sendRemindersNow>>>
+
+    export type SendRemindersNowMutationError = ErrorType<ApiProblem>
+
+
+    export const useSendRemindersNow = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendRemindersNow>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof sendRemindersNow>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSendRemindersNowMutationOptions(options), queryClient);
+    }
+    export const getSetMockPosOnlineUrl = () => {
 
 
 

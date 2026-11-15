@@ -152,6 +152,9 @@ jobs:
       Stripe__WebhookSecret: whsec_ci_only_not_a_secret
       # The mock POS signs its simulated BillClosed ("Bill paid") with this; CI-only, not a secret (Design §6.7).
       Pos__WebhookSecret: pos_ci_only_not_a_secret
+      # Guest links (Design §7.3): CI-only signing key, not a secret (CLAUDE.md rule 11); links open the CI web app.
+      GuestLinks__SigningKey: guestlinks_ci_only_not_a_secret_000000
+      GuestLinks__BaseUrl: http://localhost:3000
       # Development: migrations and the Golden Dragon seed run at start-up (Database:MigrateOnStartup), and the
       # business clock is fixed at 18:25 today (Demo:Clock, Design §17).
       ASPNETCORE_ENVIRONMENT: Development

@@ -27,6 +27,12 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
     /// <summary>A test-only POS webhook signing secret (M9a); the mock and the tests sign <c>BillClosed</c> with it.</summary>
     public const string PosWebhookSecret = "pos_test_only_not_a_secret";
 
+    /// <summary>A test-only guest-link signing key (M10a); at least 32 characters, as the API requires.</summary>
+    public const string GuestLinkKey = "guestlinks_test_only_not_a_secret_0000";
+
+    /// <summary>The guest web app's origin in tests; links are <c>{GuestLinkBaseUrl}/manage/?token=…</c>.</summary>
+    public const string GuestLinkBaseUrl = "https://guest.test";
+
     public TestClock Clock { get; } = new(DemoTime.Now);
 
     public LogCapture Logs { get; } = new();
@@ -55,6 +61,8 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
         builder.UseSetting("Payments:Provider", "Fake");
         builder.UseSetting("Stripe:WebhookSecret", WebhookSecret);
         builder.UseSetting("Pos:WebhookSecret", PosWebhookSecret);
+        builder.UseSetting("GuestLinks:SigningKey", GuestLinkKey);
+        builder.UseSetting("GuestLinks:BaseUrl", GuestLinkBaseUrl);
         foreach (var (key, value) in Settings)
         {
             builder.UseSetting(key, value);

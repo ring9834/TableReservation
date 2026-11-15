@@ -827,13 +827,101 @@ Verification: dotnet build/test, has-pending-model-changes, generate:api, web li
 format:check/test/build. Playwright and the manual look: I run them. Don't read user secrets.
 ```
 
-### M10 onward
+### M10a Reminders and guest links, back end
+```
+Milestone M10a: reminders and guest links, back end (Design §2.2 ReminderRecord, §2.6, §7 incl.
+"About GuestLinkSigner", §7.1, §8.3, §10.4, §14; Requirements step 5 AC5.1–AC5.6, BR-07, BR-13;
+ADR-004). API, tests, docs. The guest manage page, the phone-panel buttons and the presenter
+"Send reminders now" button come in M10b. Read CLAUDE.md first, including rules 9 and 14.
+
+0. Seed check FIRST, before planning code: with the business clock at 18:25, list tonight's seeded
+   bookings and say which would get a reminder under BR-13 (booked ≥ 24 h ahead, starts ≥ 2 h after
+   now, Booked and not Confirmed), and whether at least one of them has a captured deposit, so demo
+   step 5 can show reminder → Cancel → FULL refund. Also check the Requirements demo script for step 5.
+   If the seed can't show it, propose the smallest seed change (e.g. one paid party of 6 at 20:45)
+   and ASK me; don't change the seed on your own.
+
+1. Docs first: an "M10a" block with this prompt (minus the last two lines) after M9b in BUILD-PLAN.md,
+   rename "M10 onward" to "M11 onward"; decisions in a new Design §7.3 Build notes (M10a).
+
+2. GuestLinkSigner (§7): HMAC-SHA256, URL-safe token with payload {bookingId, action
+   (Manage | Confirm | Cancel), expires, keyId}; constant-time compare; invalid_link / link_expired.
+   Key from GuestLinks:SigningKey (+ optional previous keys by keyId for rotation), ValidateOnStart
+   with a message naming it; user secrets locally, a "not a secret" value in CI. Expiry = the booking
+   start, compared on the BUSINESS clock (it's a business rule; record the rule-14 reasoning in §7.3).
+   GuestLinks:BaseUrl (the web app's origin) builds the links.
+
+3. Tokens never in a path and never in logs: links are {BaseUrl}/booking/?token=… . Make sure request
+   logging, HTTP logging, exception logs and OpenTelemetry/trace attributes never record the query
+   string or the token (scrub or exclude); extend LogScrubbingTests with a guest-link request. The
+   API responses for guest endpoints send Referrer-Policy: no-referrer and Cache-Control: no-store.
+
+4. Guest endpoints (anonymous, anonymous rate limit, no personal data beyond what the page needs):
+   - GET /api/v1/guest/bookings?token: display only, never changes anything (link scanners):
+     reference, venue name, date/time (venue zone), party size, status, deposit (amount + status),
+     the cancellation terms from booking.Terms, whether cancelling now would refund (worked out with
+     RefundPolicy at this moment, without cancelling), and which actions the token allows.
+   - POST /api/v1/guest/bookings/confirm {token} and /cancel {token}: verify the token again, check its
+     action allows it (a Confirm token can't cancel; a Manage token can cancel but not confirm), then
+     Booking.Confirm / Booking.Cancel(GuestRequest) through the same code as the host. Repeats are
+     no-ops returning success (Design §3.1). Record the response on the ReminderRecord when the
+     booking has one (AC5.6). Problem codes invalid_link, link_expired, invalid_transition.
+
+5. Reminders (BR-13, AC5.1, AC5.6):
+   - One eligibility function used everywhere: Booked (not Confirmed, not cancelled), has a guest,
+     created ≥ 24 h before its start, starts ≥ 2 h after now (business clock), no reminder yet.
+   - POST /api/v1/demo/reminders/send-now (Presenter; only when Demo:Enabled): for tonight's eligible
+     bookings, RecordReminder (SentAt, PolicyShown = the exact cancellation wording rendered from
+     booking.Terms in the guest's language), raising an event that NotificationHandler turns into a
+     Reminder message with two actions, Confirm and Cancel, each a signed link (Confirm/Cancel tokens).
+     Returns how many were sent and how many were skipped and why (counts only).
+     Sending twice sends nothing new.
+   - Reminder message expiry = booking start, translated to the infrastructure clock as M7a planned.
+   - The real 24-hour scheduler is pilot; note it in §7.3 (the eligibility function is ready for it).
+   - Confirmation messages always carry a Manage link (BR-13: the guest who booked < 24 h ahead
+     relies on it). Templates en + zh-CN; the link at the end, short text, no other personal data.
+
+6. Late-cancellation warning (BR-13): the GET response says when the booking is inside the
+   free-cancellation window from booking.Terms, so the page can show "cancelling now keeps your
+   deposit" before the guest taps Cancel. Cancelling inside the window keeps the deposit (no refund);
+   outside it the refund is full (M8a path). Host cancels stay full as before.
+
+7. Messages API: GET …/messages items gain actions [{kind: confirm | cancel | manage, url}] so the
+   phone panel (M10b) can show buttons. Host data: tonight's list items gain reminder {sentAt,
+   response?, respondedAt?} for the details panel.
+
+8. Tests first:
+   - Signer: round trip, tampered payload, wrong key, old keyId still valid, expired, wrong action.
+   - Eligibility: each BR-13 rule including the exact 24 h and 2 h boundaries.
+   - Send-now: eligible get one Reminder each with two signed actions in their language; ineligible
+     skipped with reasons; a second send sends nothing; Host 403; route absent when demo is off.
+   - GET by token changes nothing (row version unchanged); POST confirm → Confirmed + floorPlanChanged
+     + ReminderRecord response; POST cancel ≥ 2 h → Cancelled, refund requested in full, Cancellation
+     and Refund texts; cancel < 2 h → deposit kept, no refund call; repeats are no-ops; Confirm token
+     can't cancel; expired → link_expired; garbage → invalid_link.
+   - Confirmation now carries a Manage link that opens the booking.
+   - LogScrubbingTests: no token, query string or link appears in any log line.
+
+(Agreed, 16 Nov) The seed already fits step 5 at 18:25: only #10 (party of 2, no deposit) and #11
+(party of 6, deposit captured) get a reminder, and cancelling #11 then is in time. Send-now queues the
+Reminder messages in its own transaction (Design §7, §10.4; ADR-002 has no reminder event), not through
+a new event. Links are {BaseUrl}/manage/?token=… (Design §18.1). Seeded deposits carry pi_seed_*
+intents Stripe has never seen: with Payments:Provider=Stripe and Demo:Enabled, a SeedDepositRouter in
+front of the provider refunds those through the Fake path (signed charge.refunded through the same
+webhook processing); tested with a strict Stripe double, including that the router is absent when
+Demo:Enabled is false. Real test-mode intents at reset stay a possible M12 rehearsal upgrade (§7.3).
+
+Verification: dotnet build/test, has-pending-model-changes, openapi.json + generate:api, web lint/
+typecheck/build. Playwright: I run it. Don't read user secrets.
+```
+
+### M11 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse
 Also add a container image scan of the API image to the CI pipeline (ADR-005).
 Use the Route 53 demo domain for both (`app.<domain>` for the front end, `api.<domain>` for the API); the default cloudfront.net/amazonlightsail.com hostnames won't work with the demo session cookie (Design §17, §20).
-Also from Design §14.1 and §20: `ForwardedHeaders` trusting only the known proxy, so rate limits see the real client IP; `Demo:Enabled=true` with both passcodes from Secrets Manager in the demo environment; Data Protection keys that survive container restarts; `Cors:AllowedOrigins` set to `https://app.<domain>`; OpenTelemetry export to X-Ray.
+Also from Design §14.1 and §20: `ForwardedHeaders` trusting only the known proxy, so rate limits see the real client IP; `Demo:Enabled=true` with both passcodes from Secrets Manager in the demo environment; Data Protection keys that survive container restarts; `Cors:AllowedOrigins` set to `https://app.<domain>`; OpenTelemetry export to X-Ray, with the ASP.NET Core instrumentation dropping `url.query` / `url.full` so guest-link tokens never reach a trace (Design §7.3).
 
 ## Definition of done (every milestone)
 

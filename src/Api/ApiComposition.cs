@@ -8,6 +8,7 @@ using Reservation.Api.Features.Bookings;
 using Reservation.Api.Features.Bookings.Availability;
 using Reservation.Api.Features.Payments;
 using Reservation.Api.Features.Pos;
+using Reservation.Api.GuestLinks;
 using Reservation.Api.Messaging;
 using Reservation.Api.Pipeline;
 using Reservation.Api.Realtime;
@@ -77,6 +78,7 @@ internal static class ApiComposition
         });
 
         services.AddRealtime();
+        services.AddGuestLinks();
         services.AddMessages();
         services.AddPaymentHandlers();
         services.AddPos();
@@ -95,6 +97,8 @@ internal static class ApiComposition
     /// </summary>
     public static WebApplication UseApi(this WebApplication app)
     {
+        // First, so error, rate-limit and status-page responses for guest links get the headers too (Design §7.3).
+        app.UseMiddleware<GuestLinkHeadersMiddleware>();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
 

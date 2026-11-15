@@ -5,6 +5,7 @@
  * OpenAPI spec version: v1
  */
 import type { Language } from './language';
+import type { MessageActionItem } from './messageActionItem';
 import type { MessagePurpose } from './messagePurpose';
 import type { MessageStatus } from './messageStatus';
 import type { MessageSubjectType } from './messageSubjectType';
@@ -25,4 +26,5 @@ export interface MessageLogItem {
   lastError: string | null;
   subjectId: string;
   subjectType: MessageSubjectType;
+  actions: MessageActionItem[];
 }

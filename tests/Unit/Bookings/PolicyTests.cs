@@ -144,4 +144,68 @@ public class ReminderPolicyTests
 
         Assert.False(ReminderPolicy.CanSend(booking, TestData.Start.AddHours(-24)));
     }
+
+    [Fact]
+    public void Check_WhenEveryRulePasses_IsEligible_BR13()
+    {
+        Assert.Equal(ReminderEligibility.Eligible, ReminderPolicy.Check(BookingFactory.Create(), TestData.Start.AddHours(-24)));
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.Confirmed, ReminderEligibility.AlreadyConfirmed)]
+    [InlineData(BookingStatus.PendingPayment, ReminderEligibility.NotBooked)]
+    [InlineData(BookingStatus.Seated, ReminderEligibility.NotBooked)]
+    [InlineData(BookingStatus.Completed, ReminderEligibility.NotBooked)]
+    [InlineData(BookingStatus.Cancelled, ReminderEligibility.NotBooked)]
+    public void Check_WhenNotBooked_SaysWhy_BR13(BookingStatus status, ReminderEligibility expected)
+    {
+        Assert.Equal(expected, ReminderPolicy.Check(BookingFactory.InStatus(status), TestData.Start.AddHours(-24)));
+    }
+
+    [Fact]
+    public void Check_WithoutGuest_IsNoGuest_BR13()
+    {
+        var booking = Booking.Create(
+            TestData.Venue(), null, TestData.ContactName, TestData.Reference(), BookingChannel.Phone, PartySize.Of(2),
+            TestData.Start, [TestData.Table4], null, null, TestData.Created).Value;
+
+        Assert.Equal(ReminderEligibility.NoGuest, ReminderPolicy.Check(booking, TestData.Start.AddHours(-24)));
+    }
+
+    [Fact]
+    public void Check_AfterAReminder_IsAlreadyReminded_BR13()
+    {
+        var booking = BookingFactory.Create();
+        Assert.True(booking.RecordReminder(TestData.Start.AddHours(-24), "policy").IsSuccess);
+
+        Assert.Equal(ReminderEligibility.AlreadyReminded, ReminderPolicy.Check(booking, TestData.Start.AddHours(-23)));
+    }
+
+    [Fact]
+    public void Check_MadeExactly24HoursAhead_IsEligible_OneTickLess_IsNot_BR13()
+    {
+        var exactly = BookingFactory.Create(now: TestData.Start.AddHours(-24));
+        var tickLess = BookingFactory.Create(now: TestData.Start.AddHours(-24).AddTicks(1));
+
+        Assert.Equal(ReminderEligibility.Eligible, ReminderPolicy.Check(exactly, TestData.Start.AddHours(-3)));
+        Assert.Equal(ReminderEligibility.BookedLessThan24hAhead, ReminderPolicy.Check(tickLess, TestData.Start.AddHours(-3)));
+    }
+
+    [Fact]
+    public void Check_StartingExactly2HoursFromNow_IsEligible_OneTickLess_IsNot_BR13()
+    {
+        var booking = BookingFactory.Create();
+
+        Assert.Equal(ReminderEligibility.Eligible, ReminderPolicy.Check(booking, TestData.Start.AddHours(-2)));
+        Assert.Equal(ReminderEligibility.StartsWithin2h, ReminderPolicy.Check(booking, TestData.Start.AddHours(-2).AddTicks(1)));
+    }
+
+    [Fact]
+    public void Check_ReportsTheFirstRuleThatFails_BR13()
+    {
+        // Made under 24 h ahead AND inside 2 h: the 24-hour rule comes first.
+        var booking = BookingFactory.Create(now: TestData.Start.AddHours(-3));
+
+        Assert.Equal(ReminderEligibility.BookedLessThan24hAhead, ReminderPolicy.Check(booking, TestData.Start.AddHours(-1)));
+    }
 }

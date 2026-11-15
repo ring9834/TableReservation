@@ -10,6 +10,10 @@ namespace Reservation.Api.Features.Bookings;
 
 internal sealed record TableRef(Guid Id, string Name);
 
+/// <summary>The booking's reminder (AC5.6, M10a): when it was sent and how the guest answered.</summary>
+/// <param name="Response"><c>confirmed</c> or <c>cancelled</c>; <c>null</c> while the guest hasn't answered.</param>
+internal sealed record BookingReminder(DateTime SentAt, ReminderResponse? Response, DateTime? RespondedAt);
+
 /// <param name="MobileMasked">Country code and last 3 digits only.</param>
 /// <param name="Version">Row version; send it back with confirm or cancel.</param>
 /// <param name="VisitCount">
@@ -20,6 +24,7 @@ internal sealed record TableRef(Guid Id, string Name);
 /// What a cancellation decided about the deposit (M8b): <c>full</c> (a refund is due or done), <c>none</c> (kept,
 /// cancelled late) or <c>notApplicable</c>; <c>null</c> while the booking is not cancelled.
 /// </param>
+/// <param name="Reminder">The reminder record (M10a), for the details panel; <c>null</c> when none was sent.</param>
 internal sealed record BookingListItem(
     Guid Id,
     string Reference,
@@ -40,7 +45,8 @@ internal sealed record BookingListItem(
     uint Version,
     RefundDecision? RefundDecision,
     int? VisitCount,
-    MoneyDto? LastBillTotal);
+    MoneyDto? LastBillTotal,
+    BookingReminder? Reminder);
 
 /// <param name="Day">The venue-local service day.</param>
 /// <param name="Items">Bookings starting that day, in time order, every status. One day is not paged.</param>
@@ -85,6 +91,7 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                 TableIds = b.Tables.Select(t => t.TableId).ToList(),
                 b.Version,
                 b.CancellationRefund,
+                b.Reminder,
             })
             .ToListAsync(cancellationToken);
 
@@ -121,7 +128,10 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                     r.Version,
                     r.CancellationRefund,
                     guest?.VisitCount,
-                    guest?.LastBillTotal is { } bill ? MoneyDto.From(bill) : null);
+                    guest?.LastBillTotal is { } bill ? MoneyDto.From(bill) : null,
+                    r.Reminder is { } reminder
+                        ? new BookingReminder(reminder.SentAt.UtcDateTime, reminder.Response, reminder.RespondedAt?.UtcDateTime)
+                        : null);
             })
             .ToList();
         return new BookingListResponse(day, venue.TimeZone, items);

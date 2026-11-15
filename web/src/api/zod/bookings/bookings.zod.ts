@@ -131,6 +131,11 @@ export const GetTonightBookingsResponse = zod.object({
   "lastBillTotal": zod.union([zod.null(),zod.object({
   "amountCents": zod.int(),
   "currency": zod.string()
+})]),
+  "reminder": zod.union([zod.null(),zod.object({
+  "sentAt": zod.iso.datetime({"offset":true}),
+  "response": zod.union([zod.null(),zod.union([zod.literal('confirmed'),zod.literal('cancelled'),zod.literal(null)])]),
+  "respondedAt": zod.iso.datetime({"offset":true}).nullable()
 })])
 }))
 })

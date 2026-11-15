@@ -11,4 +11,11 @@
   <data name="TableReady" xml:space="preserve"><value>{venue}：您的餐桌已准备好！请到迎宾台。</value></data>
   <data name="Cancellation" xml:space="preserve"><value>{venue}：您{date} {time}的{party}位预订（预订号 {reference}）已取消。</value></data>
   <data name="Refund" xml:space="preserve"><value>{venue}：您的订金 {amount} 已退还（预订号 {reference}）。</value></data>
+  <data name="Reminder" xml:space="preserve"><value>{venue}：提醒您{date} {time}的{party}位预订，预订号 {reference}。{policy}</value></data>
+  <data name="CancellationPolicyDeposit" xml:space="preserve"><value>开餐前{hours}小时之前取消，{amount}订金全额退还；之后取消，订金不予退还。</value></data>
+  <data name="CancellationPolicyDepositKept" xml:space="preserve"><value>取消预订时，{amount}订金不予退还。</value></data>
+  <data name="CancellationPolicyNoDeposit" xml:space="preserve"><value>如不能前来，请至少提前{hours}小时取消。</value></data>
+  <data name="ActionConfirm" xml:space="preserve"><value>确认</value></data>
+  <data name="ActionCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="ActionManage" xml:space="preserve"><value>管理预订</value></data>
 </root>

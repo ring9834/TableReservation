@@ -13,6 +13,16 @@ public enum PaymentProviderKind
     Fake,
 }
 
+/// <summary>Service keys for the payment providers.</summary>
+public static class PaymentProviders
+{
+    /// <summary>
+    /// The Stripe provider, keyed so that <see cref="SeedDepositRouter"/> can sit in front of it in the demo and tests can
+    /// put a Stripe double in its place (Design §7.3).
+    /// </summary>
+    public const string StripeKey = "stripe";
+}
+
 /// <summary>Configuration section <c>Payments</c>.</summary>
 public sealed class PaymentOptions
 {

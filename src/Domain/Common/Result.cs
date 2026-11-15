@@ -20,6 +20,9 @@ public enum ErrorKind
 
     /// <summary>A dependency outside the system failed in an expected way.</summary>
     External,
+
+    /// <summary>410: something that existed has run out, e.g. <c>link_expired</c> (M10a).</summary>
+    Gone,
 }
 
 /// <summary>Stable error codes the front end switches on (ADR-004).</summary>

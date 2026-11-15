@@ -1,6 +1,7 @@
 export * from './bookings/bookings.zod';
 export * from './demo/demo.zod';
 export * from './floor-plan/floor-plan.zod';
+export * from './guest-bookings/guest-bookings.zod';
 export * from './messages/messages.zod';
 export * from './payments/payments.zod';
 export * from './pos/pos.zod';

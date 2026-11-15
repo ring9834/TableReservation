@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Reservation.Infrastructure.Audit;
@@ -141,10 +142,22 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services.AddSingleton<FakeRefundQueue>();
+        services.TryAddKeyedSingleton<IPaymentProvider>(PaymentProviders.StripeKey, (provider, _) =>
+            new StripePaymentProvider(provider.GetRequiredService<IOptions<StripeOptions>>()));
         services.TryAddSingleton<IPaymentProvider>(provider =>
-            provider.GetRequiredService<IOptions<PaymentOptions>>().Value.Provider == PaymentProviderKind.Stripe
-                ? new StripePaymentProvider(provider.GetRequiredService<IOptions<StripeOptions>>())
-                : new FakePaymentProvider(provider.GetRequiredService<FakeRefundQueue>()));
+        {
+            var fake = new FakePaymentProvider(provider.GetRequiredService<FakeRefundQueue>());
+            if (provider.GetRequiredService<IOptions<PaymentOptions>>().Value.Provider != PaymentProviderKind.Stripe)
+            {
+                return fake;
+            }
+
+            // Demo in Stripe mode: the seed's pi_seed_… deposits are refunded through the simulated path (§7.3).
+            var stripe = provider.GetRequiredKeyedService<IPaymentProvider>(PaymentProviders.StripeKey);
+            return provider.GetRequiredService<IOptions<DemoDataOptions>>().Value.Enabled
+                ? new SeedDepositRouter(stripe, fake, provider.GetRequiredService<ILogger<SeedDepositRouter>>())
+                : stripe;
+        });
         services.AddSingleton<StripeWebhookVerifier>();
         services.AddSingleton<PaymentHoldExpiryJob>();
         services.AddHostedService(provider => provider.GetRequiredService<PaymentHoldExpiryJob>());
