@@ -12,6 +12,10 @@ internal sealed record TableRef(Guid Id, string Name);
 
 /// <param name="MobileMasked">Country code and last 3 digits only.</param>
 /// <param name="Version">Row version; send it back with confirm or cancel.</param>
+/// <param name="VisitCount">
+/// The guest's completed visits so far (AC6.6, M9b); <c>null</c> when the booking has no guest (a walk-in without a number).
+/// </param>
+/// <param name="LastBillTotal">The guest's last POS bill, if one was ever matched; <c>null</c> without a guest or a bill.</param>
 /// <param name="RefundDecision">
 /// What a cancellation decided about the deposit (M8b): <c>full</c> (a refund is due or done), <c>none</c> (kept,
 /// cancelled late) or <c>notApplicable</c>; <c>null</c> while the booking is not cancelled.
@@ -34,7 +38,9 @@ internal sealed record BookingListItem(
     MoneyDto? Deposit,
     DepositStatus? DepositStatus,
     uint Version,
-    RefundDecision? RefundDecision);
+    RefundDecision? RefundDecision,
+    int? VisitCount,
+    MoneyDto? LastBillTotal);
 
 /// <param name="Day">The venue-local service day.</param>
 /// <param name="Items">Bookings starting that day, in time order, every status. One day is not paged.</param>
@@ -85,7 +91,7 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
         var guestIds = rows.Where(r => r.GuestId is not null).Select(r => r.GuestId!.Value).Distinct().ToList();
         var guests = await db.Guests.AsNoTracking()
             .Where(g => guestIds.Contains(g.Id))
-            .Select(g => new { g.Id, g.Mobile, g.AllergyNotes })
+            .Select(g => new { g.Id, g.Mobile, g.AllergyNotes, g.VisitCount, g.LastBillTotal })
             .ToDictionaryAsync(g => g.Id, cancellationToken);
         var tableNames = venue.Tables.ToDictionary(t => t.Id, t => t.Name);
 
@@ -113,7 +119,9 @@ internal sealed class GetTonightBookingsHandler(ReservationsDbContext db, TimePr
                     r.DepositAmount is { } amount ? MoneyDto.From(amount) : null,
                     r.DepositStatus,
                     r.Version,
-                    r.CancellationRefund);
+                    r.CancellationRefund,
+                    guest?.VisitCount,
+                    guest?.LastBillTotal is { } bill ? MoneyDto.From(bill) : null);
             })
             .ToList();
         return new BookingListResponse(day, venue.TimeZone, items);

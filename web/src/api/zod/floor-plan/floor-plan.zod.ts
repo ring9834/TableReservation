@@ -67,6 +67,7 @@ export const GetFloorPlanResponse = zod.object({
 })]),
   "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])])
 })])
-}))
+})),
+  "demoEnabled": zod.boolean()
 })
 

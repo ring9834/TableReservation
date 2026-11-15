@@ -21,6 +21,7 @@ export interface PosLogItem {
   /** @nullable */
   bookingId: string | null;
   tableIds: string[];
+  tableNames: string[];
   /** @nullable */
   unmatchedReason: string | null;
   payload: JsonElement;

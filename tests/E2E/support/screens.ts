@@ -19,14 +19,24 @@ export const presenterContext = (browser: Browser, baseURL: string | undefined) 
     storageState: presenterSessionPath,
   });
 
-/** Opens /presenter/ and waits until the phone panel has loaded today's messages (Design §18.7). */
+/** Opens /presenter/ and waits until the phone panel and the POS panel have loaded (Design §18.7, §18.9). */
 export const openPresenterScreen = async (context: BrowserContext) => {
   const page = await context.newPage();
   await page.goto("/presenter/");
   await expect(page.getByTestId("phone-panel").getByRole("log")).toBeVisible();
   await expect(page.getByTestId("phone-panel")).not.toContainText(/Loading|加载/);
+  await expect(page.getByTestId("pos-panel")).not.toContainText(/Loading|加载/);
+  await expect(page.getByTestId("pos-switch")).toBeEnabled();
   return page;
 };
+
+/** The POS log's rows on the presenter screen, optionally one message type and booking (Design §18.9). */
+export const posRows = (page: Page, filter: { type?: string; bookingId?: string } = {}) =>
+  page.locator(
+    '[data-testid="pos-message"]' +
+      (filter.type ? `[data-type="${filter.type}"]` : "") +
+      (filter.bookingId ? `[data-booking-id="${filter.bookingId}"]` : ""),
+  );
 
 /** The phone panel's messages that contain `text` (a booking reference, a few template words). */
 export const phoneMessages = (page: Page, text?: string | RegExp) => {

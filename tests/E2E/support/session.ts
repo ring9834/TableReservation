@@ -176,3 +176,120 @@ export const bookingByReference = (reference: string, day?: string) =>
     expect(item, `booking ${reference} in the host list`).toBeDefined();
     return item!;
   });
+
+/** Runs `work` with an API client signed in as the shared presenter session (the POS log and switch, Design §6.7). */
+const withPresenterApi = async <T>(work: (api: ApiContext) => Promise<T>): Promise<T> => {
+  const api = await request.newContext({
+    baseURL: apiBaseUrl,
+    storageState: presenterSessionPath,
+    ignoreHTTPSErrors: true,
+  });
+  try {
+    return await work(api);
+  } finally {
+    await api.dispose();
+  }
+};
+
+/** Switches the mock POS on or off (PUT /demo/pos/online, Design §6.7). */
+export const setPosOnline = async (online: boolean) =>
+  withPresenterApi(async (api) => {
+    const answer = await api.put("/api/v1/demo/pos/online", { data: { online } });
+    expect(answer.status(), `pos/online answered ${answer.status()}`).toBe(204);
+  });
+
+export type PosLogEntry = {
+  id: string;
+  direction: "outbound" | "inbound";
+  messageType: string;
+  status: string;
+  venueSequence: number;
+  bookingId: string | null;
+  tableNames: string[];
+};
+
+/** The POS log as the presenter's API returns it (GET …/pos-messages, newest first, Design §6.7). */
+export const posMessages = async (status?: string) =>
+  withPresenterApi(async (api) => {
+    const answer = await api.get(`${venuePath}/pos-messages${status ? `?status=${status}` : ""}`);
+    expect(answer.ok(), `pos-messages answered ${answer.status()}`).toBe(true);
+    return ((await answer.json()) as { items: PosLogEntry[] }).items;
+  });
+
+export type SeatedWalkIn = { bookingId: string; reference: string; tableName: string };
+
+/**
+ * Seats `count` walk-ins of `partySize` without a name or number (so no UpsertMember is queued) on the tables the API
+ * suggests (GET …/tables/suggestion, POST …/walk-ins). Fails clearly when no table fits: reset the demo.
+ */
+export const seatWalkIns = async (count: number, partySize: number) =>
+  withHostApi(async (api) => {
+    const seated: SeatedWalkIn[] = [];
+    for (let i = 0; i < count; i++) {
+      seated.push(await seatOnSuggestedTable(api, partySize));
+    }
+    return seated;
+  });
+
+const seatOnSuggestedTable = async (api: ApiContext, partySize: number, extra: object = {}) => {
+  const answer = await api.get(`${venuePath}/tables/suggestion?partySize=${partySize}`);
+  expect(answer.ok(), `table suggestion answered ${answer.status()}`).toBe(true);
+  const { table } = (await answer.json()) as TableSuggestion;
+  expect(table, `a free table for ${partySize} (if none, reset the demo)`).toBeTruthy();
+  const seat = await api.post(`${venuePath}/walk-ins`, { data: { partySize, tableId: table!.id, ...extra } });
+  expect(seat.ok(), `walk-in on ${table!.name} answered ${seat.status()}`).toBe(true);
+  const { bookingId, reference } = (await seat.json()) as { bookingId: string; reference: string };
+  return { bookingId, reference, tableName: table!.name };
+};
+
+/**
+ * A waiting party with a name and mobile, seated from the waitlist on the suggested table (POST …/waitlist, then
+ * POST …/walk-ins with the entry, Design §14.2), so the booking has a guest whose visits count (AC6.6).
+ */
+export const seatGuestFromWaitlist = async (name: string, mobile: string, partySize: number) =>
+  withHostApi(async (api) => {
+    const join = await api.post(`${venuePath}/waitlist`, {
+      data: { name, mobile, partySize, quotedWaitMinutes: 5, language: "en" },
+    });
+    expect(join.status(), `join waitlist answered ${join.status()}`).toBe(201);
+    const entry = (await join.json()) as { id: string; version: number };
+    return seatOnSuggestedTable(api, partySize, {
+      waitlistEntryId: entry.id,
+      waitlistEntryVersion: entry.version,
+    });
+  });
+
+/** The venue's time zone offset at an instant, e.g. "+13:00" for Pacific/Auckland in summer. */
+const offsetAt = (instant: Date, timeZone: string) => {
+  const part = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(instant)
+    .find((p) => p.type === "timeZoneName")!.value; // "GMT+13:00"
+  return part === "GMT" ? "+00:00" : part.replace("GMT", "");
+};
+
+/** A phone booking tonight at `time` (venue-local "HH:MM") for a known or new mobile (POST …/phone-bookings). */
+export const createPhoneBooking = async (time: string, partySize: number, name: string, mobile: string) =>
+  withHostApi(async (api) => {
+    const venue = await api.get(venuePath);
+    expect(venue.ok(), `venue answered ${venue.status()}`).toBe(true);
+    const { today, timeZone } = (await venue.json()) as { today: string; timeZone: string };
+    const startsAt = `${today}T${time}:00${offsetAt(new Date(`${today}T12:00:00Z`), timeZone)}`;
+    const answer = await api.post(`${venuePath}/phone-bookings`, {
+      data: { startsAt, partySize, name, mobile, language: "en" },
+    });
+    expect(answer.status(), `phone booking answered ${answer.status()}: ${await answer.text()}`).toBe(201);
+    return (await answer.json()) as { bookingId: string; reference: string };
+  });
+
+/** The guest's visits and last bill on a booking of tonight's list (AC6.6, Design §18.9). */
+export const guestHistory = (reference: string) =>
+  withHostApi(async (api) => {
+    const list = await api.get(`${venuePath}/bookings`);
+    expect(list.ok(), `host list answered ${list.status()}`).toBe(true);
+    const { items } = (await list.json()) as {
+      items: { reference: string; visitCount: number | null; lastBillTotal: { amountCents: number } | null }[];
+    };
+    const item = items.find((i) => i.reference === reference);
+    expect(item, `booking ${reference} in the host list`).toBeDefined();
+    return { visitCount: item!.visitCount, lastBillCents: item!.lastBillTotal?.amountCents ?? null };
+  });

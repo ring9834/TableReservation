@@ -1,4 +1,4 @@
-/* The presenter screen (Design §18.7): a laptop or projector; the phone on the left, the rest free for M9 and M11. */
+/* The presenter screen (Design §18.7, §18.9): a laptop or projector; the phone on the left, the POS panel on the right. */
 
 .page {
   min-height: 100vh;
@@ -62,10 +62,6 @@
   gap: 1.5rem;
   margin-top: 1rem;
   justify-items: center;
-}
-
-.rest {
-  min-width: 0;
 }
 
 @media (min-width: 800px) {

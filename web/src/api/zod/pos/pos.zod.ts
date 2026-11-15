@@ -28,6 +28,7 @@ export const GetPosMessagesResponse = zod.object({
   "deliveredAt": zod.iso.datetime({"offset":true}).nullable(),
   "bookingId": zod.uuid().nullable(),
   "tableIds": zod.array(zod.uuid()),
+  "tableNames": zod.array(zod.string()),
   "unmatchedReason": zod.string().nullable(),
   "payload": zod.unknown()
 }))

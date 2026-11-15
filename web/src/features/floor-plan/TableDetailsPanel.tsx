@@ -1,17 +1,19 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useClearTable } from "@/api/endpoints/seating/seating";
 import type { BookingListItem, FloorTableDto, TableBookingSummary } from "@/api/model";
+import { BillPaidButton } from "@/features/bookings/BillPaid";
 import { CancelBookingButton, canCancel } from "@/features/bookings/CancelBooking";
 import { DepositLine } from "@/features/bookings/DepositLine";
+import { visitLine } from "@/features/bookings/guestHistory.mjs";
 import { canSeat, SeatBookingActions } from "@/features/bookings/SeatBooking";
 import { invalidateHostQueries } from "@/features/host/hostQueries";
 import { useHostActionError } from "@/features/host/useHostActionError";
 import { venueId } from "@/lib/config";
-import { formatInstantTime } from "@/lib/format";
+import { formatInstantTime, formatMoney, intlLocale } from "@/lib/format";
 import { displayState } from "./tableText";
 import styles from "./floorPlan.module.css";
 import actionStyles from "@/features/host/actions.module.css";
@@ -24,6 +26,8 @@ type Props = Readonly<{
   timeZone: string;
   /** Tonight's list, for the details the floor plan leaves out (allergy notes, occasion, masked mobile). */
   bookingsById: ReadonlyMap<string, BookingListItem>;
+  /** The demo controls exist (the floor plan's `demoEnabled`): "Bill paid" shows next to "Clear table" (M9b). */
+  demoEnabled: boolean;
   onClose: () => void;
 }>;
 
@@ -47,14 +51,16 @@ const summaryOf = (item: BookingListItem): TableBookingSummary => ({
  * for the seated party (AC4.1), "Seat" / "Seat at another table" for the next booking (AC3.3) and, at the bottom of
  * a booking's details and apart from Seat, a quiet "Cancel booking" for one not yet seated (M8b, AC5.5). A booking
  * picked from tonight's list that is neither the table's current nor next one (a later booking on it), or one without
- * a table, gets its own "Selected booking" section with the same details and Cancel. "Bill paid" through the POS
- * arrives with M9. Focus moves to the heading when a table or booking is chosen.
+ * a table, gets its own "Selected booking" section with the same details and Cancel. With the demo controls, "Bill
+ * paid" sits next to "Clear table" and has the mock POS close the bill (M9b, AC6.6); a booking with a guest shows the
+ * guest's visits and last bill. Focus moves to the heading when a table or booking is chosen.
  */
 export function TableDetailsPanel({
   table,
   selectedBooking,
   timeZone,
   bookingsById,
+  demoEnabled,
   onClose,
 }: Props) {
   const { t } = useTranslation();
@@ -99,11 +105,15 @@ export function TableDetailsPanel({
         />
       )}
       {table?.current?.status === "seated" && (
-        <ClearTableButton
-          key={table.current.bookingId}
-          tableId={table.id}
-          booking={table.current}
-        />
+        <ClearTableButton key={table.current.bookingId} tableId={table.id} booking={table.current}>
+          {demoEnabled && (
+            <BillPaidButton
+              tableId={table.id}
+              tableName={table.name}
+              partySize={table.current.partySize}
+            />
+          )}
+        </ClearTableButton>
       )}
       {table?.next && (
         <>
@@ -147,11 +157,15 @@ export function TableDetailsPanel({
   );
 }
 
-/** Clears the table after the party leaves (AC4.1): completes the booking with the version shown (Design §14.2). */
+/**
+ * Clears the table after the party leaves (AC4.1): completes the booking with the version shown (Design §14.2).
+ * `children` sit beside it ("Bill paid", M9b).
+ */
 function ClearTableButton({
   tableId,
   booking,
-}: Readonly<{ tableId: string; booking: TableBookingSummary }>) {
+  children,
+}: Readonly<{ tableId: string; booking: TableBookingSummary; children?: ReactNode }>) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const messageFor = useHostActionError();
@@ -182,6 +196,7 @@ function ClearTableButton({
       >
         {clear.isPending ? t("host.actions.clearing") : t("host.actions.clear")}
       </button>
+      {children}
       {failure && (
         <p role="alert" className={actionStyles.error}>
           {failure}
@@ -206,7 +221,7 @@ function BookingDetails({
   const time = (instant: string) => formatInstantTime(instant, timeZone, i18n.language);
 
   return (
-    <div className={styles.booking}>
+    <div className={styles.booking} data-booking-id={booking.bookingId}>
       <h3>{title}</h3>
       <dl>
         <dt>{t("host.panel.guest")}</dt>
@@ -234,6 +249,7 @@ function BookingDetails({
             </dd>
           </>
         )}
+        <GuestHistory booking={booking} details={details} />
         {details?.mobileMasked && (
           <>
             <dt>{t("host.panel.mobile")}</dt>
@@ -263,5 +279,43 @@ function BookingDetails({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The guest's history (AC6.6, Design §18.9), from tonight's list, only when the booking has a guest: "First visit",
+ * "3rd visit · last bill NZ$186.00", or for a completed booking (already counted) "2 visits · last bill …".
+ */
+function GuestHistory({
+  booking,
+  details,
+}: Readonly<{ booking: TableBookingSummary; details: BookingListItem | undefined }>) {
+  const { t, i18n } = useTranslation();
+  const line = visitLine(details?.visitCount, booking.status, intlLocale(i18n.language));
+  if (!line) return null;
+
+  const visits =
+    line.kind === "first"
+      ? t("host.history.first")
+      : line.kind === "nth"
+        ? t(`host.history.nthVisit.${line.form}`, { n: line.n })
+        : line.n === 1
+          ? t("host.history.visitsOne")
+          : t("host.history.visitsMany", { n: line.n });
+  const bill = details?.lastBillTotal
+    ? t("host.history.lastBill", {
+        amount: formatMoney(
+          details.lastBillTotal.amountCents,
+          details.lastBillTotal.currency,
+          i18n.language,
+        ),
+      })
+    : null;
+
+  return (
+    <>
+      <dt>{t("host.panel.history")}</dt>
+      <dd data-testid="guest-history">{bill ? `${visits} · ${bill}` : visits}</dd>
+    </>
   );
 }

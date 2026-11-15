@@ -2206,7 +2206,9 @@
           "deposit",
           "depositStatus",
           "version",
-          "refundDecision"
+          "refundDecision",
+          "visitCount",
+          "lastBillTotal"
         ],
         "type": "object",
         "properties": {
@@ -2305,6 +2307,23 @@
               },
               {
                 "$ref": "#/components/schemas/RefundDecision"
+              }
+            ]
+          },
+          "visitCount": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "lastBillTotal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MoneyDto"
               }
             ]
           }
@@ -2712,7 +2731,8 @@
           "timeZone",
           "at",
           "areas",
-          "tables"
+          "tables",
+          "demoEnabled"
         ],
         "type": "object",
         "properties": {
@@ -2738,6 +2758,9 @@
             "items": {
               "$ref": "#/components/schemas/FloorTableDto"
             }
+          },
+          "demoEnabled": {
+            "type": "boolean"
           }
         }
       },
@@ -3192,6 +3215,7 @@
           "deliveredAt",
           "bookingId",
           "tableIds",
+          "tableNames",
           "unmatchedReason",
           "payload"
         ],
@@ -3241,6 +3265,12 @@
             "items": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          "tableNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "unmatchedReason": {

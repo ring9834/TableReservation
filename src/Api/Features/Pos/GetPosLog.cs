@@ -17,6 +17,10 @@ namespace Reservation.Api.Features.Pos;
 /// <param name="DeliveredAt">When the POS accepted an outbound message (business clock).</param>
 /// <param name="BookingId">The booking the message is about; for an inbound bill, the booking it was matched to.</param>
 /// <param name="TableIds">The tables in the message's envelope.</param>
+/// <param name="TableNames">
+/// The names of <c>tableIds</c> in the same order (e.g. <c>T4</c>), so the POS log needs no floor plan (M9b); <c>?</c> for a
+/// table the venue doesn't have.
+/// </param>
 /// <param name="UnmatchedReason">Inbound only: <c>no_match</c>, <c>ambiguous</c> or <c>second_bill</c>.</param>
 /// <param name="Payload">The full message JSON (AC6.2), with phone numbers masked; stored unmasked for the POS.</param>
 internal sealed record PosLogItem(
@@ -30,6 +34,7 @@ internal sealed record PosLogItem(
     DateTime? DeliveredAt,
     Guid? BookingId,
     IReadOnlyList<Guid> TableIds,
+    IReadOnlyList<string> TableNames,
     string? UnmatchedReason,
     JsonElement Payload);
 
@@ -77,19 +82,25 @@ internal sealed class GetPosLogHandler(ReservationsDbContext db) : IQueryHandler
         }
 
         var messages = await rows.OrderByDescending(m => m.VenueSequence).Take(MaxItems).ToListAsync(cancellationToken);
-        var items = messages.Select(m => new PosLogItem(
-            m.Id.Value,
-            m.Direction,
-            m.MessageType,
-            m.Status,
-            m.VenueSequence,
-            m.Attempts,
-            m.CreatedAt.UtcDateTime,
-            m.DeliveredAt?.UtcDateTime,
-            m.BookingId?.Value,
-            TableIds(m.Payload),
-            m.UnmatchedReason,
-            MaskedPayload(m.Payload))).ToList();
+        var tableNames = venue.Tables.ToDictionary(t => t.Id.Value, t => t.Name);
+        var items = messages.Select(m =>
+        {
+            var tableIds = TableIds(m.Payload);
+            return new PosLogItem(
+                m.Id.Value,
+                m.Direction,
+                m.MessageType,
+                m.Status,
+                m.VenueSequence,
+                m.Attempts,
+                m.CreatedAt.UtcDateTime,
+                m.DeliveredAt?.UtcDateTime,
+                m.BookingId?.Value,
+                tableIds,
+                [.. tableIds.Select(id => tableNames.GetValueOrDefault(id, "?"))],
+                m.UnmatchedReason,
+                MaskedPayload(m.Payload));
+        }).ToList();
         return new PosLogResponse(venue.TimeZone, items);
     }
 

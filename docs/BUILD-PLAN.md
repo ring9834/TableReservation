@@ -763,6 +763,70 @@ Verification: dotnet build/test, has-pending-model-changes, openapi.json + gener
 typecheck/build. Playwright: I run it. Don't read user secrets.
 ```
 
+### M9b POS log, mock POS switch and "Bill paid" on screen
+```
+Milestone M9b: POS log, mock POS switch and "Bill paid" on screen (Design §6, §6.7, §10.5, §15, §17,
+§18; Requirements §6 AC6.1, AC6.2, AC6.5, AC6.6, QA-5; demo script steps 11–12). Front end + E2E +
+docs; the small API additions below are allowed. No new packages. Read CLAUDE.md first.
+
+1. Docs first: an "M9b" block with this prompt (minus the last two lines) after M9a in BUILD-PLAN.md;
+   decisions in a new Design §18.9 Build notes (M9b).
+
+2. API additions (additive; regenerate openapi.json + orval client):
+   - POS log items gain tableNames (e.g. ["T4"]) so the presenter screen needs no floor-plan access.
+   - The host needs to know whether demo controls exist (the bill-paid route is mapped only when
+     Demo:Enabled). Add the smallest host-readable flag (e.g. demoEnabled on an existing venue/session
+     response, or GET /demo/config); the "Bill paid" button is hidden when it is false.
+   - Booking details for the host (floor-plan summary / tonight's list item, whichever the panel
+     uses) gain the guest's visitCount and lastBillTotal (MoneyDto), so AC6.6 is visible.
+
+3. Presenter screen, the free right column next to the phone panel (M7b layout):
+   - "POS" header with the mock POS switch: a clear on/off toggle "POS online" / "POS offline"
+     (colour + text + icon), PUT /demo/pos/online, state from GET …/pos/status, and a count of
+     messages waiting ("3 waiting"). Disabled while the request runs.
+   - POS log (AC6.1): newest first (by venueSequence), live via posLogChanged; reconnect refetches.
+     Each row: time (venue zone), direction "To POS →" / "← From POS" (text, not colour only), message
+     type, key fields in one line (OpenTable: T4 · 4 guests · name; ApplyDeposit: NZ$120.00;
+     UpsertMember: name · masked phone; BillClosed: T4 · NZ$186.00), status badge (Waiting, Sent,
+     Failed, Matched, Unmatched + reason in plain words), and the sequence number "#41". A Waiting row
+     shows "waiting for the POS" and the attempts are not shown as failures. New rows highlight briefly.
+   - Tap a row to expand (AC6.2): the full JSON as returned (already masked), pretty-printed,
+     monospaced, scrollable, with a "Copy JSON" button. Only one row expanded at a time; keyboard and
+     screen-reader friendly (button with aria-expanded).
+   - Filter: All / Waiting / Unmatched.
+   - Every string in en and zh-CN. Message types (OpenTable, ApplyDeposit, …) and JSON stay as they are.
+
+4. Host screen:
+   - "Bill paid" on a Seated table's details panel (only when demo is enabled), next to "Clear table".
+     It opens a small dialog: "Bill total" in NZ$ (required, > 0, two decimals), pre-filled with a
+     plausible amount (e.g. party size × NZ$45.00) the host can change, then POST /demo/pos/bill-paid
+     {tableId, totalCents}. On matched: the table frees as usual (floorPlanChanged). On unmatched: a
+     plain message ("The POS bill wasn't matched to a booking: {reason}"). Errors via
+     useHostActionError. Disabled while the request runs.
+   - Booking details show the guest's history: "First visit" or "3rd visit · last bill NZ$186.00"
+     (en and zh-CN ordinal wording), only when the booking has a guest.
+
+5. Playwright (pos.spec.ts, serial; presenter + host contexts):
+   - QA-5: presenter switches the POS offline → host seats three walk-ins (API helper or UI) → within
+     2 s the log shows three OpenTable rows "Waiting" with consecutive sequence numbers → presenter
+     switches online → all three become "Sent" within 10 s, in sequence order, and no message
+     appears twice (count rows by messageId).
+   - Step 12: expand one OpenTable row → the JSON shows messageId, venueId, bookingId, tableIds and
+     version 1; Copy JSON works (clipboard permission in the context or check the button state).
+   - AC6.6: "Bill paid" on one seated table with a typed total → a "← From POS" BillClosed row
+     "Matched" appears in the log, the table is free on the host, and that guest's next booking
+     details (or the API) show the visit and the last bill.
+   - afterAll: switch the POS back online, clear every walk-in the spec seated. Keep the existing
+     stand-in patterns so the other specs still find their tables.
+
+(Agreed, 16 Nov) The demo flag is demoEnabled on the floor-plan response. The visit line counts the
+booking as visit N+1 (visitCount 0 → "First visit", 2 → "3rd visit"); a Completed booking, already
+counted, shows "{n} visits" instead of an ordinal.
+
+Verification: dotnet build/test, has-pending-model-changes, generate:api, web lint/typecheck/
+format:check/test/build. Playwright and the manual look: I run them. Don't read user secrets.
+```
+
 ### M10 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
