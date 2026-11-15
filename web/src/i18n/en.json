@@ -93,7 +93,9 @@
     "too_many_requests": "Too many attempts. Please wait a minute and try again.",
     "unexpected": "Something went wrong on our side. Please try again.",
     "not_signed_in": "That passcode isn't right. Please try again.",
-    "payment_provider_error": "Payment service unavailable. Your table is held for a few minutes; please try again."
+    "payment_provider_error": "Payment service unavailable. Your table is held for a few minutes; please try again.",
+    "invalid_link": "This link isn't valid.",
+    "link_expired": "This link has expired: the booking has started."
   },
   "fieldErrors": {
     "name_length": "Please enter your name (up to 80 characters).",
@@ -171,7 +173,8 @@
       "notes": "Notes",
       "allergyInList": "See tonight's list for details.",
       "deposit": "Deposit",
-      "history": "History"
+      "history": "History",
+      "reminder": "Reminder"
     },
     "list": {
       "heading": "Tonight's bookings",
@@ -245,6 +248,12 @@
       "visitsOne": "1 visit",
       "visitsMany": "{{n}} visits",
       "lastBill": "last bill {{amount}}"
+    },
+    "reminder": {
+      "sent": "Reminder sent {{time}}",
+      "noReply": "no reply yet",
+      "confirmed": "Confirmed {{time}}",
+      "cancelled": "Cancelled by guest {{time}}"
     }
   },
   "presenter": {
@@ -252,7 +261,24 @@
     "title": "{{venue}} · presenter",
     "presenterOnly": "This screen is for the presenter. Sign in with the presenter passcode to see the phone panel.",
     "signInAgain": "Sign in as presenter",
-    "openHost": "Open the host screen"
+    "openHost": "Open the host screen",
+    "reminders": {
+      "button": "Send reminders now",
+      "sending": "Sending…",
+      "none": "No new reminders",
+      "sentOne": "1 reminder sent",
+      "sentMany": "{{n}} reminders sent",
+      "skipped": "{{n}} skipped: {{reasons}}",
+      "separator": ", ",
+      "reason": {
+        "alreadyReminded": "{{n}} already reminded",
+        "alreadyConfirmed": "{{n}} already confirmed",
+        "notBooked": "{{n}} not booked yet",
+        "noGuest": "{{n}} without guest details",
+        "bookedLessThan24hAhead": "{{n}} booked under 24 hours ahead",
+        "startsWithin2h": "{{n}} starting within 2 hours"
+      }
+    }
   },
   "phone": {
     "heading": "Messages",
@@ -273,7 +299,15 @@
       "expired": "Not sent (too late)",
       "senderFailed": "Not sent (the text service failed)",
       "notSent": "Not sent"
-    }
+    },
+    "actions": {
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "manage": "Manage booking"
+    },
+    "back": "Messages",
+    "newTab": "Open in new tab",
+    "browserTitle": "Booking page"
   },
   "pos": {
     "heading": "POS",
@@ -386,5 +420,47 @@
     "seated": "Seated",
     "walkedAway": "Walked away",
     "removed": "Removed"
+  },
+  "manage": {
+    "heading": "Your booking at {{venue}}",
+    "headingPlain": "Your booking",
+    "reference": "Reference",
+    "when": "When",
+    "dateTime": "{{date}}, {{time}}",
+    "party": "Party",
+    "statusLabel": "Status",
+    "deposit": "Deposit",
+    "status": {
+      "pendingPayment": "Awaiting deposit",
+      "booked": "Booked",
+      "confirmed": "Confirmed",
+      "seated": "Seated",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "terms": {
+      "noDeposit": "Can't make it? Please cancel by {{time}}.",
+      "deposit": "Cancel by {{time}} and your {{amount}} deposit is refunded in full; after that it is kept.",
+      "depositKept": "Your {{amount}} deposit can't be refunded."
+    },
+    "lateWarning": "The free-cancellation time has passed: cancelling now keeps your deposit of {{amount}}.",
+    "confirm": "Confirm booking",
+    "confirming": "Confirming…",
+    "cancel": "Cancel booking",
+    "cancelHeading": "Cancel this booking?",
+    "consequence": {
+      "refundFull": "Your {{amount}} deposit will be refunded in full.",
+      "kept": "Cancelling now keeps your deposit of {{amount}}.",
+      "noDeposit": "No deposit has been taken."
+    },
+    "cancelConfirm": "Yes, cancel",
+    "cancelling": "Cancelling…",
+    "keep": "Keep booking",
+    "result": {
+      "confirmed": "Thanks, you're confirmed.",
+      "cancelled": "Your booking is cancelled.",
+      "refundOnItsWay": "Your refund is on its way."
+    },
+    "changed": "This booking is now: {{status}}."
   }
 }

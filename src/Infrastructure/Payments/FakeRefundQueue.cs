@@ -30,6 +30,12 @@ public sealed class FakeRefundQueue([FromKeyedServices(Clocks.Infrastructure)] T
     /// <summary>Puts a refund back after a failed report.</summary>
     public void Retry(FakeRefund refund) => refunds.Enqueue(refund);
 
+    /// <summary>
+    /// Drops every waiting refund. The demo reset (M10b) calls it: the seeded deposits keep their <c>pi_seed_…</c>
+    /// intents across a reset, so a refund made before it must not be reported against the fresh seed.
+    /// </summary>
+    public void Clear() => refunds.Clear();
+
     /// <summary>Takes the refunds made at or before <paramref name="madeBy"/>, oldest first; later ones stay.</summary>
     public IReadOnlyList<FakeRefund> TakeDue(DateTimeOffset madeBy)
     {

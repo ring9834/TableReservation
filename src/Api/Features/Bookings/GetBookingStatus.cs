@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Reservation.Api.Common;
+using Reservation.Api.Pipeline;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Infrastructure;
@@ -61,8 +62,9 @@ internal sealed class GetBookingStatusHandler(
 }
 
 /// <summary>
-/// <c>GET /venues/{venueId}/bookings/{id}/status</c> (guest, public). Under the anonymous limit (60 a minute per IP), which
-/// a poll every 2 seconds stays inside.
+/// <c>GET /venues/{venueId}/bookings/{id}/status</c> (guest, public). Limited per booking (<c>RateLimits:BookingStatusPerMinute</c>,
+/// 60 a minute; a poll every 2 seconds is 30), not in the per-IP bucket, so guests sharing venue Wi-Fi don't use up each
+/// other's allowance (Design §18.10).
 /// </summary>
 internal sealed class GetBookingStatusEndpoint : IEndpoint
 {
@@ -71,6 +73,7 @@ internal sealed class GetBookingStatusEndpoint : IEndpoint
             .WithName("getBookingStatus")
             .WithTags("Bookings")
             .AllowAnonymous()
+            .WithAnonymousBucket(AnonymousBucket.BookingStatus)
             .Produces<BookingStatusResponse>()
             .ProducesApiProblem(StatusCodes.Status404NotFound, StatusCodes.Status429TooManyRequests);
 

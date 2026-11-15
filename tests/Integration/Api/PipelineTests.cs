@@ -37,10 +37,11 @@ public sealed class PipelineTests(PostgresFixture postgres) : ApiTestBase(postgr
     }
 
     [Fact]
-    public async Task The_61st_anonymous_call_in_a_minute_is_too_many_requests()
+    public async Task The_301st_anonymous_call_in_a_minute_is_too_many_requests()
     {
+        // Per-IP bucket for anonymous reads: 300 a minute since M10b (Design §18.10).
         var path = $"{Venue}/availability?date={DemoTime.Tonight:yyyy-MM-dd}&partySize=2";
-        for (var i = 0; i < 60; i++)
+        for (var i = 0; i < 300; i++)
         {
             Assert.Equal(HttpStatusCode.OK, (await Client.GetAsync(path, Ct)).StatusCode);
         }

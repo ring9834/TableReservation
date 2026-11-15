@@ -328,6 +328,73 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getSimulatePaymentMutationOptions(options), queryClient);
     }
+    export const getResetDemoUrl = () => {
+
+
+
+
+  return `/api/v1/demo/reset`
+}
+
+export const resetDemo = async ( options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+
+  return apiFetch<void>(getResetDemoUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResetDemoMutationKey = () => ['resetDemo'] as const;
+
+export const getResetDemoMutationOptions = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetDemo>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetDemo>>, TError,void, TContext> => {
+
+const mutationKey = getResetDemoMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetDemo>>, void> = () => {
+
+
+          return  resetDemo(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetDemoMutationResult = NonNullable<Awaited<ReturnType<typeof resetDemo>>>
+
+    export type ResetDemoMutationError = ErrorType<ApiProblem>
+
+
+    export const useResetDemo = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetDemo>>, TError,void, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resetDemo>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getResetDemoMutationOptions(options), queryClient);
+    }
     export const getDemoLoginUrl = () => {
 
 

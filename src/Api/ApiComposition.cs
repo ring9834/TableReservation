@@ -112,6 +112,7 @@ internal static class ApiComposition
         app.UseMiddleware<RequestLoggingMiddleware>();
         app.UseRouting();
         app.UseCors();
+        app.UseMiddleware<GuestLinkRateKeyMiddleware>(); // the per-link rate-limit key, hashed (Design §18.10)
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();

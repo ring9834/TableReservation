@@ -5,6 +5,7 @@ using Reservation.Api.Common;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Infrastructure;
+using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Payments;
 using Reservation.Infrastructure.Persistence;
@@ -83,7 +84,8 @@ internal sealed partial class FakeRefundReporter(
     IOptions<OutboxOptions> outbox,
     IOptions<DemoOptions> demo,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider clock,
-    ILogger<FakeRefundReporter> logger) : BackgroundService
+    ILogger<FakeRefundReporter> logger,
+    WorkerPause? pause = null) : BackgroundService
 {
     /// <summary>How old a refund must be before it is reported: after the refund consumer's transaction commits.</summary>
     public static readonly TimeSpan Delay = TimeSpan.FromSeconds(1);
@@ -95,6 +97,7 @@ internal sealed partial class FakeRefundReporter(
     /// <summary>Reports every due refund; returns how many were processed.</summary>
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken)
     {
+        using var batch = await WorkerPause.EnterAsync(pause, cancellationToken); // the demo reset waits for it (Design §18.10)
         var secret = stripe.Value.WebhookSecret;
         if (string.IsNullOrEmpty(secret))
         {

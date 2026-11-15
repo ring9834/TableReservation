@@ -66,6 +66,7 @@ public static class DependencyInjection
 
         services.AddScoped<DemoSeeder>();
         services.AddScoped<DemoReset>();
+        services.AddSingleton<WorkerPause>(); // the workers' batches; the demo reset pauses them (Design §18.10)
         services.AddScoped<DatabaseInitializer>();
         return services;
     }

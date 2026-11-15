@@ -18,6 +18,9 @@ internal static class ProblemCodes
     public const string InvalidSignature = "invalid_signature";
     public const string PayloadTooLarge = "payload_too_large";
 
+    // Demo reset (M10b, Design §18.10): the workers or a request kept the tables busy through every attempt (503).
+    public const string DemoResetBusy = "demo_reset_busy";
+
     // Guest links (M10a, Design §7.3): malformed, forged, unknown key or wrong action (400); past its expiry (410).
     public const string InvalidLink = "invalid_link";
     public const string LinkExpired = "link_expired";
@@ -51,6 +54,7 @@ internal static class ApiProblems
         [ProblemCodes.PayloadTooLarge] = "The request body is too large",
         [ProblemCodes.InvalidLink] = "The link is not valid",
         [ProblemCodes.LinkExpired] = "The link has expired",
+        [ProblemCodes.DemoResetBusy] = "The demo is busy; the reset did not run",
         [ProblemCodes.Unexpected] = "An unexpected error occurred",
     };
 

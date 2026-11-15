@@ -25,6 +25,7 @@ export * from './createOnlineBookingHeaders';
 export * from './createPhoneBookingHeaders';
 export * from './demoLoginRequest';
 export * from './demoLoginResponse';
+export * from './demoResetNotice';
 export * from './depositStatus';
 export * from './endWaitlistRequest';
 export * from './floorAreaDto';

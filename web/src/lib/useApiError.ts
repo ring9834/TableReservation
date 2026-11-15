@@ -12,6 +12,8 @@ export const knownErrorCodes = [
   "too_many_requests",
   "not_signed_in",
   "payment_provider_error",
+  "invalid_link",
+  "link_expired",
   "unexpected",
 ] as const;
 

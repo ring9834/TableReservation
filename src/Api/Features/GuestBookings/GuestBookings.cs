@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reservation.Api.Common;
 using Reservation.Api.GuestLinks;
+using Reservation.Api.Pipeline;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Domain.Venues;
@@ -32,6 +33,7 @@ internal sealed record GuestCancellationTerms(int FreeUntilHoursBefore, RefundAm
 /// <param name="CancellationRefund">The decision made when the booking was cancelled; <c>null</c> unless cancelled.</param>
 /// <param name="LinkAction">What the link was made for: <c>manage</c>, <c>confirm</c> or <c>cancel</c>.</param>
 /// <param name="AllowedActions">What the guest can do now with this link: <c>confirm</c> and/or <c>cancel</c>.</param>
+/// <param name="Language">The booking's language (<c>en</c> or <c>zh</c>), so the page opens in it (M10b, Design §18.10).</param>
 internal sealed record GuestBookingResponse(
     string Reference,
     string VenueName,
@@ -48,7 +50,8 @@ internal sealed record GuestBookingResponse(
     RefundDecision? RefundIfCancelledNow,
     RefundDecision? CancellationRefund,
     LinkAction LinkAction,
-    IReadOnlyList<LinkAction> AllowedActions);
+    IReadOnlyList<LinkAction> AllowedActions,
+    Language Language);
 
 /// <param name="Status">The booking's status after the action.</param>
 /// <param name="RefundDecision">Set once the booking is cancelled (§8.3): <c>full</c>, <c>none</c> (deposit kept) or
@@ -115,7 +118,8 @@ internal sealed partial class GuestBookingHandler(
             cancellable ? RefundPolicy.Decide(booking, CancelReason.GuestRequest, Actor.ForGuest(booking.GuestId), now) : null,
             booking.Status == BookingStatus.Cancelled ? booking.CancellationRefund : null,
             link.Value.Action,
-            allowed);
+            allowed,
+            booking.Language);
     }
 
     public Task<Result<GuestActionResponse>> ConfirmAsync(string? token, CancellationToken cancellationToken) =>
@@ -208,6 +212,7 @@ internal sealed class GuestBookingEndpoints : IEndpoint
             .WithName("getGuestBooking")
             .WithTags("GuestBookings")
             .AllowAnonymous()
+            .WithAnonymousBucket(AnonymousBucket.GuestLink)
             .Produces<GuestBookingResponse>()
             .ProducesApiProblem(StatusCodes.Status400BadRequest, StatusCodes.Status410Gone, StatusCodes.Status429TooManyRequests);
 
@@ -215,6 +220,7 @@ internal sealed class GuestBookingEndpoints : IEndpoint
             .WithName("confirmGuestBooking")
             .WithTags("GuestBookings")
             .AllowAnonymous()
+            .WithAnonymousBucket(AnonymousBucket.GuestLink)
             .Produces<GuestActionResponse>()
             .ProducesApiProblem(
                 StatusCodes.Status400BadRequest, StatusCodes.Status409Conflict, StatusCodes.Status410Gone, StatusCodes.Status429TooManyRequests);
@@ -223,6 +229,7 @@ internal sealed class GuestBookingEndpoints : IEndpoint
             .WithName("cancelGuestBooking")
             .WithTags("GuestBookings")
             .AllowAnonymous()
+            .WithAnonymousBucket(AnonymousBucket.GuestLink)
             .Produces<GuestActionResponse>()
             .ProducesApiProblem(
                 StatusCodes.Status400BadRequest, StatusCodes.Status409Conflict, StatusCodes.Status410Gone, StatusCodes.Status429TooManyRequests);

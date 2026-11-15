@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Reservation.Domain.Common;
+using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
@@ -34,7 +35,8 @@ public sealed partial class PosDeliveryWorker(
     IOptions<OutboxOptions> outboxOptions,
     TimeProvider businessClock,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider clock,
-    ILogger<PosDeliveryWorker> logger)
+    ILogger<PosDeliveryWorker> logger,
+    WorkerPause? pause = null)
     : BackgroundService
 {
     /// <summary>The last error when the adapter threw instead of answering: the exception type only.</summary>
@@ -145,6 +147,7 @@ public sealed partial class PosDeliveryWorker(
     /// </summary>
     private async Task<PosSendOutcome?> SendHeadAsync(VenueId venueId, CancellationToken cancellationToken)
     {
+        using var batch = await WorkerPause.EnterAsync(pause, cancellationToken); // the demo reset waits for it (Design §18.10)
         await using var scope = scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<ReservationsDbContext>();

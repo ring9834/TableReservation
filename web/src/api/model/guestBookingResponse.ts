@@ -7,6 +7,7 @@
 import type { BookingStatus } from './bookingStatus';
 import type { GuestCancellationTerms } from './guestCancellationTerms';
 import type { GuestDeposit } from './guestDeposit';
+import type { Language } from './language';
 import type { LinkAction } from './linkAction';
 import type { RefundDecision } from './refundDecision';
 
@@ -27,4 +28,5 @@ export interface GuestBookingResponse {
   cancellationRefund: null | RefundDecision;
   linkAction: LinkAction;
   allowedActions: LinkAction[];
+  language: Language;
 }

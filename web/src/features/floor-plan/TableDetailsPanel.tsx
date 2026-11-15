@@ -250,6 +250,7 @@ function BookingDetails({
           </>
         )}
         <GuestHistory booking={booking} details={details} />
+        <ReminderLine details={details} timeZone={timeZone} />
         {details?.mobileMasked && (
           <>
             <dt>{t("host.panel.mobile")}</dt>
@@ -279,6 +280,34 @@ function BookingDetails({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The reminder and the guest's answer (AC5.6, M10b, Design §18.10), from tonight's list: "Reminder sent 6:25 pm · no
+ * reply yet" / "· Confirmed 6:26 pm" / "· Cancelled by guest 6:27 pm". Nothing when no reminder was sent.
+ */
+function ReminderLine({
+  details,
+  timeZone,
+}: Readonly<{ details: BookingListItem | undefined; timeZone: string }>) {
+  const { t, i18n } = useTranslation();
+  const reminder = details?.reminder;
+  if (!reminder) return null;
+  const time = (instant: string) => formatInstantTime(instant, timeZone, i18n.language);
+  const sent = t("host.reminder.sent", { time: time(reminder.sentAt) });
+  const reply =
+    reminder.response && reminder.respondedAt
+      ? t(`host.reminder.${reminder.response}`, { time: time(reminder.respondedAt) })
+      : t("host.reminder.noReply");
+
+  return (
+    <>
+      <dt>{t("host.panel.reminder")}</dt>
+      <dd data-testid="reminder-line" data-response={reminder.response ?? "none"}>
+        {`${sent} · ${reply}`}
+      </dd>
+    </>
   );
 }
 

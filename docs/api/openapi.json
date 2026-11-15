@@ -1614,6 +1614,49 @@
         }
       }
     },
+    "/api/v1/demo/reset": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "resetDemo",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/venues/{venueId}/bookings/{id}/confirm": {
       "post": {
         "tags": [
@@ -2938,6 +2981,9 @@
           }
         }
       },
+      "DemoResetNotice": {
+        "type": "object"
+      },
       "DepositStatus": {
         "enum": [
           "pending",
@@ -3154,7 +3200,8 @@
           "refundIfCancelledNow",
           "cancellationRefund",
           "linkAction",
-          "allowedActions"
+          "allowedActions",
+          "language"
         ],
         "type": "object",
         "properties": {
@@ -3234,6 +3281,9 @@
             "items": {
               "$ref": "#/components/schemas/LinkAction"
             }
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
           }
         }
       },

@@ -44,6 +44,8 @@ export const SimulatePaymentParams = zod.object({
 
 export const SimulatePaymentResponse = zod.void()
 
+export const ResetDemoResponse = zod.void()
+
 export const demoLoginBodyPasscodeMax = 200;
 
 
