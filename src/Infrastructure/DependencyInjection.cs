@@ -10,6 +10,7 @@ using Reservation.Infrastructure.Messaging;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Payments;
 using Reservation.Infrastructure.Persistence;
+using Reservation.Infrastructure.Pos;
 
 namespace Reservation.Infrastructure;
 
@@ -44,7 +45,8 @@ public static class DependencyInjection
             options.UseReservationsDatabase(provider.GetRequiredService<NpgsqlDataSource>())
                 .AddInterceptors(
                     provider.GetRequiredService<OutboxSaveChangesInterceptor>(),
-                    provider.GetRequiredService<MessageChangeInterceptor>());
+                    provider.GetRequiredService<MessageChangeInterceptor>(),
+                    provider.GetRequiredService<PosMessageChangeInterceptor>());
             configureDatabase?.Invoke(options);
         });
 
@@ -59,6 +61,7 @@ public static class DependencyInjection
         AddOutbox(services);
         AddMessaging(services);
         AddPayments(services);
+        AddPos(services);
 
         services.AddScoped<DemoSeeder>();
         services.AddScoped<DemoReset>();
@@ -83,6 +86,28 @@ public static class DependencyInjection
         services.TryAddScoped<IMessageSender, PhonePanelSender>();
         services.AddSingleton<MessageDeliveryWorker>();
         services.AddHostedService(provider => provider.GetRequiredService<MessageDeliveryWorker>());
+    }
+
+    /// <summary>
+    /// The POS link (Design §6, §6.7): the per-venue sequence, the delivery worker and its signal, the after-commit
+    /// interceptor with a notifier that pushes nothing (the API replaces it with <c>posLogChanged</c>), and the demo's
+    /// <see cref="MockPosAdapter"/> as <see cref="IPosAdapter"/>. Tests may replace the adapter.
+    /// </summary>
+    private static void AddPos(IServiceCollection services)
+    {
+        services.AddOptions<PosOptions>()
+            .BindConfiguration(PosOptions.Section)
+            .Validate(o => o.IsValid, "Pos:SignatureTolerance, Pos:PollInterval, Pos:UnavailableRetry and Pos:UnavailableWindow must be positive.")
+            .ValidateOnStart();
+
+        services.AddSingleton<PosSignal>();
+        services.AddScoped<PosSequenceAllocator>();
+        services.AddScoped<PosMessageChangeInterceptor>();
+        services.TryAddSingleton<IPosLogNotifier, NullPosLogNotifier>();
+        services.AddSingleton<MockPosAdapter>();
+        services.TryAddSingleton<IPosAdapter>(provider => provider.GetRequiredService<MockPosAdapter>());
+        services.AddSingleton<PosDeliveryWorker>();
+        services.AddHostedService(provider => provider.GetRequiredService<PosDeliveryWorker>());
     }
 
     /// <summary>

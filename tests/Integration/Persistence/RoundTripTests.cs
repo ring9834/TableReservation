@@ -97,7 +97,7 @@ public sealed class RoundTripTests(PostgresFixture postgres)
         {
             guest = Guest.Create(GoldenDragon.VenueId, PersonName.Create("周杰 Zhou Jie").Value, PhoneNumber.Create("+64 21 011 0099").Value,
                 "zhou@example.test", Language.Zh, "Peanuts", now);
-            guest.RecordVisit(Money.FromNzd(9_900), now);
+            guest.RecordVisit(now, Money.FromNzd(9_900));
             entry = WaitlistEntry.Join(GoldenDragon.VenueId, guest.Id, guest.Name, PartySize.Of(4), 25, now, Language.Zh).Value;
             Check(entry.Notify(GoldenDragon.TableId("T4"), now.AddMinutes(20)));
             message = Message.Queue(GoldenDragon.VenueId, guest.Id, MessagePurpose.TableReady, MessageChannel.Sms, Language.Zh,

@@ -3,6 +3,7 @@ export * from './demo/demo.zod';
 export * from './floor-plan/floor-plan.zod';
 export * from './messages/messages.zod';
 export * from './payments/payments.zod';
+export * from './pos/pos.zod';
 export * from './seating/seating.zod';
 export * from './venues/venues.zod';
 export * from './waitlist/waitlist.zod';

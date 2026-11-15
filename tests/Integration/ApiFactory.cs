@@ -24,6 +24,9 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
     /// <summary>A test-only Stripe webhook signing secret; tests sign their webhooks with it.</summary>
     public const string WebhookSecret = "whsec_test_only_not_a_secret";
 
+    /// <summary>A test-only POS webhook signing secret (M9a); the mock and the tests sign <c>BillClosed</c> with it.</summary>
+    public const string PosWebhookSecret = "pos_test_only_not_a_secret";
+
     public TestClock Clock { get; } = new(DemoTime.Now);
 
     public LogCapture Logs { get; } = new();
@@ -51,6 +54,7 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
         builder.UseSetting("Demo:PresenterPasscode", PresenterPasscode);
         builder.UseSetting("Payments:Provider", "Fake");
         builder.UseSetting("Stripe:WebhookSecret", WebhookSecret);
+        builder.UseSetting("Pos:WebhookSecret", PosWebhookSecret);
         foreach (var (key, value) in Settings)
         {
             builder.UseSetting(key, value);

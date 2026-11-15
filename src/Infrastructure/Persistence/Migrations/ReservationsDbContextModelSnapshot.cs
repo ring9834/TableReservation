@@ -728,6 +728,89 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.ToTable("outbox", (string)null);
                 });
 
+            modelBuilder.Entity("Reservation.Infrastructure.Pos.MockPosOpenTable", b =>
+                {
+                    b.Property<Guid>("TableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("table_id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("opened_at");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("venue_id");
+
+                    b.HasKey("TableId")
+                        .HasName("pk_mock_pos_open_tables");
+
+                    b.ToTable("mock_pos_open_tables", (string)null);
+                });
+
+            modelBuilder.Entity("Reservation.Infrastructure.Pos.MockPosReceipt", b =>
+                {
+                    b.Property<string>("IdempotencyKey")
+                        .HasColumnType("text")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message_type");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<long>("ReceivedOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("received_order");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("ReceivedOrder"));
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("venue_id");
+
+                    b.HasKey("IdempotencyKey")
+                        .HasName("pk_mock_pos_received");
+
+                    b.ToTable("mock_pos_received", (string)null);
+                });
+
+            modelBuilder.Entity("Reservation.Infrastructure.Pos.MockPosState", b =>
+                {
+                    b.Property<short>("Id")
+                        .HasColumnType("smallint")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at");
+
+                    b.Property<bool>("Online")
+                        .HasColumnType("boolean")
+                        .HasColumnName("online");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mock_pos_state");
+
+                    b.ToTable("mock_pos_state", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mock_pos_state_singleton", "id = 1");
+                        });
+                });
+
             modelBuilder.Entity("Reservation.Infrastructure.Pos.PosMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -761,15 +844,27 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("idempotency_key");
 
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
                     b.Property<string>("MessageType")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("message_type");
 
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
                     b.Property<JsonDocument>("Payload")
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset>("QueuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("queued_at");
 
                     b.Property<Guid?>("SourceEventId")
                         .HasColumnType("uuid")
@@ -807,7 +902,27 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_pos_messages_venue_id_venue_sequence");
 
+                    b.HasIndex(new[] { "VenueId", "VenueSequence" }, "ix_pos_messages_outbound_open")
+                        .HasDatabaseName("ix_pos_messages_outbound_open")
+                        .HasFilter("direction = 'Outbound' AND status IN ('Waiting', 'Failed')");
+
                     b.ToTable("pos_messages", (string)null);
+                });
+
+            modelBuilder.Entity("Reservation.Infrastructure.Pos.PosVenueSequence", b =>
+                {
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("venue_id");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_sequence");
+
+                    b.HasKey("VenueId")
+                        .HasName("pk_pos_venue_sequences");
+
+                    b.ToTable("pos_venue_sequences", (string)null);
                 });
 
             modelBuilder.Entity("Reservation.Domain.Bookings.Booking", b =>

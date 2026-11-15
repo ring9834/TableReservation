@@ -978,6 +978,258 @@
         }
       }
     },
+    "/api/v1/venues/{venueId}/pos-messages": {
+      "get": {
+        "tags": [
+          "Pos"
+        ],
+        "operationId": "getPosMessages",
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PosLogResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/venues/{venueId}/pos/status": {
+      "get": {
+        "tags": [
+          "Pos"
+        ],
+        "operationId": "getPosStatus",
+        "parameters": [
+          {
+            "name": "venueId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PosStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/demo/pos/online": {
+      "put": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "setMockPosOnline",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMockPosOnlineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/demo/pos/bill-paid": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "simulateBillPaid",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateBillPaidRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulateBillPaidResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/demo/payments/{bookingId}/succeed": {
       "post": {
         "tags": [
@@ -2584,6 +2836,7 @@
           }
         }
       },
+      "JsonElement": {},
       "Language": {
         "enum": [
           "en",
@@ -2777,6 +3030,141 @@
           "fake"
         ]
       },
+      "PosApplyDeposit": {
+        "required": [
+          "amountCents",
+          "currency",
+          "paymentRef",
+          "messageId",
+          "messageType",
+          "venueId",
+          "tableIds",
+          "occurredAt"
+        ],
+        "type": "object",
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "paymentRef": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "venueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "tableIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PosBillClosed": {
+        "required": [
+          "posBillId",
+          "tableId",
+          "billTotalCents",
+          "closedAt",
+          "messageId",
+          "messageType",
+          "venueId",
+          "tableIds",
+          "occurredAt"
+        ],
+        "type": "object",
+        "properties": {
+          "posBillId": {
+            "type": "string"
+          },
+          "tableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "billTotalCents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipCents": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "closedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "venueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "tableIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PosDirection": {
+        "enum": [
+          "outbound",
+          "inbound"
+        ]
+      },
       "PosLogChangedNotice": {
         "required": [
           "posMessageIds"
@@ -2789,6 +3177,239 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "PosLogItem": {
+        "required": [
+          "id",
+          "direction",
+          "messageType",
+          "status",
+          "venueSequence",
+          "attempts",
+          "createdAt",
+          "deliveredAt",
+          "bookingId",
+          "tableIds",
+          "unmatchedReason",
+          "payload"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/PosDirection"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PosMessageStatus"
+          },
+          "venueSequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "attempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deliveredAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "bookingId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "tableIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "unmatchedReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        }
+      },
+      "PosLogResponse": {
+        "required": [
+          "timeZone",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PosLogItem"
+            }
+          }
+        }
+      },
+      "PosMessageStatus": {
+        "enum": [
+          "waiting",
+          "sent",
+          "acknowledged",
+          "failed",
+          "received",
+          "matched",
+          "unmatched",
+          "dismissed"
+        ]
+      },
+      "PosOpenTable": {
+        "required": [
+          "partySize",
+          "seatedAt",
+          "messageId",
+          "messageType",
+          "venueId",
+          "tableIds",
+          "occurredAt"
+        ],
+        "type": "object",
+        "properties": {
+          "partySize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "guestName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "seatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "venueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "tableIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PosStatusResponse": {
+        "required": [
+          "online"
+        ],
+        "type": "object",
+        "properties": {
+          "online": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PosUpsertMember": {
+        "required": [
+          "memberPhone",
+          "name",
+          "language",
+          "messageId",
+          "messageType",
+          "venueId",
+          "tableIds",
+          "occurredAt"
+        ],
+        "type": "object",
+        "properties": {
+          "memberPhone": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "venueId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "tableIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -2923,6 +3544,71 @@
               "string"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "SetMockPosOnlineRequest": {
+        "required": [
+          "online"
+        ],
+        "type": "object",
+        "properties": {
+          "online": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "SimulateBillPaidRequest": {
+        "required": [
+          "tableId",
+          "totalCents"
+        ],
+        "type": "object",
+        "properties": {
+          "tableId": {
+            "minLength": 1,
+            "type": "string",
+            "format": "uuid"
+          },
+          "totalCents": {
+            "maximum": 10000000,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SimulateBillPaidResponse": {
+        "required": [
+          "posMessageId",
+          "status",
+          "bookingId",
+          "unmatchedReason"
+        ],
+        "type": "object",
+        "properties": {
+          "posMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PosMessageStatus"
+          },
+          "bookingId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "unmatchedReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -3422,6 +4108,9 @@
     },
     {
       "name": "Seating"
+    },
+    {
+      "name": "Pos"
     },
     {
       "name": "Demo"

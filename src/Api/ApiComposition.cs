@@ -7,6 +7,7 @@ using Reservation.Api.Common;
 using Reservation.Api.Features.Bookings;
 using Reservation.Api.Features.Bookings.Availability;
 using Reservation.Api.Features.Payments;
+using Reservation.Api.Features.Pos;
 using Reservation.Api.Messaging;
 using Reservation.Api.Pipeline;
 using Reservation.Api.Realtime;
@@ -70,11 +71,15 @@ internal static class ApiComposition
 
             // SignalR notices as component schemas (Design §15).
             options.AddNoticeSchemas();
+
+            // POS message payloads (Design §6.7, docs/api/pos-messages.md).
+            options.AddPosMessageSchemas();
         });
 
         services.AddRealtime();
         services.AddMessages();
         services.AddPaymentHandlers();
+        services.AddPos();
 
         services.AddValidatorsFromAssemblyContaining<CreateBookingRequestValidator>(includeInternalTypes: true);
         services.AddFeatures(typeof(ApiComposition).Assembly);
