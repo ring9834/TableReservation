@@ -175,6 +175,66 @@ public sealed class LogScrubbingTests(PostgresFixture postgres) : ApiTestBase(po
         }
     }
 
+    [Fact]
+    public async Task POS_messages_leave_no_names_phones_or_payloads_in_the_logs()
+    {
+        const string guestName = "Brixel Oddmantle";
+        const string guestMobile = "021 011 0168";
+        const string walkInName = "Tavrin Scollop";
+        const string posBillId = "bill-scrub-5e2c";
+        await SignInAsync(Client);
+        var t1 = Reservation.Infrastructure.Demo.GoldenDragon.TableId("T1").Value;
+        var t2 = Reservation.Infrastructure.Demo.GoldenDragon.TableId("T2").Value;
+
+        // UpsertMember and OpenTable (name, phone) queued, sent, logged by ID only; a deposit booking's ApplyDeposit too.
+        var booking = await ReadAsync<CreateBookingResponse>(
+            await PostAsync(Client, Venue + "/phone-bookings", BookingBody(DemoTime.Tonight, 19, 30, 2, guestName, guestMobile)),
+            HttpStatusCode.Created);
+        await ReadAsync<BookingStateResponse>(await PostAsync(Client, $"{Venue}/bookings/{booking.BookingId}/seat", new { version = booking.Version }));
+        await ReadAsync<Reservation.Api.Features.Seating.SeatWalkInResponse>(
+            await PostAsync(Client, Venue + "/walk-ins", new { partySize = 2, tableId = t2, name = walkInName }), HttpStatusCode.Created);
+        await DispatchAndDeliverAsync();
+        var posWorker = Factory.Services.GetRequiredService<Reservation.Infrastructure.Pos.PosDeliveryWorker>();
+        while (await posWorker.DeliverOnceAsync(Ct) > 0)
+        {
+        }
+
+        // Bill paid through the mock, then a forged and a real POS webhook carrying a marker bill ID.
+        await ReadAsync<Reservation.Api.Features.Pos.SimulateBillPaidResponse>(
+            await PostAsync(Client, "/api/v1/demo/pos/bill-paid", new { tableId = t1, totalCents = 4_321 }));
+        var bill = $$"""
+            {"version":1,"messageId":"{{Guid.NewGuid()}}","messageType":"BillClosed","venueId":"{{Reservation.Infrastructure.Demo.GoldenDragon.VenueId.Value}}",
+             "tableIds":["{{t2}}"],"occurredAt":"2026-11-24T05:25:00Z","posBillId":"{{posBillId}}","tableId":"{{t2}}","billTotalCents":1234,"closedAt":"2026-11-24T05:25:00Z"}
+            """;
+        await SendPosWebhookAsync(bill, "t=1,v1=00");
+        Assert.Equal(HttpStatusCode.OK, (await SendPosWebhookAsync(
+            bill, Reservation.Infrastructure.Pos.PosWebhookSigner.Sign(bill, ApiFactory.PosWebhookSecret, DateTimeOffset.UtcNow))).StatusCode);
+        await DispatchAndDeliverAsync();
+
+        var log = string.Join('\n', Factory.Logs.Lines.Select(l => l.Text));
+        Assert.Contains("POS: ", log, StringComparison.Ordinal);
+        Assert.Contains("POS webhook rejected: invalid_signature", log, StringComparison.Ordinal);
+        string[] secrets =
+        [
+            guestName, "Oddmantle", walkInName, "Scollop", posBillId, "memberPhone", "billTotalCents",
+            "021 011 0168", "0210110168", "+64210110168", "210110168", ApiFactory.PosWebhookSecret,
+        ];
+        foreach (var secret in secrets)
+        {
+            Assert.DoesNotContain(secret, log, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private Task<HttpResponseMessage> SendPosWebhookAsync(string body, string signature)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhooks/pos")
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+        };
+        request.Headers.TryAddWithoutValidation(Reservation.Infrastructure.Pos.PosWebhookSigner.Header, signature);
+        return NewClient().SendAsync(request, Ct);
+    }
+
     private Task<HttpResponseMessage> SendWebhookAsync(string body, string signature)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhooks/stripe")

@@ -63,13 +63,26 @@ public sealed class Guest : AggregateRoot<GuestId>
         Language = language;
     }
 
-    /// <summary>A visit with a bill from the POS (AC6.6). The handler's inbox row makes this run once per event.</summary>
-    public void RecordVisit(Money billTotal, DateTimeOffset at)
+    /// <summary>
+    /// A visit ended (AC6.6, Design §6.7): every completed booking counts, whether the POS closed the bill or a host
+    /// cleared the table. <paramref name="billTotal"/> is the bill when there is one; without one the last bill total is
+    /// kept. The handler's inbox row makes this run once per event.
+    /// </summary>
+    public void RecordVisit(DateTimeOffset at, Money? billTotal)
     {
         VisitCount++;
-        LastBillTotal = billTotal;
         LastVisitAt = at;
+        if (billTotal is { } total)
+        {
+            LastBillTotal = total;
+        }
     }
+
+    /// <summary>
+    /// A bill that arrived after the visit was already counted (late match, §6.5): records the spend without counting a
+    /// second visit.
+    /// </summary>
+    public void RecordLateBill(Money billTotal) => LastBillTotal = billTotal;
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

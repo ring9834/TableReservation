@@ -7,6 +7,29 @@
 import * as zod from 'zod';
 
 
+export const SetMockPosOnlineBody = zod.object({
+  "online": zod.boolean().nullable()
+})
+
+export const SetMockPosOnlineResponse = zod.void()
+
+
+export const simulateBillPaidBodyTotalCentsMax = 10000000;
+
+
+
+export const SimulateBillPaidBody = zod.object({
+  "tableId": zod.uuid().min(1),
+  "totalCents": zod.int().min(1).max(simulateBillPaidBodyTotalCentsMax)
+})
+
+export const SimulateBillPaidResponse = zod.object({
+  "posMessageId": zod.uuid(),
+  "status": zod.enum(['waiting', 'sent', 'acknowledged', 'failed', 'received', 'matched', 'unmatched', 'dismissed']),
+  "bookingId": zod.uuid().nullable(),
+  "unmatchedReason": zod.string().nullable()
+})
+
 export const SimulatePaymentParams = zod.object({
   "bookingId": zod.uuid()
 })

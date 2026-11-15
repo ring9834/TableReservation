@@ -3,6 +3,7 @@ export * from './demo/demo';
 export * from './floor-plan/floor-plan';
 export * from './messages/messages';
 export * from './payments/payments';
+export * from './pos/pos';
 export * from './seating/seating';
 export * from './venues/venues';
 export * from './waitlist/waitlist';

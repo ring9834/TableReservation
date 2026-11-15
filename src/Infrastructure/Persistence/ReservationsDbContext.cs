@@ -46,6 +46,16 @@ public sealed class ReservationsDbContext(DbContextOptions<ReservationsDbContext
 
     public DbSet<AuditEntry> Audit => Set<AuditEntry>();
 
+    /// <summary>Per-venue POS sequence counter (Design §6.7); not venue-filtered.</summary>
+    public DbSet<PosVenueSequence> PosVenueSequences => Set<PosVenueSequence>();
+
+    /// <summary>The demo mock POS's own state (Design §6.7); written through its own context, never venue-filtered.</summary>
+    public DbSet<MockPosState> MockPosState => Set<MockPosState>();
+
+    public DbSet<MockPosReceipt> MockPosReceipts => Set<MockPosReceipt>();
+
+    public DbSet<MockPosOpenTable> MockPosOpenTables => Set<MockPosOpenTable>();
+
     /// <summary>Not venue-filtered: the key already includes the venue.</summary>
     public DbSet<IdempotencyRecord> IdempotencyKeys => Set<IdempotencyRecord>();
 

@@ -684,7 +684,86 @@ Verification: dotnet build/test, has-pending-model-changes, web lint/typecheck/f
 build, generate:api. Playwright and the manual checks: I run them. Don't read user secrets or .env files.
 ```
 
-### M9 onward
+### M9a Mock POS back end
+```
+Milestone M9a: mock POS back end (Design §3.5, §5.5, §6.1–§6.6, §10.5, §13, §14, §15; Requirements
+§6 AC6.3–AC6.6, QA-5). API, workers, tests, docs. The POS log panel, the online/offline control and
+the host "Bill paid" button come in M9b. Read CLAUDE.md first, including rules 1, 3, 9 and 14.
+
+1. Docs first: an "M9a" block with this prompt (minus the last two lines) after M8b in BUILD-PLAN.md,
+   rename "M9 onward" to "M10 onward"; decisions in a new Design §6.7 Build notes (M9a).
+
+2. Outbound messages (§6.3): PosProjectionHandler (outbox, inbox-idempotent) only INSERTS pos_messages
+   rows (Waiting); it never calls the adapter. BookingCreated with a guest → UpsertMember;
+   BookingSeated → OpenTable, and ApplyDeposit after it when the deposit is Captured (same event,
+   OpenTable first). Idempotency key "{eventId}:{MessageType}".
+   - Every payload has one envelope (AC6.3): messageId, messageType, venueId, bookingId, tableIds
+     (empty for UpsertMember), occurredAt, plus the type's fields. Version the envelope (v1).
+   - venue_sequence must be allocated safely under concurrent handlers (e.g. a per-venue counter row
+     updated with RETURNING, or an advisory lock), never max()+1. Inbound messages use the same counter.
+
+3. Delivery (§6.2, §6.4, AC6.5, QA-5): PosDeliveryWorker on the INFRASTRUCTURE clock (signal or 1 s;
+   5 s retry while unavailable). Per venue, strictly in venue_sequence order: never send n+1 before n is
+   Sent. Only one sender per venue at a time even with two API instances (advisory lock per venue or
+   equivalent); test it. Unavailable doesn't count as an attempt for 24 h. Say what a permanent
+   rejection does to the queue (block or skip) and record it in §6.7. Send with the idempotency key; a
+   crash after the adapter accepted and before Sent is saved must not deliver twice at the POS.
+   Every status change pushes posLogChanged {posMessageIds} only after commit (as M7a did for messages).
+
+4. MockPosAdapter: online/offline state stored in the database (survives restarts; demo reset sets it
+   online), not in memory. It records each idempotency key it accepted and ignores repeats, and keeps
+   which booking is open on which table (from OpenTable) so BillClosed can echo bookingId (§6.5 step 1).
+   PUT /api/v1/demo/pos/online {online} (Presenter; only when Demo:Enabled).
+
+5. Inbound BillClosed (§5.5, §6.5): POST /api/v1/webhooks/pos, signed (Pos:WebhookSecret; user secrets
+   locally, a "not a secret" value in CI), inbox consumer 'pos-webhook' + POS message ID, stored as an
+   inbound pos_messages row. One shared PosWebhookProcessor used by the endpoint and by
+   POST /api/v1/demo/pos/bill-paid {tableId, totalCents} (Host or Presenter; only when Demo:Enabled), which
+   builds a signed BillClosed from the mock's open-table record and passes it through the SAME
+   processor (signature, inbox, CloseBill). No shortcut that completes bookings directly.
+   - CloseBillHandler, exactly §6.5 steps 1–4 with LateBillMatchMinutes from venue settings (business
+     clock times). Duplicate posBillId ignored; a different second bill → Unmatched 'second_bill';
+     two or more late candidates → Unmatched 'ambiguous'. Completion raises BookingCompleted and
+     TableCleared and records the bill; the guest's visit and LastBillTotal update (AC6.6).
+   - Manual match/dismiss (Manager) are pilot: don't build them; Unmatched rows just show in the log.
+
+6. API: GET /api/v1/venues/{venueId}/pos-messages?status (Presenter), newest first, at most 200:
+   id, direction, messageType, status, venueSequence, attempts, createdAt, deliveredAt, bookingId,
+   tableIds, unmatchedReason, and the payload. The payload shown has phone numbers masked like the phone
+   panel (stored unmasked for the POS). GET …/pos/status for the switch state. Demo reset and
+   ResetIfStale clear pos_messages, the counter and the mock's state. The seed creates no POS messages.
+
+7. Partner contract: docs/api/pos-messages.md describing every message (UpsertMember, OpenTable,
+   ApplyDeposit, BillClosed): purpose, direction, envelope, fields with types, an example JSON, the
+   idempotency and ordering guarantees, signature scheme, and the open partner question from §6.5
+   (echo bookingId). Neutral wording: "the POS". Add the payload schemas to openapi.json components.
+
+8. Tests first (Testcontainers; business clock fixed at 18:25, only the infrastructure clock moves):
+   - Mapping: each event → the right messages, keys, envelope; walk-in without guest → no UpsertMember;
+     deposit booking seated → OpenTable then ApplyDeposit; each event dispatched twice → one row each.
+   - Sequence under concurrency: parallel handlers → unique, gap-free order per venue.
+   - QA-5: offline, seat three tables → three Waiting, retried every 5 s, attempts unchanged; online →
+     sent in sequence order, each accepted once by the mock; two workers in parallel still in order;
+     crash after accept → no duplicate at the mock.
+   - Inbound: bad signature 401; duplicate message once; §6.5 steps 1, 2, 3, 4 each; second_bill;
+     ambiguous; bill-paid on a seeded table (no OpenTable recorded) completes via step 2; guest visit
+     and LastBillTotal updated; posLogChanged only after commit.
+   - Log endpoint: masked phone, Host 403, anonymous 401. Demo routes absent when Demo:Enabled is false.
+   - LogScrubbingTests: no names, phones or payloads in logs.
+
+(Agreed additions, 15 Nov) Every BookingCompleted with a guest counts the visit (BillClosed or
+ClearedByHost), recording the bill total when there is one; BookingBillAttached only sets the bill
+total without a second visit (Guest.RecordVisit(at, total?) + RecordLateBill(total)), unit-tested and
+tested end to end (clear then late bill = 1 visit with the total). §6.7 notes that the
+pos_venue_sequences row lock is held until the dispatcher batch commits, so a batch with a Stripe
+refund call delays inbound bills for that venue; the pilot should allocate POS sequences outside slow
+handlers or move the POS projection to its own batch.
+
+Verification: dotnet build/test, has-pending-model-changes, openapi.json + generate:api, web lint/
+typecheck/build. Playwright: I run it. Don't read user secrets.
+```
+
+### M10 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse

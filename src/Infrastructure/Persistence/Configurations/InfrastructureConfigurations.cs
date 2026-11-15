@@ -44,6 +44,10 @@ internal sealed class PosMessageConfiguration : IEntityTypeConfiguration<PosMess
         builder.HasIndex(x => new { x.VenueId, x.CreatedAt })
             .HasFilter("status = 'Unmatched'")
             .HasDatabaseName("ix_pos_unmatched");
+        // The delivery worker's head lookup (Design §6.7): a second, named index on the same columns.
+        builder.HasIndex(x => new { x.VenueId, x.VenueSequence }, "ix_pos_messages_outbound_open")
+            .HasFilter("direction = 'Outbound' AND status IN ('Waiting', 'Failed')")
+            .HasDatabaseName("ix_pos_messages_outbound_open");
     }
 }
 

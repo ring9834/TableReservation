@@ -195,9 +195,19 @@ public sealed record PhoneNumber
     }
 
     /// <summary>Safe to log or show in the message log: country code and last 3 digits only.</summary>
-    public string Masked() => E164.Length <= 6
-        ? new string('*', E164.Length)
-        : string.Concat(E164.AsSpan(0, 3), new string('*', E164.Length - 6), E164.AsSpan(E164.Length - 3));
+    public string Masked() => Mask(E164);
+
+    /// <summary>
+    /// The same masking for a number held as text (e.g. in a stored POS payload, Design §6.7): the first 3 and last 3
+    /// characters kept, the rest <c>*</c>; 6 characters or fewer are masked entirely.
+    /// </summary>
+    public static string Mask(string number)
+    {
+        ArgumentNullException.ThrowIfNull(number);
+        return number.Length <= 6
+            ? new string('*', number.Length)
+            : string.Concat(number.AsSpan(0, 3), new string('*', number.Length - 6), number.AsSpan(number.Length - 3));
+    }
 
     public override string ToString() => Masked();
 }

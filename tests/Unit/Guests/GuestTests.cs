@@ -47,12 +47,39 @@ public class GuestTests
     {
         var guest = NewGuest();
 
-        guest.RecordVisit(Money.FromNzd(18_500), TestData.Start.AddHours(1));
-        guest.RecordVisit(Money.FromNzd(9_900), TestData.Start.AddDays(7));
+        guest.RecordVisit(TestData.Start.AddHours(1), Money.FromNzd(18_500));
+        guest.RecordVisit(TestData.Start.AddDays(7), Money.FromNzd(9_900));
 
         Assert.Equal(2, guest.VisitCount);
         Assert.Equal(Money.FromNzd(9_900), guest.LastBillTotal);
         Assert.Equal(TestData.Start.AddDays(7), guest.LastVisitAt);
+    }
+
+    [Fact]
+    public void RecordVisit_WithoutABill_CountsTheVisitAndKeepsTheEarlierBill()
+    {
+        var guest = NewGuest();
+        guest.RecordVisit(TestData.Start.AddHours(1), Money.FromNzd(18_500));
+
+        guest.RecordVisit(TestData.Start.AddDays(7), null);
+
+        Assert.Equal(2, guest.VisitCount);
+        Assert.Equal(Money.FromNzd(18_500), guest.LastBillTotal);
+        Assert.Equal(TestData.Start.AddDays(7), guest.LastVisitAt);
+    }
+
+    [Fact]
+    public void RecordLateBill_SetsTheBillWithoutASecondVisit()
+    {
+        var guest = NewGuest();
+        guest.RecordVisit(TestData.Start.AddHours(1), null);
+
+        guest.RecordLateBill(Money.FromNzd(12_300));
+
+        Assert.Equal(1, guest.VisitCount);
+        Assert.Equal(Money.FromNzd(12_300), guest.LastBillTotal);
+        Assert.Equal(TestData.Start.AddHours(1), guest.LastVisitAt);
+        EventAssert.NoneRaised(guest, 0);
     }
 
     private static Guest NewGuest() => Guest.Create(
