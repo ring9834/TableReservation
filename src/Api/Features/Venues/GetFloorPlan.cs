@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Reservation.Api.Auth;
 using Reservation.Api.Common;
 using Reservation.Api.Features.Bookings.Availability;
@@ -52,7 +53,17 @@ internal sealed record FloorTableDto(
 /// <param name="At">The business-clock instant the states were derived at.</param>
 /// <param name="Areas">In floor order.</param>
 /// <param name="Tables">In floor order: area order, then as laid out.</param>
-internal sealed record FloorPlanResponse(Guid VenueId, string TimeZone, DateTime At, IReadOnlyList<FloorAreaDto> Areas, IReadOnlyList<FloorTableDto> Tables);
+/// <param name="DemoEnabled">
+/// The demo controls exist (<c>Demo:Enabled</c>): the host screen then shows "Bill paid", which calls
+/// <c>POST /demo/pos/bill-paid</c> (M9b).
+/// </param>
+internal sealed record FloorPlanResponse(
+    Guid VenueId,
+    string TimeZone,
+    DateTime At,
+    IReadOnlyList<FloorAreaDto> Areas,
+    IReadOnlyList<FloorTableDto> Tables,
+    bool DemoEnabled);
 
 internal sealed record GetFloorPlan(VenueId VenueId);
 
@@ -61,7 +72,8 @@ internal sealed record GetFloorPlan(VenueId VenueId);
 /// active bookings that matter now (seated, or still to come before the end of the venue-local day) with an
 /// <c>AsNoTracking</c> projection; never loads aggregates.
 /// </summary>
-internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider clock) : IQueryHandler<GetFloorPlan, FloorPlanResponse>
+internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider clock, IOptions<DemoOptions> demo)
+    : IQueryHandler<GetFloorPlan, FloorPlanResponse>
 {
     private static readonly BookingStatus[] _upcoming = [BookingStatus.PendingPayment, BookingStatus.Booked, BookingStatus.Confirmed];
 
@@ -156,7 +168,8 @@ internal sealed class GetFloorPlanHandler(ReservationsDbContext db, TimeProvider
             venue.TimeZone,
             now.UtcDateTime,
             [.. areas.Select(a => new FloorAreaDto(a.Id.Value, a.Name, a.NameZh, a.SortOrder))],
-            tables);
+            tables,
+            demo.Value.Enabled);
     }
 }
 

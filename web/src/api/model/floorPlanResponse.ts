@@ -13,4 +13,5 @@ export interface FloorPlanResponse {
   at: string;
   areas: FloorAreaDto[];
   tables: FloorTableDto[];
+  demoEnabled: boolean;
 }

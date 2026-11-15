@@ -1,10 +1,11 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { MessageLogItem, MessageLogResponse } from "@/api/model";
 import { formatInstantTime } from "@/lib/format";
 import { messageStatus } from "./messageStatus.mjs";
+import { useFreshIds } from "./useFreshIds";
 import styles from "./phonePanel.module.css";
 
 type Props = Readonly<{
@@ -31,24 +32,8 @@ export function PhonePanel({ log, pending, error, venueName }: Props) {
   const list = useRef<HTMLOListElement>(null);
   const atBottom = useRef(true);
 
-  // Messages that arrived after the first load get a short highlight. Worked out while rendering when the items
-  // change (React's pattern for state that follows other data); an ID stays marked, so the CSS animation runs once.
-  const [seen, setSeen] = useState<{
-    items: MessageLogItem[] | undefined;
-    ids: Set<string> | null;
-  }>({
-    items: undefined,
-    ids: null,
-  });
-  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
-  if (items && items !== seen.items) {
-    const ids = new Set(items.map((item) => item.id));
-    if (seen.ids) {
-      const arrived = items.filter((item) => !seen.ids!.has(item.id)).map((item) => item.id);
-      if (arrived.length > 0) setFresh(new Set([...fresh, ...arrived]));
-    }
-    setSeen({ items, ids });
-  }
+  // Messages that arrived after the first load get a short highlight.
+  const fresh = useFreshIds(items);
 
   useLayoutEffect(() => {
     const element = list.current;

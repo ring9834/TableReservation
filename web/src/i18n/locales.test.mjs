@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { depositLabelKeys } from "../features/booking/payment.mjs";
+import { ordinalForms } from "../features/bookings/guestHistory.mjs";
 import { purposes, statusKeys } from "../features/presenter/messageStatus.mjs";
+import { posFilters, posStatusKeys, unmatchedReasons } from "../features/presenter/posLog.mjs";
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"));
 const en = load("en.json");
@@ -143,6 +145,40 @@ test("every deposit wording the host screens can show has a label (Design §18.8
   for (const resources of [en, zh]) {
     for (const key of depositLabelKeys) {
       assert.ok(valueAt(resources, `deposit.status.${key}`), `No label for deposit ${key}`);
+    }
+  }
+});
+
+test("every POS log status, filter and unmatched reason has a label (Design §18.9)", () => {
+  for (const resources of [en, zh]) {
+    for (const key of posStatusKeys) {
+      assert.ok(valueAt(resources, `pos.status.${key}`), `No label for POS status ${key}`);
+    }
+    for (const filter of posFilters) {
+      assert.ok(valueAt(resources, `pos.filter.${filter}`), `No label for POS filter ${filter}`);
+    }
+    for (const reason of [...unmatchedReasons, "other"]) {
+      assert.ok(
+        valueAt(resources, `pos.unmatchedReason.${reason}`),
+        `No words for unmatched reason ${reason}`,
+      );
+    }
+  }
+});
+
+test("every visit ordinal and bill total error has a label (Design §18.9)", () => {
+  for (const resources of [en, zh]) {
+    for (const form of ordinalForms) {
+      assert.ok(
+        valueAt(resources, `host.history.nthVisit.${form}`),
+        `No label for ordinal ${form}`,
+      );
+    }
+    for (const error of ["required", "invalid", "tooSmall", "tooLarge"]) {
+      assert.ok(
+        valueAt(resources, `host.actions.billErrors.${error}`),
+        `No message for bill error ${error}`,
+      );
     }
   }
 });

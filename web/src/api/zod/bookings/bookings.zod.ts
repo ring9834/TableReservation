@@ -126,7 +126,12 @@ export const GetTonightBookingsResponse = zod.object({
 })]),
   "depositStatus": zod.union([zod.null(),zod.union([zod.literal('pending'),zod.literal('captured'),zod.literal('refunded'),zod.literal('released'),zod.literal(null)])]),
   "version": zod.int(),
-  "refundDecision": zod.union([zod.null(),zod.union([zod.literal('full'),zod.literal('none'),zod.literal('notApplicable'),zod.literal(null)])])
+  "refundDecision": zod.union([zod.null(),zod.union([zod.literal('full'),zod.literal('none'),zod.literal('notApplicable'),zod.literal(null)])]),
+  "visitCount": zod.int().nullable(),
+  "lastBillTotal": zod.union([zod.null(),zod.object({
+  "amountCents": zod.int(),
+  "currency": zod.string()
+})])
 }))
 })
 

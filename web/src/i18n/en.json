@@ -170,7 +170,8 @@
       "occasion": "Occasion",
       "notes": "Notes",
       "allergyInList": "See tonight's list for details.",
-      "deposit": "Deposit"
+      "deposit": "Deposit",
+      "history": "History"
     },
     "list": {
       "heading": "Tonight's bookings",
@@ -208,7 +209,21 @@
       "cancelNoDeposit": "No deposit has been taken.",
       "keepBooking": "Keep booking",
       "confirmCancel": "Cancel booking",
-      "cancelled": "Booking {{reference}} cancelled."
+      "cancelled": "Booking {{reference}} cancelled.",
+      "billPaid": "Bill paid",
+      "billTitle": "Bill paid at {{table}}",
+      "billHint": "The mock POS sends this bill to the booking system, as if the guests paid at the counter.",
+      "billTotal": "Bill total (NZ$)",
+      "sendBill": "Send bill",
+      "sendingBill": "Sending…",
+      "closeDialog": "Close",
+      "billUnmatched": "The POS bill wasn't matched to a booking: {{reason}}",
+      "billErrors": {
+        "required": "Enter the bill total.",
+        "invalid": "Enter an amount in dollars and cents, e.g. 186.50.",
+        "tooSmall": "The bill total must be more than NZ$0.00.",
+        "tooLarge": "The bill total can be at most NZ$100,000.00."
+      }
     },
     "errors": {
       "slot_taken": "That table is no longer free. The floor has been refreshed; please choose again.",
@@ -218,6 +233,18 @@
       "party_too_large": "No table here seats a party that large.",
       "not_found": "That is no longer here. The screen has been refreshed.",
       "not_signed_in": "Your session has ended. Going to sign-in…"
+    },
+    "history": {
+      "first": "First visit",
+      "nthVisit": {
+        "one": "{{n}}st visit",
+        "two": "{{n}}nd visit",
+        "few": "{{n}}rd visit",
+        "other": "{{n}}th visit"
+      },
+      "visitsOne": "1 visit",
+      "visitsMany": "{{n}} visits",
+      "lastBill": "last bill {{amount}}"
     }
   },
   "presenter": {
@@ -247,6 +274,47 @@
       "senderFailed": "Not sent (the text service failed)",
       "notSent": "Not sent"
     }
+  },
+  "pos": {
+    "heading": "POS",
+    "logLabel": "POS messages",
+    "switchLabel": "Mock POS",
+    "online": "POS online",
+    "offline": "POS offline",
+    "waitingCount": "{{count}} waiting",
+    "filterLabel": "Show",
+    "filter": {
+      "all": "All",
+      "waiting": "Waiting",
+      "unmatched": "Unmatched"
+    },
+    "empty": "No POS messages yet",
+    "emptyFiltered": "No messages with this status",
+    "toPos": "To POS →",
+    "fromPos": "← From POS",
+    "sequence": "#{{n}}",
+    "guestsOne": "1 guest",
+    "guestsMany": "{{count}} guests",
+    "status": {
+      "waiting": "Waiting for the POS",
+      "sent": "Sent",
+      "acknowledged": "Acknowledged",
+      "failed": "Failed: not delivered",
+      "received": "Received",
+      "matched": "Matched",
+      "unmatched": "Unmatched: {{reason}}",
+      "dismissed": "Dismissed"
+    },
+    "unmatchedReason": {
+      "no_match": "no booking at this table",
+      "ambiguous": "more than one booking could match",
+      "second_bill": "the booking already has a bill",
+      "other": "not matched to a booking"
+    },
+    "json": "Full message (JSON)",
+    "copy": "Copy JSON",
+    "copied": "Copied",
+    "copyFailed": "Couldn't copy"
   },
   "tableState": {
     "free": "Free",

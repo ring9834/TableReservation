@@ -190,6 +190,7 @@ export function HostPage() {
               selectedBooking={selectedBooking}
               timeZone={plan.data.timeZone}
               bookingsById={bookingsById}
+              demoEnabled={plan.data.demoEnabled}
               onClose={() => selectTable(null)}
             />
           )}

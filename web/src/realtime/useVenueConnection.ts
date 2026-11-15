@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { getGetFloorPlanQueryKey } from "@/api/endpoints/floor-plan/floor-plan";
 import { getGetTonightBookingsQueryKey } from "@/api/endpoints/bookings/bookings";
 import { getGetMessagesQueryKey } from "@/api/endpoints/messages/messages";
+import { getGetPosMessagesQueryKey } from "@/api/endpoints/pos/pos";
 import { getGetWaitlistQueryKey } from "@/api/endpoints/waitlist/waitlist";
 import type { MessageLogChangedNotice, WaitlistChangedNotice } from "@/api/model";
 import { apiBaseUrl } from "@/lib/apiFetch";
@@ -52,6 +53,7 @@ const isUnauthorized = (error: unknown) =>
  *   party for a freed table (AC4.2, Design §18.6).
  * - `messageLogChanged` invalidates the message log (the presenter's phone panel) and is passed to
  *   `onMessageLogChanged` (Design §18.7).
+ * - `posLogChanged` invalidates the POS log under every filter (the presenter's POS panel, Design §18.9).
  * - After any reconnect every query is invalidated once, so nothing missed while away stays missing (AC2.5).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
  *   again. An open WebSocket can outlive a lost network for a while, and the browser knows sooner.
@@ -109,6 +111,11 @@ export function useVenueConnection(
     connection.on("messageLogChanged", (notice: MessageLogChangedNotice) => {
       void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(venueId) });
       optionsRef.current.onMessageLogChanged?.(notice);
+    });
+
+    // The prefix key, so the POS log refetches under every filter (Design §18.9).
+    connection.on("posLogChanged", () => {
+      void queryClient.invalidateQueries({ queryKey: getGetPosMessagesQueryKey(venueId) });
     });
 
     connection.onreconnecting(() => {

@@ -35,4 +35,7 @@ export interface BookingListItem {
   depositStatus: null | DepositStatus;
   version: number;
   refundDecision: null | RefundDecision;
+  /** @nullable */
+  visitCount: number | null;
+  lastBillTotal: null | MoneyDto;
 }

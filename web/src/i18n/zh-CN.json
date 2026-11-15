@@ -170,7 +170,8 @@
       "occasion": "场合",
       "notes": "备注",
       "allergyInList": "详情请看今晚预订列表。",
-      "deposit": "订金"
+      "deposit": "订金",
+      "history": "到访记录"
     },
     "list": {
       "heading": "今晚预订",
@@ -208,7 +209,21 @@
       "cancelNoDeposit": "尚未收取订金。",
       "keepBooking": "保留预订",
       "confirmCancel": "确认取消",
-      "cancelled": "预订 {{reference}} 已取消。"
+      "cancelled": "预订 {{reference}} 已取消。",
+      "billPaid": "已结账",
+      "billTitle": "{{table}} 已结账",
+      "billHint": "模拟 POS 会把这张账单发给预订系统，就像客人在收银台付了款。",
+      "billTotal": "账单金额（NZ$）",
+      "sendBill": "发送账单",
+      "sendingBill": "正在发送…",
+      "closeDialog": "关闭",
+      "billUnmatched": "POS 账单未能匹配到预订：{{reason}}",
+      "billErrors": {
+        "required": "请输入账单金额。",
+        "invalid": "请输入金额（元和分），例如 186.50。",
+        "tooSmall": "账单金额必须大于 NZ$0.00。",
+        "tooLarge": "账单金额最多为 NZ$100,000.00。"
+      }
     },
     "errors": {
       "slot_taken": "该餐桌已不再空闲。楼面已刷新，请重新选择。",
@@ -218,6 +233,18 @@
       "party_too_large": "本店没有能容纳这么多人的餐桌。",
       "not_found": "该项已不存在。屏幕已刷新。",
       "not_signed_in": "登录已过期，正在前往登录页面…"
+    },
+    "history": {
+      "first": "首次光临",
+      "nthVisit": {
+        "one": "第{{n}}次光临",
+        "two": "第{{n}}次光临",
+        "few": "第{{n}}次光临",
+        "other": "第{{n}}次光临"
+      },
+      "visitsOne": "到访 1 次",
+      "visitsMany": "到访 {{n}} 次",
+      "lastBill": "上次消费 {{amount}}"
     }
   },
   "presenter": {
@@ -247,6 +274,47 @@
       "senderFailed": "未发送（短信服务出错）",
       "notSent": "未发送"
     }
+  },
+  "pos": {
+    "heading": "POS",
+    "logLabel": "POS 消息",
+    "switchLabel": "模拟 POS",
+    "online": "POS 在线",
+    "offline": "POS 离线",
+    "waitingCount": "{{count}} 条等待中",
+    "filterLabel": "显示",
+    "filter": {
+      "all": "全部",
+      "waiting": "等待中",
+      "unmatched": "未匹配"
+    },
+    "empty": "暂无 POS 消息",
+    "emptyFiltered": "没有此状态的消息",
+    "toPos": "发往 POS →",
+    "fromPos": "← 来自 POS",
+    "sequence": "#{{n}}",
+    "guestsOne": "1 位",
+    "guestsMany": "{{count}} 位",
+    "status": {
+      "waiting": "等待 POS",
+      "sent": "已发送",
+      "acknowledged": "已确认",
+      "failed": "失败：未送达",
+      "received": "已收到",
+      "matched": "已匹配",
+      "unmatched": "未匹配：{{reason}}",
+      "dismissed": "已忽略"
+    },
+    "unmatchedReason": {
+      "no_match": "这张桌没有预订",
+      "ambiguous": "有不止一个预订可能匹配",
+      "second_bill": "该预订已有账单",
+      "other": "未匹配到预订"
+    },
+    "json": "完整消息（JSON）",
+    "copy": "复制 JSON",
+    "copied": "已复制",
+    "copyFailed": "无法复制"
   },
   "tableState": {
     "free": "空闲",

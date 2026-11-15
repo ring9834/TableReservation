@@ -13,15 +13,16 @@ import { venueId } from "@/lib/config";
 import { useApiError } from "@/lib/useApiError";
 import { useVenueConnection } from "@/realtime/useVenueConnection";
 import { PhonePanel } from "./PhonePanel";
+import { PosPanel } from "./PosPanel";
 import styles from "./presenter.module.css";
 
 /** A host session may open `/presenter/`; the message log answers 403 (Design §17, §18.7). */
 const isForbidden = (error: unknown) => isApiError(error) && error.status === 403;
 
 /**
- * The presenter screen (Design §17, §18.7), for a laptop or projector: the phone panel on the left. The rest of the
- * page stays free for the POS log (M9) and the demo controls (M11). `messageLogChanged` refetches the log; a reconnect
- * refetches everything (Design §15).
+ * The presenter screen (Design §17, §18.7, §18.9), for a laptop or projector: the phone panel on the left, the POS
+ * panel (switch and log) on the right; the demo controls join it in M11. `messageLogChanged` and `posLogChanged`
+ * refetch their logs; a reconnect refetches everything (Design §15).
  */
 export function PresenterPage() {
   const { t } = useTranslation();
@@ -79,8 +80,7 @@ export function PresenterPage() {
               error={messages.error ? messageFor(messages.error) : null}
               venueName={venue.data?.name ?? ""}
             />
-            {/* Kept free for the POS log (M9) and the demo controls (M11). */}
-            <div className={styles.rest} />
+            <PosPanel />
           </div>
         </>
       )}
