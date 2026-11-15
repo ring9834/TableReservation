@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Reservation.Api.Auth;
 using Reservation.Api.Common;
 using Reservation.Api.Features.Bookings.Availability;
+using Reservation.Api.GuestLinks;
 using Reservation.Domain.Common;
 using Reservation.Domain.Messaging;
 using Reservation.Infrastructure.Persistence;
@@ -15,13 +16,19 @@ internal enum MessageSubjectType
     WaitlistEntry,
 }
 
-/// <summary>A message as the presenter's phone panel shows it (Design §7, §7.2).</summary>
+/// <summary>A button on a message (M10a, Design §7.3): what it does and the signed link it opens.</summary>
+/// <param name="Kind"><c>confirm</c> or <c>cancel</c> (reminder), <c>manage</c> (confirmation).</param>
+/// <param name="Url">The guest link, <c>{BaseUrl}/manage/?token=…</c>, as written at the end of the body.</param>
+internal sealed record MessageActionItem(LinkAction Kind, string Url);
+
+/// <summary>A message as the presenter's phone panel shows it (Design §7, §7.2, §7.3).</summary>
 /// <param name="Body">The text as sent (or to be sent).</param>
 /// <param name="MobileMasked">Country code and last 3 digits only.</param>
 /// <param name="SentAt">When the provider accepted it (business clock).</param>
 /// <param name="DeliveredAt">When delivery was reported (business clock).</param>
 /// <param name="LastError">Why it failed (e.g. <c>expired</c>, <c>superseded</c>); <c>null</c> unless failed.</param>
 /// <param name="SubjectId">The booking or waitlist entry the message is about.</param>
+/// <param name="Actions">The message's buttons (M10a); empty for texts without links.</param>
 internal sealed record MessageLogItem(
     Guid Id,
     MessagePurpose Purpose,
@@ -33,7 +40,8 @@ internal sealed record MessageLogItem(
     DateTime? DeliveredAt,
     string? LastError,
     Guid SubjectId,
-    MessageSubjectType SubjectType);
+    MessageSubjectType SubjectType,
+    IReadOnlyList<MessageActionItem> Actions);
 
 /// <param name="At">The business-clock instant the log was read at.</param>
 /// <param name="Items">Today's messages (venue-local day, business clock), newest last, at most 100.</param>
@@ -87,9 +95,16 @@ internal sealed class GetMessageLogHandler(ReservationsDbContext db, TimeProvide
             m.DeliveredAt?.UtcDateTime,
             m.Status == MessageStatus.Failed ? m.LastError : null,
             m.SubjectId,
-            m.Purpose == MessagePurpose.TableReady ? MessageSubjectType.WaitlistEntry : MessageSubjectType.Booking)).ToList();
+            m.Purpose == MessagePurpose.TableReady ? MessageSubjectType.WaitlistEntry : MessageSubjectType.Booking,
+            ActionsOf(m))).ToList();
         return new MessageLogResponse(now.UtcDateTime, venue.TimeZone, items);
     }
+
+    private static List<MessageActionItem> ActionsOf(Message message) =>
+        [.. message.Actions
+            .Select(a => (Ok: Enum.TryParse<LinkAction>(a.Kind, ignoreCase: true, out var kind), Kind: kind, a.Url))
+            .Where(a => a.Ok && Enum.IsDefined(a.Kind))
+            .Select(a => new MessageActionItem(a.Kind, a.Url))];
 }
 
 /// <summary><c>GET /venues/{venueId}/messages</c> (Presenter): the phone panel's message log.</summary>

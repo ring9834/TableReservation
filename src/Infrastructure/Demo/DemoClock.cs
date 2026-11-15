@@ -72,6 +72,12 @@ public sealed class DemoDataOptions
     public const string Section = "Demo";
 
     /// <summary>
+    /// <c>Demo:Enabled</c>, the same switch the API's demo session reads. Infrastructure uses it to put
+    /// <see cref="Payments.SeedDepositRouter"/> in front of Stripe (Design §7.3). Default false.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
     /// When the database holds no booking on today's venue-local date (business clock), reset and reseed at start-up,
     /// so a local database seeded on an earlier day shows tonight again. Default false.
     /// </summary>

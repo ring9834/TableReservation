@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Reservation.Api.GuestLinks;
 using Reservation.Domain.Bookings;
 using Reservation.Domain.Common;
 using Reservation.Domain.Messaging;
@@ -17,7 +18,9 @@ namespace Reservation.Api.Messaging;
 /// after the commit.
 /// <list type="bullet">
 /// <item><see cref="BookingCreated"/> → Confirmation, for online and phone bookings created as Booked. Walk-ins (and
-/// parties seated from the waitlist, also walk-ins) and PendingPayment bookings get none.</item>
+/// parties seated from the waitlist, also walk-ins) and PendingPayment bookings get none. Since M10a every
+/// Confirmation carries a Manage link that expires at the booking start (BR-13: a guest who booked under 24 h ahead
+/// gets no reminder and relies on it).</item>
 /// <item><see cref="DepositCaptured"/> → Confirmation (M8a): a deposit booking is confirmed once the payment succeeds.</item>
 /// <item><see cref="BookingCancelled"/> by the guest or a host → Cancellation (M8a). None when the hold expired: the
 /// guest never had a confirmed booking (and a late payment is refunded with its own text).</item>
@@ -32,6 +35,7 @@ namespace Reservation.Api.Messaging;
 internal sealed class NotificationHandler(
     ReservationsDbContext db,
     MessageComposer composer,
+    GuestLinkUrls links,
     TimeProvider clock,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider infrastructureClock)
     : IEventHandler<BookingCreated>, IEventHandler<DepositCaptured>, IEventHandler<BookingCancelled>, IEventHandler<DepositRefunded>,
@@ -59,8 +63,11 @@ internal sealed class NotificationHandler(
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException($"Booking {domainEvent.BookingId.Value} not found.");
 
-        var composed = composer.Compose(MessagePurpose.Confirmation, language, new TemplateModel(
-            venue.Name, venue.FindTimeZone(), domainEvent.Reference, domainEvent.PartySize, domainEvent.StartsAt));
+        var composed = composer.Compose(
+            MessagePurpose.Confirmation,
+            language,
+            new TemplateModel(venue.Name, venue.FindTimeZone(), domainEvent.Reference, domainEvent.PartySize, domainEvent.StartsAt),
+            ManageLink(domainEvent.BookingId, domainEvent.StartsAt));
         Queue(domainEvent.VenueId, guestId, MessagePurpose.Confirmation, language, composed, domainEvent.BookingId.Value);
     }
 
@@ -124,10 +131,16 @@ internal sealed class NotificationHandler(
 
         var venue = await LoadVenueAsync(venueId, cancellationToken);
         var amount = amountCents is { } cents ? new Money(cents, booking.Deposit?.Amount.Currency ?? venue.Currency) : (Money?)null;
-        var composed = composer.Compose(purpose, booking.Language, new TemplateModel(
-            venue.Name, venue.FindTimeZone(), booking.Reference.Value, booking.PartySize.Value, booking.Period.Start, amount));
+        var composed = composer.Compose(
+            purpose,
+            booking.Language,
+            new TemplateModel(venue.Name, venue.FindTimeZone(), booking.Reference.Value, booking.PartySize.Value, booking.Period.Start, amount),
+            purpose == MessagePurpose.Confirmation ? ManageLink(booking.Id, booking.Period.Start) : null);
         Queue(venueId, guestId, purpose, booking.Language, composed, bookingId.Value);
     }
+
+    private LinkActionUrl[] ManageLink(BookingId bookingId, DateTimeOffset startsAt) =>
+        [new(LinkAction.Manage, links.For(bookingId, LinkAction.Manage, startsAt))];
 
     private async Task<Venue> LoadVenueAsync(VenueId venueId, CancellationToken cancellationToken) =>
         await db.Venues.IgnoreQueryFilters([ReservationsDbContext.VenueFilter]).AsNoTracking()

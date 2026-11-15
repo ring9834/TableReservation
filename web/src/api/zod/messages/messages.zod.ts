@@ -25,7 +25,11 @@ export const GetMessagesResponse = zod.object({
   "deliveredAt": zod.iso.datetime({"offset":true}).nullable(),
   "lastError": zod.string().nullable(),
   "subjectId": zod.uuid(),
-  "subjectType": zod.enum(['booking', 'waitlistEntry'])
+  "subjectType": zod.enum(['booking', 'waitlistEntry']),
+  "actions": zod.array(zod.object({
+  "kind": zod.enum(['manage', 'confirm', 'cancel']),
+  "url": zod.string()
+}))
 }))
 })
 

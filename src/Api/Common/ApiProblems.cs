@@ -17,6 +17,10 @@ internal static class ProblemCodes
     // Stripe webhook (M8a, Design §8.4): a bad or missing Stripe-Signature (401), a body over 64 KB (413).
     public const string InvalidSignature = "invalid_signature";
     public const string PayloadTooLarge = "payload_too_large";
+
+    // Guest links (M10a, Design §7.3): malformed, forged, unknown key or wrong action (400); past its expiry (410).
+    public const string InvalidLink = "invalid_link";
+    public const string LinkExpired = "link_expired";
 }
 
 /// <summary>
@@ -45,6 +49,8 @@ internal static class ApiProblems
         [ProblemCodes.PaymentProviderError] = "The payment provider failed",
         [ProblemCodes.InvalidSignature] = "The signature is not valid",
         [ProblemCodes.PayloadTooLarge] = "The request body is too large",
+        [ProblemCodes.InvalidLink] = "The link is not valid",
+        [ProblemCodes.LinkExpired] = "The link has expired",
         [ProblemCodes.Unexpected] = "An unexpected error occurred",
     };
 
@@ -57,6 +63,7 @@ internal static class ApiProblems
         ErrorKind.Rule => StatusCodes.Status422UnprocessableEntity,
         ErrorKind.Forbidden => StatusCodes.Status403Forbidden,
         ErrorKind.External => StatusCodes.Status502BadGateway,
+        ErrorKind.Gone => StatusCodes.Status410Gone,
         _ => StatusCodes.Status500InternalServerError,
     };
 

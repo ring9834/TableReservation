@@ -70,8 +70,10 @@ internal sealed class SimulatePaymentEndpoint : IEndpoint
 /// refund consumer inside the dispatcher's transaction, only adds to <see cref="FakeRefundQueue"/>; this worker later
 /// takes each refund at least <see cref="Delay"/> old (so after that transaction has committed), signs the
 /// <c>charge.refunded</c> Stripe would send and hands it to <see cref="StripeWebhookProcessor"/>. The deposit then
-/// becomes <c>Refunded</c> exactly as in test mode. A failed report is retried a few times. Runs only with the Fake
-/// provider and <c>Outbox:RunWorkers</c>; <see cref="RunOnceAsync"/> is the test hook.
+/// becomes <c>Refunded</c> exactly as in test mode. A failed report is retried a few times. Runs with
+/// <c>Outbox:RunWorkers</c> when the Fake provider is used, or (M10a) in Stripe mode with the demo on, where
+/// <c>SeedDepositRouter</c> refunds the seed's deposits through the same queue (Design §7.3); <see cref="RunOnceAsync"/>
+/// is the test hook.
 /// </summary>
 internal sealed partial class FakeRefundReporter(
     IServiceScopeFactory scopeFactory,
@@ -79,6 +81,7 @@ internal sealed partial class FakeRefundReporter(
     IOptions<PaymentOptions> payments,
     IOptions<StripeOptions> stripe,
     IOptions<OutboxOptions> outbox,
+    IOptions<DemoOptions> demo,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider clock,
     ILogger<FakeRefundReporter> logger) : BackgroundService
 {
@@ -130,7 +133,9 @@ internal sealed partial class FakeRefundReporter(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (payments.Value.Provider != PaymentProviderKind.Fake || !outbox.Value.RunWorkers)
+        // Also in Stripe mode with the demo on: SeedDepositRouter refunds the seed's deposits through the queue (§7.3).
+        var queueInUse = payments.Value.Provider == PaymentProviderKind.Fake || demo.Value.Enabled;
+        if (!queueInUse || !outbox.Value.RunWorkers)
         {
             return;
         }

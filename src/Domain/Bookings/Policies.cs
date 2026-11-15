@@ -40,7 +40,31 @@ public static class RefundPolicy
         amount == RefundAmount.Full ? RefundDecision.Full : RefundDecision.None;
 }
 
-/// <summary>Reminder timing (BR-13, Design §7.1).</summary>
+/// <summary>Whether a booking may get a reminder now, and if not, why (BR-13, Design §7.3).</summary>
+public enum ReminderEligibility
+{
+    Eligible,
+
+    /// <summary>A reminder was already recorded; sending again sends nothing.</summary>
+    AlreadyReminded,
+
+    /// <summary>The guest (or a host) has already confirmed.</summary>
+    AlreadyConfirmed,
+
+    /// <summary>Not <c>Booked</c>: waiting for payment, seated, completed or cancelled.</summary>
+    NotBooked,
+
+    /// <summary>No guest to text (a walk-in without contact details).</summary>
+    NoGuest,
+
+    /// <summary>Made less than 24 h before its start: its confirmation carried the manage-booking link.</summary>
+    BookedLessThan24hAhead,
+
+    /// <summary>Starts within 2 h of now.</summary>
+    StartsWithin2h,
+}
+
+/// <summary>Reminder timing (BR-13, Design §7.1, §7.3).</summary>
 public static class ReminderPolicy
 {
     /// <summary>A reminder goes out this long before the booking.</summary>
@@ -50,16 +74,39 @@ public static class ReminderPolicy
     public static readonly TimeSpan MinimumNotice = TimeSpan.FromHours(2);
 
     /// <summary>
-    /// True when a reminder may be sent now: the booking is <c>Booked</c> (not yet confirmed), was made at
-    /// least 24 h ahead (otherwise its confirmation carried the manage-booking link), and starts 2 h or more from now.
+    /// The one eligibility rule, used by <see cref="Booking.RecordReminder"/>, "Send reminders now" and (pilot) the
+    /// 24-hour scheduler: no reminder yet, <c>Booked</c> (not confirmed), has a guest, made at least 24 h before its
+    /// start, and starting 2 h or more after <paramref name="now"/> (business clock). Checked in that order, so the
+    /// reason reported is the first rule that fails.
     /// </summary>
-    public static bool CanSend(Booking booking, DateTimeOffset now)
+    public static ReminderEligibility Check(Booking booking, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(booking);
-        return booking.Status == BookingStatus.Booked
-            && booking.Period.Start - booking.CreatedAt >= LeadTime
-            && booking.Period.Start - now >= MinimumNotice;
+        if (booking.Reminder is not null)
+        {
+            return ReminderEligibility.AlreadyReminded;
+        }
+
+        if (booking.Status != BookingStatus.Booked)
+        {
+            return booking.Status == BookingStatus.Confirmed ? ReminderEligibility.AlreadyConfirmed : ReminderEligibility.NotBooked;
+        }
+
+        if (booking.GuestId is null)
+        {
+            return ReminderEligibility.NoGuest;
+        }
+
+        if (booking.Period.Start - booking.CreatedAt < LeadTime)
+        {
+            return ReminderEligibility.BookedLessThan24hAhead;
+        }
+
+        return booking.Period.Start - now < MinimumNotice ? ReminderEligibility.StartsWithin2h : ReminderEligibility.Eligible;
     }
+
+    /// <summary>True when <see cref="Check"/> says <see cref="ReminderEligibility.Eligible"/>.</summary>
+    public static bool CanSend(Booking booking, DateTimeOffset now) => Check(booking, now) == ReminderEligibility.Eligible;
 }
 
 /// <summary>Why an inbound <c>BillClosed</c> could not be matched (§6.5, §6.6; <c>pos_messages.unmatched_reason</c>).</summary>

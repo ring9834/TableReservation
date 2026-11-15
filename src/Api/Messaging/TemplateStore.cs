@@ -8,8 +8,18 @@ namespace Reservation.Api.Messaging;
 /// <summary>Message templates per purpose and language (Design §7).</summary>
 internal interface ITemplateStore
 {
-    /// <summary>The template text with its <c>{placeholders}</c>; throws when there is none, which a test catches.</summary>
-    string Get(MessagePurpose purpose, Language language);
+    /// <summary>
+    /// The text stored under <paramref name="key"/> (a purpose name, or since M10a a fragment such as
+    /// <c>ActionConfirm</c> or <c>CancellationPolicyDeposit</c>) with its <c>{placeholders}</c>; throws when there is
+    /// none, which a test catches.
+    /// </summary>
+    string Get(string key, Language language);
+}
+
+internal static class TemplateStoreExtensions
+{
+    public static string Get(this ITemplateStore store, MessagePurpose purpose, Language language) =>
+        store.Get(purpose.ToString(), language);
 }
 
 /// <summary>
@@ -22,7 +32,7 @@ internal sealed class ResxTemplateStore : ITemplateStore
     private static readonly ResourceManager _english = Load("TemplatesEnglish");
     private static readonly ResourceManager _chinese = Load("TemplatesChinese");
 
-    public string Get(MessagePurpose purpose, Language language)
+    public string Get(string key, Language language)
     {
         var resources = language switch
         {
@@ -31,9 +41,9 @@ internal sealed class ResxTemplateStore : ITemplateStore
             _ => throw new ArgumentOutOfRangeException(nameof(language), language, "No templates for this language."),
         };
 
-        var text = resources.GetString(purpose.ToString(), CultureInfo.InvariantCulture);
+        var text = resources.GetString(key, CultureInfo.InvariantCulture);
         return string.IsNullOrWhiteSpace(text)
-            ? throw new InvalidOperationException($"No {language} template for {purpose}.")
+            ? throw new InvalidOperationException($"No {language} template for {key}.")
             : text;
     }
 

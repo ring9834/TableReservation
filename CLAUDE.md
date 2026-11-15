@@ -46,6 +46,7 @@ dotnet user-secrets set Demo:HostPasscode "<host passcode>" --project src/Api   
 dotnet user-secrets set Demo:PresenterPasscode "<presenter passcode>" --project src/Api   # once; must differ from the host passcode
 dotnet user-secrets set Stripe:WebhookSecret "<any value>" --project src/Api   # once; Development (Fake provider + Demo:Enabled) signs its simulated payment and refund events with it, and the API refuses to start without it (Design §18.8)
 dotnet user-secrets set Pos:WebhookSecret "<any value>" --project src/Api   # once; with Demo:Enabled the mock POS signs its simulated BillClosed ("Bill paid") with it, and the API refuses to start without it (Design §6.7)
+dotnet user-secrets set GuestLinks:SigningKey "<random, 32+ characters>" --project src/Api   # once; signs the guest Manage / Confirm / Cancel links (Design §7.3); the API refuses to start without it. GuestLinks:BaseUrl (the web origin) is in appsettings.Development.json
 dotnet user-secrets set Payments:Provider Stripe --project src/Api   # optional: real Stripe test mode (Development uses Fake); then also set Stripe:SecretKey (sk_test_…), Stripe:PublishableKey (pk_test_…) and Stripe:WebhookSecret (whsec_… from stripe listen); the API refuses to start without them
 stripe listen --forward-to https://localhost:5001/api/v1/webhooks/stripe   # with Stripe test mode only: forwards Stripe webhooks to the API (Design §8.4)
 dotnet build                             # .NET 10 SDK pinned in global.json; warnings are errors

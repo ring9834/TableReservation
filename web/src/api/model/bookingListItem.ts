@@ -5,6 +5,7 @@
  * OpenAPI spec version: v1
  */
 import type { BookingChannel } from './bookingChannel';
+import type { BookingReminder } from './bookingReminder';
 import type { BookingStatus } from './bookingStatus';
 import type { DepositStatus } from './depositStatus';
 import type { MoneyDto } from './moneyDto';
@@ -38,4 +39,5 @@ export interface BookingListItem {
   /** @nullable */
   visitCount: number | null;
   lastBillTotal: null | MoneyDto;
+  reminder: null | BookingReminder;
 }

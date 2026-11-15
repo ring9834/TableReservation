@@ -1,7 +1,9 @@
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Reservation.Api.Features.Bookings;
 using Reservation.Api.Features.Messages;
+using Reservation.Api.GuestLinks;
 using Reservation.Domain.Messaging;
 using Reservation.Infrastructure.Messaging;
 using Reservation.Infrastructure.Outbox;
@@ -218,6 +220,56 @@ public sealed class LogScrubbingTests(PostgresFixture postgres) : ApiTestBase(po
         [
             guestName, "Oddmantle", walkInName, "Scollop", posBillId, "memberPhone", "billTotalCents",
             "021 011 0168", "0210110168", "+64210110168", "210110168", ApiFactory.PosWebhookSecret,
+        ];
+        foreach (var secret in secrets)
+        {
+            Assert.DoesNotContain(secret, log, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public async Task Reminders_and_guest_links_leave_no_token_link_query_string_or_text_in_the_logs()
+    {
+        var presenter = NewClient();
+        await SignInAsync(presenter, ApiFactory.PresenterPasscode);
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync(presenter, "/api/v1/demo/reminders/send-now", new { })).StatusCode);
+        await DispatchAndDeliverAsync();
+
+        List<Message> reminders;
+        await using (var db = Database.Context())
+        {
+            reminders = await db.Messages.AsNoTracking().Where(m => m.Purpose == MessagePurpose.Reminder).ToListAsync(Ct);
+        }
+
+        Assert.Equal(2, reminders.Count);
+        var urls = reminders.SelectMany(m => m.Actions).Select(a => a.Url).ToList();
+        var tokens = urls.Select(u => u[(u.IndexOf("token=", StringComparison.Ordinal) + "token=".Length)..]).ToList();
+        var signer = Factory.Services.GetRequiredService<GuestLinkSigner>();
+        var expired = signer.Create(new Reservation.Domain.Common.BookingId(Guid.CreateVersion7()), LinkAction.Cancel, DemoTime.At(17, 0));
+        const string garbage = "Scrub-garbage-token-4d1f";
+
+        foreach (var token in tokens.Append(expired).Append(garbage))
+        {
+            await NewClient().GetAsync($"/api/v1/guest/bookings?token={Uri.EscapeDataString(token)}", Ct);
+        }
+
+        // One booking confirms, the other cancels (in time: refund requested), each twice; a confirm link tries to cancel.
+        foreach (var (action, token) in new[] { ("confirm", tokens[0]), ("cancel", tokens[3]), ("confirm", tokens[0]), ("cancel", tokens[3]), ("cancel", tokens[2]), ("cancel", garbage) })
+        {
+            await PostAsync(NewClient(), $"/api/v1/guest/bookings/{action}", new { token });
+        }
+
+        await DispatchAndDeliverAsync();
+
+        var log = string.Join('\n', Factory.Logs.Lines.Select(l => l.Text));
+        Assert.Contains("HTTP GET /api/v1/guest/bookings responded 200", log, StringComparison.Ordinal);
+        Assert.Contains("HTTP POST /api/v1/guest/bookings/cancel responded 200", log, StringComparison.Ordinal);
+        Assert.Contains("Reminder queued for booking", log, StringComparison.Ordinal);
+        string[] secrets =
+        [
+            .. tokens, .. urls, expired, garbage, "token=", "?token", ApiFactory.GuestLinkBaseUrl, "manage/?", ApiFactory.GuestLinkKey,
+            .. reminders.Select(m => m.Body), "reminder of your booking", "提醒您", "Cancel free", "订金全额退还",
+            "Emma Clarke", "黄建国", "GDB3K7", "GDC4L8", "+64210110010", "+64210110011", "021 011 0010",
         ];
         foreach (var secret in secrets)
         {

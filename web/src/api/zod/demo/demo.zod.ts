@@ -7,6 +7,14 @@
 import * as zod from 'zod';
 
 
+export const SendRemindersNowResponse = zod.object({
+  "sent": zod.int(),
+  "skipped": zod.array(zod.object({
+  "reason": zod.enum(['eligible', 'alreadyReminded', 'alreadyConfirmed', 'notBooked', 'noGuest', 'bookedLessThan24hAhead', 'startsWithin2h']),
+  "count": zod.int()
+}))
+})
+
 export const SetMockPosOnlineBody = zod.object({
   "online": zod.boolean().nullable()
 })

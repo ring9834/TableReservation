@@ -1,6 +1,7 @@
 export * from './bookings/bookings';
 export * from './demo/demo';
 export * from './floor-plan/floor-plan';
+export * from './guest-bookings/guest-bookings';
 export * from './messages/messages';
 export * from './payments/payments';
 export * from './pos/pos';

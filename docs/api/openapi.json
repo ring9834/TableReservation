@@ -978,6 +978,56 @@
         }
       }
     },
+    "/api/v1/demo/reminders/send-now": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "sendRemindersNow",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendRemindersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/venues/{venueId}/pos-messages": {
       "get": {
         "tags": [
@@ -1354,6 +1404,205 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guest/bookings": {
+      "get": {
+        "tags": [
+          "GuestBookings"
+        ],
+        "operationId": "getGuestBooking",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestBookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guest/bookings/confirm": {
+      "post": {
+        "tags": [
+          "GuestBookings"
+        ],
+        "operationId": "confirmGuestBooking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/guest/bookings/cancel": {
+      "post": {
+        "tags": [
+          "GuestBookings"
+        ],
+        "operationId": "cancelGuestBooking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2208,7 +2457,8 @@
           "version",
           "refundDecision",
           "visitCount",
-          "lastBillTotal"
+          "lastBillTotal",
+          "reminder"
         ],
         "type": "object",
         "properties": {
@@ -2326,6 +2576,16 @@
                 "$ref": "#/components/schemas/MoneyDto"
               }
             ]
+          },
+          "reminder": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BookingReminder"
+              }
+            ]
           }
         }
       },
@@ -2349,6 +2609,37 @@
             "items": {
               "$ref": "#/components/schemas/BookingListItem"
             }
+          }
+        }
+      },
+      "BookingReminder": {
+        "required": [
+          "sentAt",
+          "response",
+          "respondedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "response": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReminderResponse"
+              }
+            ]
+          },
+          "respondedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -2824,6 +3115,173 @@
           }
         }
       },
+      "GuestActionResponse": {
+        "required": [
+          "status",
+          "refundDecision"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/BookingStatus"
+          },
+          "refundDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundDecision"
+              }
+            ]
+          }
+        }
+      },
+      "GuestBookingResponse": {
+        "required": [
+          "reference",
+          "venueName",
+          "timeZone",
+          "startsAt",
+          "localDate",
+          "localTime",
+          "partySize",
+          "status",
+          "deposit",
+          "terms",
+          "freeCancellationUntil",
+          "cancellingNowKeepsDeposit",
+          "refundIfCancelledNow",
+          "cancellationRefund",
+          "linkAction",
+          "allowedActions"
+        ],
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "venueName": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "localTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "partySize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BookingStatus"
+          },
+          "deposit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuestDeposit"
+              }
+            ]
+          },
+          "terms": {
+            "$ref": "#/components/schemas/GuestCancellationTerms"
+          },
+          "freeCancellationUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancellingNowKeepsDeposit": {
+            "type": "boolean"
+          },
+          "refundIfCancelledNow": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundDecision"
+              }
+            ]
+          },
+          "cancellationRefund": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundDecision"
+              }
+            ]
+          },
+          "linkAction": {
+            "$ref": "#/components/schemas/LinkAction"
+          },
+          "allowedActions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkAction"
+            }
+          }
+        }
+      },
+      "GuestCancellationTerms": {
+        "required": [
+          "freeUntilHoursBefore",
+          "refundWhenInTime"
+        ],
+        "type": "object",
+        "properties": {
+          "freeUntilHoursBefore": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "refundWhenInTime": {
+            "$ref": "#/components/schemas/RefundAmount"
+          }
+        }
+      },
+      "GuestDeposit": {
+        "required": [
+          "amount",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DepositStatus"
+          }
+        }
+      },
+      "GuestLinkRequest": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "JoinWaitlistRequest": {
         "required": [
           "name",
@@ -2866,6 +3324,28 @@
           "zh"
         ]
       },
+      "LinkAction": {
+        "enum": [
+          "manage",
+          "confirm",
+          "cancel"
+        ]
+      },
+      "MessageActionItem": {
+        "required": [
+          "kind",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/LinkAction"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
       "MessageLogChangedNotice": {
         "required": [
           "messageIds"
@@ -2893,7 +3373,8 @@
           "deliveredAt",
           "lastError",
           "subjectId",
-          "subjectType"
+          "subjectType",
+          "actions"
         ],
         "type": "object",
         "properties": {
@@ -2945,6 +3426,12 @@
           },
           "subjectType": {
             "$ref": "#/components/schemas/MessageSubjectType"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageActionItem"
+            }
           }
         }
       },
@@ -3443,11 +3930,35 @@
           }
         }
       },
+      "RefundAmount": {
+        "enum": [
+          "full",
+          "none"
+        ]
+      },
       "RefundDecision": {
         "enum": [
           "full",
           "none",
           "notApplicable",
+          null
+        ]
+      },
+      "ReminderEligibility": {
+        "enum": [
+          "eligible",
+          "alreadyReminded",
+          "alreadyConfirmed",
+          "notBooked",
+          "noGuest",
+          "bookedLessThan24hAhead",
+          "startsWithin2h"
+        ]
+      },
+      "ReminderResponse": {
+        "enum": [
+          "confirmed",
+          "cancelled",
           null
         ]
       },
@@ -3577,6 +4088,25 @@
           }
         }
       },
+      "SendRemindersResponse": {
+        "required": [
+          "sent",
+          "skipped"
+        ],
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedReminders"
+            }
+          }
+        }
+      },
       "SetMockPosOnlineRequest": {
         "required": [
           "online"
@@ -3639,6 +4169,22 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "SkippedReminders": {
+        "required": [
+          "reason",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/ReminderEligibility"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -4140,16 +4686,19 @@
       "name": "Seating"
     },
     {
-      "name": "Pos"
+      "name": "Demo"
     },
     {
-      "name": "Demo"
+      "name": "Pos"
     },
     {
       "name": "Payments"
     },
     {
       "name": "Messages"
+    },
+    {
+      "name": "GuestBookings"
     },
     {
       "name": "Bookings"

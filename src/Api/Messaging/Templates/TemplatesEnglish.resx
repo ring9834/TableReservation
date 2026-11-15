@@ -11,4 +11,11 @@
   <data name="TableReady" xml:space="preserve"><value>{venue}: your table is ready! Please come to the host stand.</value></data>
   <data name="Cancellation" xml:space="preserve"><value>{venue}: your booking for {party} on {date} at {time} (ref {reference}) is cancelled.</value></data>
   <data name="Refund" xml:space="preserve"><value>{venue}: we've refunded your deposit of {amount} (ref {reference}).</value></data>
+  <data name="Reminder" xml:space="preserve"><value>{venue}: reminder of your booking for {party} on {date} at {time}, ref {reference}. {policy}</value></data>
+  <data name="CancellationPolicyDeposit" xml:space="preserve"><value>Cancel free up to {hours} h before and your {amount} deposit is refunded in full; after that it is kept.</value></data>
+  <data name="CancellationPolicyDepositKept" xml:space="preserve"><value>Your {amount} deposit is not refundable if you cancel.</value></data>
+  <data name="CancellationPolicyNoDeposit" xml:space="preserve"><value>Can't make it? Please cancel at least {hours} h before.</value></data>
+  <data name="ActionConfirm" xml:space="preserve"><value>Confirm</value></data>
+  <data name="ActionCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="ActionManage" xml:space="preserve"><value>Manage</value></data>
 </root>

@@ -34,7 +34,7 @@ public sealed class DemoSeeder(TimeProvider timeProvider)
         clock.Set(clock.GetUtcNow().AddMinutes(1));
         foreach (var booking in bookings.Where(b => b.Deposit is not null))
         {
-            Check(booking.CaptureDeposit($"pi_seed_{booking.Reference}", booking.Deposit!.Amount, tableStillFree: true, clock.GetUtcNow()));
+            Check(booking.CaptureDeposit(SeedPayments.IntentFor(booking.Reference.Value), booking.Deposit!.Amount, tableStillFree: true, clock.GetUtcNow()));
         }
 
         // Confirmed bookings were confirmed this morning.
