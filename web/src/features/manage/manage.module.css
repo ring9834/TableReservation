@@ -1,0 +1,177 @@
+/* Mobile first (AC1.7): one column, large touch targets (44 px), visible focus. Design §18.10. */
+
+.page {
+  min-height: 100vh;
+  background: var(--surface);
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem 0;
+}
+
+/* Inside the presenter's phone frame (M10b): keep the language switch clear of the "‹ Messages" bar. */
+.page[data-framed] .header {
+  padding-top: 1.25rem;
+}
+
+.main {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0.5rem 1rem 3rem;
+}
+
+.main h1 {
+  margin: 0.5rem 0 1rem;
+  font-size: 1.5rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.details {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  background: var(--surface-muted);
+  border-radius: 0.5rem;
+}
+
+.details > div {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.75rem;
+}
+
+.details dt {
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.reference {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.05em;
+}
+
+.terms {
+  margin: 0 0 1rem;
+}
+
+.warning,
+.notice,
+.result,
+.alert {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border-left: 4px solid currentColor;
+}
+
+.warning {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.notice {
+  background: var(--surface-muted);
+}
+
+.result {
+  color: #166534;
+  background: #dcfce7;
+  font-weight: 600;
+}
+
+.result p {
+  margin: 0;
+}
+
+.result p + p {
+  margin-top: 0.35rem;
+}
+
+.alert {
+  color: var(--error);
+  background: var(--surface-muted);
+}
+
+.confirmStep {
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 2px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.confirmStep h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.confirmStep p {
+  margin: 0 0 1rem;
+}
+
+.buttons {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.primary,
+.secondary,
+.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.primary {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0;
+}
+
+.secondary {
+  color: var(--accent-text);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+
+/* Fixed colours, readable in both themes (as the host's cancel, Design §18.8). */
+.danger {
+  color: #ffffff;
+  background: #b91c1c;
+  border: 0;
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+@media (prefers-color-scheme: dark) {
+  .warning {
+    color: #fde68a;
+    background: #451a03;
+  }
+
+  .result {
+    color: #bbf7d0;
+    background: #14532d;
+  }
+}

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Reservation.Domain.Bookings;
+using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
@@ -24,11 +25,13 @@ public sealed partial class PaymentHoldExpiryJob(
     IOptions<PaymentHoldExpiryOptions> options,
     TimeProvider businessClock,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider infrastructureClock,
-    ILogger<PaymentHoldExpiryJob> logger) : BackgroundService
+    ILogger<PaymentHoldExpiryJob> logger,
+    WorkerPause? pause = null) : BackgroundService
 {
     /// <summary>One check: expires every due hold and returns how many bookings it cancelled.</summary>
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken)
     {
+        using var batch = await WorkerPause.EnterAsync(pause, cancellationToken); // the demo reset waits for it (Design §18.10)
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ReservationsDbContext>();
         var holdNow = infrastructureClock.GetUtcNow();

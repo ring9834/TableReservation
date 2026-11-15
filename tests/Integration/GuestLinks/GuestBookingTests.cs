@@ -45,6 +45,7 @@ public sealed class GuestBookingTests(PostgresFixture postgres) : GuestLinkTestB
         Assert.Equal(LinkAction.Confirm, view.LinkAction);
         Assert.Equal([LinkAction.Confirm], view.AllowedActions);
         Assert.False(view.CancellingNowKeepsDeposit);
+        Assert.Equal(Language.En, view.Language); // the page opens in the guest's language (M10b)
 
         var after = await ByReferenceAsync(ConfirmsRef);
         Assert.Equal(before.Version, after.Version);
@@ -61,6 +62,7 @@ public sealed class GuestBookingTests(PostgresFixture postgres) : GuestLinkTestB
         Assert.Equal(new GuestDepositView(12_000, DepositStatus.Captured), new GuestDepositView(view.Deposit!.Amount.AmountCents, view.Deposit.Status));
         Assert.Equal([LinkAction.Cancel], view.AllowedActions);
         Assert.Equal(RefundDecision.Full, view.RefundIfCancelledNow);
+        Assert.Equal(Language.Zh, view.Language);
         Assert.False(view.CancellingNowKeepsDeposit);
         Assert.Equal(DemoTime.At(18, 30).UtcDateTime, view.FreeCancellationUntil);
     }

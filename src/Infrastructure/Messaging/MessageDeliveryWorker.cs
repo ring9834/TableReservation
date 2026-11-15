@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Reservation.Domain.Common;
 using Reservation.Domain.Messaging;
+using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
@@ -31,7 +32,8 @@ public sealed partial class MessageDeliveryWorker(
     IOptions<OutboxOptions> outboxOptions,
     TimeProvider businessClock,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider clock,
-    ILogger<MessageDeliveryWorker> logger)
+    ILogger<MessageDeliveryWorker> logger,
+    WorkerPause? pause = null)
     : BackgroundService
 {
     public const string Expired = "expired";
@@ -44,6 +46,7 @@ public sealed partial class MessageDeliveryWorker(
     /// <summary>One claim–send–commit cycle. Returns the number of rows it handled.</summary>
     public async Task<int> DeliverBatchAsync(CancellationToken cancellationToken)
     {
+        using var batch = await WorkerPause.EnterAsync(pause, cancellationToken); // the demo reset waits for it (Design §18.10)
         await using var scope = scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<ReservationsDbContext>();

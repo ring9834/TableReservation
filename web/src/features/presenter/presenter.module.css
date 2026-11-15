@@ -71,3 +71,55 @@
     justify-items: stretch;
   }
 }
+
+/* "Send reminders now" (M10b, Design §18.10); M11 groups it with the other demo controls. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.reminders {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.demoButton {
+  min-height: 2.75rem;
+  padding: 0.4rem 1rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.demoButton:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.demoButton:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.remindersStatus {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.9rem;
+}
+
+.remindersStatus:empty {
+  display: none;
+}
+
+.remindersError {
+  color: var(--error);
+  font-weight: 600;
+}

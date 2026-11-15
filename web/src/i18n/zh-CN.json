@@ -93,7 +93,9 @@
     "too_many_requests": "尝试次数过多，请稍等一分钟后再试。",
     "unexpected": "系统出现问题，请重试。",
     "not_signed_in": "密码不正确，请重试。",
-    "payment_provider_error": "支付服务暂时不可用。您的餐桌会保留几分钟，请重试。"
+    "payment_provider_error": "支付服务暂时不可用。您的餐桌会保留几分钟，请重试。",
+    "invalid_link": "此链接无效。",
+    "link_expired": "此链接已过期：预订已开始。"
   },
   "fieldErrors": {
     "name_length": "请输入您的姓名（最多 80 个字符）。",
@@ -171,7 +173,8 @@
       "notes": "备注",
       "allergyInList": "详情请看今晚预订列表。",
       "deposit": "订金",
-      "history": "到访记录"
+      "history": "到访记录",
+      "reminder": "提醒"
     },
     "list": {
       "heading": "今晚预订",
@@ -245,6 +248,12 @@
       "visitsOne": "到访 1 次",
       "visitsMany": "到访 {{n}} 次",
       "lastBill": "上次消费 {{amount}}"
+    },
+    "reminder": {
+      "sent": "已于 {{time}} 发送提醒",
+      "noReply": "尚未回复",
+      "confirmed": "{{time}} 已确认",
+      "cancelled": "{{time}} 客人已取消"
     }
   },
   "presenter": {
@@ -252,7 +261,24 @@
     "title": "{{venue}} · 演示",
     "presenterOnly": "此页面仅供演示者使用。请用演示者密码登录以查看手机面板。",
     "signInAgain": "以演示者身份登录",
-    "openHost": "打开迎宾页面"
+    "openHost": "打开迎宾页面",
+    "reminders": {
+      "button": "立即发送提醒",
+      "sending": "正在发送…",
+      "none": "没有新的提醒",
+      "sentOne": "已发送 1 条提醒",
+      "sentMany": "已发送 {{n}} 条提醒",
+      "skipped": "跳过 {{n}} 个：{{reasons}}",
+      "separator": "、",
+      "reason": {
+        "alreadyReminded": "{{n}} 个已提醒过",
+        "alreadyConfirmed": "{{n}} 个已确认",
+        "notBooked": "{{n}} 个尚未完成预订",
+        "noGuest": "{{n}} 个没有客人信息",
+        "bookedLessThan24hAhead": "{{n}} 个提前不足 24 小时预订",
+        "startsWithin2h": "{{n}} 个将在 2 小时内开始"
+      }
+    }
   },
   "phone": {
     "heading": "短信",
@@ -273,7 +299,15 @@
       "expired": "未发送（已过时）",
       "senderFailed": "未发送（短信服务出错）",
       "notSent": "未发送"
-    }
+    },
+    "actions": {
+      "confirm": "确认",
+      "cancel": "取消",
+      "manage": "管理预订"
+    },
+    "back": "信息",
+    "newTab": "在新标签页打开",
+    "browserTitle": "预订页面"
   },
   "pos": {
     "heading": "POS",
@@ -386,5 +420,47 @@
     "seated": "已入座",
     "walkedAway": "已离开",
     "removed": "已移除"
+  },
+  "manage": {
+    "heading": "您在 {{venue}} 的预订",
+    "headingPlain": "您的预订",
+    "reference": "预订号",
+    "when": "时间",
+    "dateTime": "{{date}} {{time}}",
+    "party": "人数",
+    "statusLabel": "状态",
+    "deposit": "订金",
+    "status": {
+      "pendingPayment": "待付订金",
+      "booked": "已预订",
+      "confirmed": "已确认",
+      "seated": "已入座",
+      "completed": "已完成",
+      "cancelled": "已取消"
+    },
+    "terms": {
+      "noDeposit": "如无法前来，请在 {{time}} 前取消。",
+      "deposit": "在 {{time}} 前取消，{{amount}} 订金全额退还；之后取消，订金不予退还。",
+      "depositKept": "您的 {{amount}} 订金不予退还。"
+    },
+    "lateWarning": "已过免费取消时间：现在取消，您的 {{amount}} 订金将不予退还。",
+    "confirm": "确认预订",
+    "confirming": "正在确认…",
+    "cancel": "取消预订",
+    "cancelHeading": "要取消此预订吗？",
+    "consequence": {
+      "refundFull": "您的 {{amount}} 订金将全额退还。",
+      "kept": "现在取消，您的 {{amount}} 订金将不予退还。",
+      "noDeposit": "尚未收取订金。"
+    },
+    "cancelConfirm": "确定取消",
+    "cancelling": "正在取消…",
+    "keep": "保留预订",
+    "result": {
+      "confirmed": "谢谢，您的预订已确认。",
+      "cancelled": "您的预订已取消。",
+      "refundOnItsWay": "退款正在处理中。"
+    },
+    "changed": "此预订的当前状态：{{status}}。"
   }
 }

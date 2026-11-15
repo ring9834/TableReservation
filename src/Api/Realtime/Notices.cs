@@ -27,6 +27,9 @@ internal sealed record MessageLogChangedNotice(IReadOnlyList<Guid> MessageIds);
 /// <summary>Invalidate <c>pos-messages</c> (POS log).</summary>
 internal sealed record PosLogChangedNotice(IReadOnlyList<Guid> PosMessageIds);
 
+/// <summary>The demo was reset (M10b, Design §18.10): invalidate everything. Carries nothing.</summary>
+internal sealed record DemoResetNotice();
+
 /// <summary>A notice and the client method that receives it.</summary>
 internal sealed record RealtimeNotice(string Method, object Payload);
 
@@ -37,6 +40,7 @@ internal static class NoticeMethods
     public const string WaitlistChanged = "waitlistChanged";
     public const string MessageLogChanged = "messageLogChanged";
     public const string PosLogChanged = "posLogChanged";
+    public const string DemoReset = "demoReset";
 }
 
 /// <summary>Which notice each domain event produces (Design §4.3 "Realtime" column, §15.1).</summary>

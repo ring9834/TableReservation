@@ -293,3 +293,14 @@ export const guestHistory = (reference: string) =>
     expect(item, `booking ${reference} in the host list`).toBeDefined();
     return { visitCount: item!.visitCount, lastBillCents: item!.lastBillTotal?.amountCents ?? null };
   });
+
+/**
+ * Resets the demo to the seeded evening (POST /demo/reset, Presenter, M10b, Design §18.10): all venue data reseeded,
+ * mock POS online; open screens refetch through `demoReset`. The demo session cookies are not in the database, so the
+ * shared sessions stay signed in.
+ */
+export const resetDemo = async () =>
+  withPresenterApi(async (api) => {
+    const answer = await api.post("/api/v1/demo/reset");
+    expect(answer.status(), `demo/reset answered ${answer.status()}`).toBe(204);
+  });

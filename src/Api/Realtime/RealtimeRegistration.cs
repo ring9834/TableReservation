@@ -46,7 +46,7 @@ internal static class RealtimeRegistration
     /// <summary>Adds the notice records to the OpenAPI components, so orval generates them (ADR-004, Design §15).</summary>
     public static OpenApiOptions AddNoticeSchemas(this OpenApiOptions options)
     {
-        Type[] notices = [typeof(FloorPlanChangedNotice), typeof(WaitlistChangedNotice), typeof(MessageLogChangedNotice), typeof(PosLogChangedNotice)];
+        Type[] notices = [typeof(FloorPlanChangedNotice), typeof(WaitlistChangedNotice), typeof(MessageLogChangedNotice), typeof(PosLogChangedNotice), typeof(DemoResetNotice)];
         return options.AddDocumentTransformer(async (document, context, cancellationToken) =>
         {
             foreach (var notice in notices)

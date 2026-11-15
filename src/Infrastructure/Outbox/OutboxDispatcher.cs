@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Reservation.Domain.Common;
+using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Persistence;
 
 namespace Reservation.Infrastructure.Outbox;
@@ -22,7 +23,8 @@ public sealed partial class OutboxDispatcher(
     OutboxSignal signal,
     IOptions<OutboxOptions> options,
     [FromKeyedServices(Clocks.Infrastructure)] TimeProvider clock,
-    ILogger<OutboxDispatcher> logger)
+    ILogger<OutboxDispatcher> logger,
+    WorkerPause? pause = null)
     : BackgroundService
 {
     private const int MaxErrorLength = 2000;
@@ -34,6 +36,7 @@ public sealed partial class OutboxDispatcher(
     /// <summary>One claim–deliver–commit cycle. Returns the number of rows it handled.</summary>
     public async Task<int> DispatchBatchAsync(CancellationToken cancellationToken)
     {
+        using var batch = await WorkerPause.EnterAsync(pause, cancellationToken); // the demo reset waits for it (Design §18.10)
         await using var scope = scopeFactory.CreateAsyncScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<ReservationsDbContext>();

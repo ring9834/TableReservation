@@ -51,8 +51,9 @@ const isUnauthorized = (error: unknown) =>
  *   ends its suggestion); the hooks refetch (ADR-002).
  * - `waitlistChanged` invalidates the waitlist and is passed to `onWaitlistChanged`, which highlights a suggested
  *   party for a freed table (AC4.2, Design §18.6).
- * - `messageLogChanged` invalidates the message log (the presenter's phone panel) and is passed to
- *   `onMessageLogChanged` (Design §18.7).
+ * - `messageLogChanged` invalidates the message log (the presenter's phone panel) and tonight's bookings (the host's
+ *   reminder line, M10b), and is passed to `onMessageLogChanged` (Design §18.7, §18.10).
+ * - `demoReset` invalidates every query (Design §15, §18.10).
  * - `posLogChanged` invalidates the POS log under every filter (the presenter's POS panel, Design §18.9).
  * - After any reconnect every query is invalidated once, so nothing missed while away stays missing (AC2.5).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
@@ -110,6 +111,8 @@ export function useVenueConnection(
 
     connection.on("messageLogChanged", (notice: MessageLogChangedNotice) => {
       void queryClient.invalidateQueries({ queryKey: getGetMessagesQueryKey(venueId) });
+      // A reminder was sent: tonight's list carries it (M10b, Design §18.10).
+      void queryClient.invalidateQueries({ queryKey: getGetTonightBookingsQueryKey(venueId) });
       optionsRef.current.onMessageLogChanged?.(notice);
     });
 
@@ -117,6 +120,9 @@ export function useVenueConnection(
     connection.on("posLogChanged", () => {
       void queryClient.invalidateQueries({ queryKey: getGetPosMessagesQueryKey(venueId) });
     });
+
+    // The presenter reset the demo (M10b): everything may have changed.
+    connection.on("demoReset", catchUp);
 
     connection.onreconnecting(() => {
       if (!disposed) setStatus("reconnecting");

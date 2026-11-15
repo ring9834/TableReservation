@@ -50,4 +50,12 @@ export const changeLanguage = (language: AppLanguage) => {
   }
 };
 
+/**
+ * Switches language for this page only, without remembering it (M10b): the guest manage page opens in the booking's
+ * language, and inside the presenter's phone it shares the presenter's origin and storage.
+ */
+export const applyLanguage = (language: AppLanguage) => {
+  void i18next.changeLanguage(language);
+};
+
 export default i18next;

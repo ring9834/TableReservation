@@ -31,8 +31,8 @@ export const isApiError = (error: unknown): error is ApiError => error instanceo
 const newCorrelationId = () => crypto.randomUUID();
 
 /**
- * Calls the API: base URL, cookies included (the demo session, Design §17), a fresh `X-Correlation-Id` per request,
- * JSON in and out. A non-2xx answer is thrown as {@link ApiError} with the Problem Details `code`.
+ * Calls the API: base URL, cookies included (the demo session, Design §17) unless the caller passes its own
+ * `credentials` (the guest manage page sends none, M10b), a fresh `X-Correlation-Id` per request, JSON in and out. A non-2xx answer is thrown as {@link ApiError} with the Problem Details `code`.
  */
 export const apiFetch = async <T>(url: string, init: RequestInit = {}): Promise<T> => {
   const headers = new Headers(init.headers);
@@ -41,7 +41,11 @@ export const apiFetch = async <T>(url: string, init: RequestInit = {}): Promise<
 
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${url}`, { ...init, headers, credentials: "include" });
+    response = await fetch(`${apiBaseUrl}${url}`, {
+      ...init,
+      headers,
+      credentials: init.credentials ?? "include",
+    });
   } catch (error) {
     if (init.signal?.aborted) {
       throw error; // a cancelled query, not an API failure

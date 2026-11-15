@@ -915,6 +915,93 @@ Verification: dotnet build/test, has-pending-model-changes, openapi.json + gener
 typecheck/build. Playwright: I run it. Don't read user secrets.
 ```
 
+### M10b Step 5 on screen
+```
+Milestone M10b: step 5 on screen (Design §7, §7.3, §10.4, §17, §18; Requirements step 5
+AC5.1–AC5.6, BR-07, BR-13). Front end + E2E + docs; small API additions below are allowed.
+No new packages. Read CLAUDE.md first, including rule 9 (tokens are personal-data-grade).
+
+1. Docs first: an "M10b" block with this prompt (minus the last two lines) after M10a in
+   BUILD-PLAN.md; decisions in a new Design §18.10 Build notes (M10b).
+
+2. API additions:
+   - GET /guest/bookings?token also returns the booking's language (en | zh) so the page opens in
+     the guest's language (the switch still works).
+   - POST /api/v1/demo/reset (Presenter; only when Demo:Enabled): runs the existing DemoReset (data,
+     clock back to the seeded evening, mock POS online), then broadcasts demoReset (§15). Clients
+     invalidate everything on demoReset. M11 adds the presenter button; this milestone only needs
+     the endpoint for E2E. Integration test: reset after changes → seeded shape again; Host 403;
+     absent when demo is off.
+
+3. Guest manage page /manage/?token=… (web/src/app/manage, the existing stub):
+   - Reads the token from the query string once; never logs it, never sends it anywhere except the
+     guest endpoints. <meta name="referrer" content="no-referrer"> on this page. No third-party
+     scripts on it.
+   - Shows Golden Dragon, reference, date and time (venue zone), party size, status, deposit
+     (amount + status), the cancellation terms in plain words.
+   - Buttons only for the actions the API returns. Confirm: one tap → "Thanks, you're confirmed".
+     Cancel: a second confirmation step that says what happens to the deposit, from the API:
+     "Your NZ$120.00 deposit will be refunded in full" or, inside the window (BR-13),
+     "Cancelling now keeps your deposit of NZ$120.00", then "Your booking is cancelled" (+ "Your
+     refund is on its way" when full). Double-tap guard as in M8b.
+   - Errors in plain words, both languages: invalid_link "This link isn't valid", link_expired
+     "This link has expired: the booking has started", invalid_transition (e.g. already seated or
+     cancelled) shows the current status instead.
+   - Opens in the guest's language from the API; en/中文 switch; mobile-first layout; 44 px targets.
+
+4. Phone panel (presenter):
+   - A bubble with actions shows them as buttons under the text: Reminder → "Confirm" / "Cancel",
+     Confirmation → "Manage booking". In the body text, the long URLs are shown shortened
+     (ellipsised, still links); the stored body is unchanged.
+   - Tapping a button opens the manage page INSIDE the phone frame (an iframe of /manage/?token=…,
+     same origin) with a "‹ Messages" back control; also an "Open in new tab" link. Same requests
+     as a real guest's browser: GET to display, POST only on the guest's tap.
+   - "Send reminders now" button in the presenter header area (M11 will group demo controls):
+     POST /demo/reminders/send-now → "2 reminders sent" plus skipped counts in plain words
+     ("7 skipped: 3 start within 2 hours, 4 seated…"); a second press "No new reminders".
+     Disabled while running.
+
+5. Host screen:
+   - Booking details show the reminder line from tonight's list data: "Reminder sent 6:25 pm ·
+     no reply yet" / "· Confirmed 6:26 pm" / "· Cancelled by guest 6:27 pm" (en + zh).
+   - Tonight's list also refreshes on messageLogChanged (a reminder was sent), not only on
+     floorPlanChanged.
+
+6. Playwright (reminders.spec.ts, serial; presenter + host + guest-in-phone):
+   - beforeAll: POST /demo/reset so seeds #10 and #11 are fresh. afterAll: reset again, so later
+     specs start from the seeded evening (check walk-in.spec still passes after it).
+   - Send reminders now → within 2 s the phone panel shows two Reminder bubbles: #10 in English,
+     #11 in Chinese, each with Confirm and Cancel.
+   - #10: tap Confirm → the manage page in the phone shows the booking and Confirm → confirm →
+     "you're confirmed"; the host shows #10 Confirmed within 2 s (AC5.3) and the reminder line
+     "Confirmed".
+   - #11: tap Cancel → page in Chinese, says the NZ$120.00 deposit will be refunded in full →
+     cancel → the host frees its table within 2 s (AC5.4); deposit reaches Refunded (AC5.5; Fake in
+     CI, the seed router in Stripe mode locally); Cancellation and Refund texts appear in Chinese.
+   - Reminder line shows the guest's response (AC5.6). Send again → "No new reminders".
+   - Errors: a garbage token → "This link isn't valid". The late-cancel wording is covered by a
+     unit test of the page logic (no table-dependent E2E for it).
+
+(Agreed, 16 Nov) The reset can't move the clock: DemoClock in Fixed mode never moves before M11, so
+there is nothing to put back; M11's clock controls add their own reset. The reset also empties the Fake
+refund queue and broadcasts demoReset after the commit. The manage page applies the guest's language
+without storing it (the iframe shares the presenter's origin) and calls the guest endpoints without the
+staff cookie. Phone-panel action buttons are labelled in the message's language, like the body.
+
+(Fix, 16 Nov) With the workers running the reset deadlocked with a worker batch and answered 409 slot_taken.
+The reset now pauses the workers (in-process WorkerPause), locks every table in one fixed order with a
+3 s lock_timeout, retries up to 5 times on 40P01 / 40001 / 55P03, and otherwise answers 503
+demo_reset_busy; an integration test resets with the workers running (Design §18.10).
+
+(Agreed, 16 Nov) The guest Cancel then got 429: all anonymous routes shared one 60-a-minute bucket per IP,
+which venue Wi-Fi shares too. E2E keeps the real limits; the anonymous traffic is split: status poll per
+booking (60), guest links per hashed token (30), other anonymous reads per IP (300), all under a 600 per-IP
+ceiling; create (10) and demo-login (5) unchanged; all RateLimits:* (Design §18.10).
+
+Verification: dotnet build/test, has-pending-model-changes, generate:api, web lint/typecheck/
+format:check/test/build. Playwright and the manual look: I run them. Don't read user secrets.
+```
+
 ### M11 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 

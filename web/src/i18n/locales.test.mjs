@@ -4,8 +4,15 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { depositLabelKeys } from "../features/booking/payment.mjs";
 import { ordinalForms } from "../features/bookings/guestHistory.mjs";
+import {
+  consequenceKeys,
+  linkErrorCodes,
+  statusKeys as manageStatusKeys,
+} from "../features/manage/manage.mjs";
 import { purposes, statusKeys } from "../features/presenter/messageStatus.mjs";
+import { actionKinds } from "../features/presenter/phoneLinks.mjs";
 import { posFilters, posStatusKeys, unmatchedReasons } from "../features/presenter/posLog.mjs";
+import { skipReasons } from "../features/presenter/reminders.mjs";
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"));
 const en = load("en.json");
@@ -51,6 +58,8 @@ test("every API error code the pages can meet has a message", () => {
     "too_many_requests",
     "not_signed_in",
     "payment_provider_error",
+    "invalid_link",
+    "link_expired",
     "unexpected",
   ];
   for (const code of codes) {
@@ -179,6 +188,38 @@ test("every visit ordinal and bill total error has a label (Design §18.9)", () 
         valueAt(resources, `host.actions.billErrors.${error}`),
         `No message for bill error ${error}`,
       );
+    }
+  }
+});
+
+test("the manage page, phone actions and reminders have every label (Design §18.10)", () => {
+  for (const resources of [en, zh]) {
+    for (const status of manageStatusKeys) {
+      assert.ok(
+        valueAt(resources, `manage.status.${status}`),
+        `No guest label for status ${status}`,
+      );
+    }
+    for (const key of consequenceKeys) {
+      assert.ok(valueAt(resources, `manage.consequence.${key}`), `No words for consequence ${key}`);
+    }
+    for (const code of linkErrorCodes) {
+      assert.ok(valueAt(resources, `errors.${code}`), `No message for link error ${code}`);
+    }
+    for (const key of ["confirmed", "cancelled", "refundOnItsWay"]) {
+      assert.ok(valueAt(resources, `manage.result.${key}`), `No words for result ${key}`);
+    }
+    for (const kind of actionKinds) {
+      assert.ok(valueAt(resources, `phone.actions.${kind}`), `No button label for action ${kind}`);
+    }
+    for (const reason of skipReasons) {
+      assert.ok(
+        valueAt(resources, `presenter.reminders.reason.${reason}`),
+        `No words for skip reason ${reason}`,
+      );
+    }
+    for (const response of ["confirmed", "cancelled"]) {
+      assert.ok(valueAt(resources, `host.reminder.${response}`), `No words for reply ${response}`);
     }
   }
 });

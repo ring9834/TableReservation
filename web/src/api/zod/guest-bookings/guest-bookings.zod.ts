@@ -36,7 +36,8 @@ export const GetGuestBookingResponse = zod.object({
   "refundIfCancelledNow": zod.union([zod.null(),zod.union([zod.literal('full'),zod.literal('none'),zod.literal('notApplicable'),zod.literal(null)])]),
   "cancellationRefund": zod.union([zod.null(),zod.union([zod.literal('full'),zod.literal('none'),zod.literal('notApplicable'),zod.literal(null)])]),
   "linkAction": zod.enum(['manage', 'confirm', 'cancel']),
-  "allowedActions": zod.array(zod.enum(['manage', 'confirm', 'cancel']))
+  "allowedActions": zod.array(zod.enum(['manage', 'confirm', 'cancel'])),
+  "language": zod.enum(['en', 'zh'])
 })
 
 export const ConfirmGuestBookingBody = zod.object({
