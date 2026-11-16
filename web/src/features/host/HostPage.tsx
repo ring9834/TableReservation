@@ -119,6 +119,7 @@ export function HostPage() {
           <button
             type="button"
             className={actionStyles.primaryButton}
+            data-testid="walk-in-button"
             onClick={() => setDialog({ kind: "walkIn" })}
           >
             {t("host.walkInButton")}

@@ -56,6 +56,9 @@ public sealed class PosProjectionTests(PostgresFixture postgres) : PosTestBase(p
         Assert.Equal(2, payload.GetProperty("partySize").GetInt32());
         Assert.Equal("Sam", payload.GetProperty("guestName").GetString());
         Assert.Equal(DemoTime.Now, payload.GetProperty("seatedAt").GetDateTimeOffset());
+        // As stored and sent: UTC ending in Z, as docs/api/pos-messages.md says (M11b), never "+00:00".
+        Assert.EndsWith("Z", payload.GetProperty("occurredAt").GetString());
+        Assert.EndsWith("Z", payload.GetProperty("seatedAt").GetString());
         Assert.Equal($"{await EventIdAsync(walkIn.BookingId, "BookingSeated")}:OpenTable", row.IdempotencyKey);
     }
 

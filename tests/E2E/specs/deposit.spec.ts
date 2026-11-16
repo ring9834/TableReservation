@@ -1,4 +1,6 @@
-import { expect, test, type FrameLocator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalScroll } from "../support/layout";
+import { payDeposit } from "../support/payment";
 import {
   hostContext,
   openPresenterScreen,
@@ -25,39 +27,6 @@ test.afterAll(async () => {
   await cancelBookings(created);
 });
 
-/**
- * The Stripe frame inside our PaymentElement container that holds the card fields, chosen by what it contains, never
- * by its order, title or file name. Stripe renders several frames there that share the title "Secure payment input
- * frame" (the form and an accessory frame, plus a loader while it starts), and its file names change between
- * Stripe.js versions (the form is `elements-inner-easel-….html` today, not `elements-inner-payment-…`). When Stripe
- * lists the payment methods (accordion, or Card not selected), the Card option is tapped first.
- */
-const stripeCardFrame = async (page: Page): Promise<FrameLocator> => {
-  const frames = page.getByTestId("payment-element").locator("iframe");
-  let found: FrameLocator | undefined;
-  await expect
-    .poll(
-      async () => {
-        for (let i = 0; i < (await frames.count()); i++) {
-          const frame = frames.nth(i).contentFrame();
-          if ((await frame.getByLabel("Card number").count()) > 0) {
-            found = frame;
-            return true;
-          }
-          const cardOption = frame
-            .getByRole("tab", { name: /^Card$/ })
-            .or(frame.getByRole("button", { name: /^Card$/ }));
-          if ((await cardOption.count()) > 0) {
-            await cardOption.first().click();
-          }
-        }
-        return false;
-      },
-      { message: "a Stripe frame in payment-element with a 'Card number' field", timeout: 30_000 },
-    )
-    .toBe(true);
-  return found!;
-};
 
 const referencePattern = /^[A-HJ-NP-Z2-9]{6}$/;
 const clockTime = /\d{1,2}:\d{2}\s?(am|pm)/i;
@@ -130,28 +99,13 @@ test("a party of 6 pays its deposit, the host cancels and the deposit is refunde
   await expect(page.getByTestId("hold-countdown")).toContainText("We'll hold your table for");
   await expect(payStep).not.toContainText(clockTime);
 
-  if (provider === "fake") {
-    await expect(page.getByTestId("test-mode-note")).toContainText("no real card");
-    // A double tap: the button turns into "Paying…" and is disabled, so only one payment is sent (payment.test.mjs).
-    await page.getByTestId("simulate-payment").dblclick();
-    await expect(page.getByTestId("deposit-paid")).toHaveText("Deposit paid NZ$120.00", { timeout: 5_000 });
-  } else {
-    const card = await stripeCardFrame(page);
-    await card.getByLabel("Card number").fill("4242 4242 4242 4242");
-    await card.getByLabel("Expiration date").fill("12 / 34");
-    await card.getByLabel("Security code").fill("123");
-    await page.getByTestId("pay-button").click();
-    const paid = page.getByTestId("deposit-paid");
-    try {
-      await expect(paid).toBeVisible({ timeout: 15_000 });
-    } catch {
-      test.skip(true, "No Stripe webhook arrived within 15 s: is `stripe listen` running (Design §8.4)?");
-    }
-    await expect(paid).toHaveText("Deposit paid NZ$120.00");
-  }
+  await expectNoHorizontalScroll(page, "pay step");
+
+  await payDeposit(page, provider, "NZ$120.00");
 
   await expect(page.getByRole("heading", { name: "You're booked!" })).toBeVisible();
   await expect(page.getByTestId("booking-reference")).toHaveText(reference);
+  await expectNoHorizontalScroll(page, "confirmation after the deposit");
   const booking = await bookingByReference(reference);
 
   // The phone panel shows the Confirmation once the deposit is paid.

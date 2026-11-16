@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { recording, slowMoMs } from "./support/recording";
 
 /**
  * The API and the web app must already be running (Design §18.4):
@@ -7,6 +8,19 @@ import { defineConfig, devices } from "@playwright/test";
  * global-setup.ts signs the host in once (E2E_HOST_PASSCODE) and saves the session for every spec file (Design §18.5).
  */
 const isCi = !!process.env.CI;
+
+/**
+ * The devices the screen helpers open (support/screens.ts reads them from the project's metadata): the guest's phone
+ * and the host's tablet. The presenter is always a laptop.
+ */
+export type ScreenDevices = { phone: string; tablet: string };
+
+const androidAndGalaxyTab: ScreenDevices = { phone: "Pixel 7", tablet: "Galaxy Tab S4 landscape" };
+const iPhoneAndIPad: ScreenDevices = { phone: "iPhone 15", tablet: "iPad Pro 11 landscape" };
+
+/** QA-8 (M11b, Design §17.3): the guest specs on an iPhone, the host specs on an iPad, both in WebKit. */
+const guestSpecs = [/booking\.spec\.ts/, /deposit\.spec\.ts/, /manage\.spec\.ts/, /phone-layout\.spec\.ts/];
+const hostSpecs = [/host\.spec\.ts/, /walk-in\.spec\.ts/, /floor-plan\.spec\.ts/];
 
 export default defineConfig({
   testDir: "./specs",
@@ -22,10 +36,24 @@ export default defineConfig({
     ignoreHTTPSErrors: true, // local dev certificates (next dev --experimental-https, dotnet dev-certs)
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // DEMO_RECORD=1: a watchable pace for the fallback recording of the demo script (M11b).
+    launchOptions: recording ? { slowMo: slowMoMs } : undefined,
   },
   // Mobile first (AC1.7): a phone-sized Chromium. CI uses Playwright's Linux Chromium; locally the installed
-  // Microsoft Edge (same engine), because Chrome crashes under automation on the development laptop.
+  // Microsoft Edge (same engine), because Chrome crashes under automation on the development laptop. The first
+  // project's channel is the one global-setup.ts signs in with.
+  // QA-8 locally adds WebKit (`npx playwright install webkit` once): an iPhone for the guest specs and an iPad for the
+  // host specs. Not in CI yet (download size and time).
   projects: isCi
-    ? [{ name: "mobile-chromium", use: { ...devices["Pixel 7"] } }]
-    : [{ name: "mobile-edge", use: { ...devices["Pixel 7"], channel: "msedge" } }],
+    ? [{ name: "mobile-chromium", use: { ...devices["Pixel 7"] }, metadata: androidAndGalaxyTab }]
+    : [
+        { name: "mobile-edge", use: { ...devices["Pixel 7"], channel: "msedge" }, metadata: androidAndGalaxyTab },
+        { name: "iphone-webkit", use: { ...devices["iPhone 15"] }, testMatch: guestSpecs, metadata: iPhoneAndIPad },
+        {
+          name: "tablet-webkit",
+          use: { ...devices["iPad Pro 11 landscape"] },
+          testMatch: hostSpecs,
+          metadata: iPhoneAndIPad,
+        },
+      ],
 });

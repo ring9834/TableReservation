@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  HubConnectionBuilder,
-  HubConnectionState,
-  type HubConnection,
-  type IRetryPolicy,
-} from "@microsoft/signalr";
+import { HubConnectionBuilder, HubConnectionState, type HubConnection } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { getGetFloorPlanQueryKey } from "@/api/endpoints/floor-plan/floor-plan";
@@ -15,6 +10,7 @@ import { getGetPosMessagesQueryKey } from "@/api/endpoints/pos/pos";
 import { getGetWaitlistQueryKey } from "@/api/endpoints/waitlist/waitlist";
 import type { MessageLogChangedNotice, WaitlistChangedNotice } from "@/api/model";
 import { apiBaseUrl } from "@/lib/apiFetch";
+import { createConnectionSequencer } from "./connectionSequencer.mjs";
 import { createSignalRLogger, isUnauthorized } from "./signalrLogger.mjs";
 
 /**
@@ -56,9 +52,12 @@ export type VenueConnectionOptions = Readonly<{
  * - `demoClockChanged` invalidates every query, as `demoReset` does: business time moved (M11a, Design §17.2).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
  *   again. An open WebSocket can outlive a lost network for a while, and the browser knows sooner.
- * - A start we stop ourselves (unmount; React Strict Mode mounts every effect twice in development) is expected:
- *   no console error, no state change. Failed starts and reconnects while the API or network is down are one
- *   console.warn per outage (`signalrLogger.mjs`); the banner is the user-facing signal.
+ * - Reconnecting is ours, not the client's automatic reconnect: a lost connection closes, and `onclose` schedules the
+ *   next start with the delays above. Starts and stops never overlap (`connectionSequencer.mjs`, M11b): a stop
+ *   (offline, unmount; React Strict Mode mounts every effect twice in development) waits for a start in flight to
+ *   settle, and a start waits for a stop in flight, so the client never logs a start abandoned by stop(). Failed
+ *   starts while the API or network is down are one console.warn per outage (`signalrLogger.mjs`); the banner is the
+ *   user-facing signal.
  */
 export function useVenueConnection(
   venueId: string,
@@ -79,33 +78,19 @@ export function useVenueConnection(
     let hasConnected = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let attempt = 0;
-    /** True from our own stop() until the next start: failures it causes are expected. */
-    let stopping = false;
 
-    /** Set when a reconnect attempt was answered 401: the close that follows goes to sign-in. */
-    let signedOut = false;
-
-    const retryPolicy: IRetryPolicy = {
-      nextRetryDelayInMilliseconds: ({ previousRetryCount, retryReason }) => {
-        if (isUnauthorized(retryReason)) {
-          signedOut = true;
-          return null; // stop reconnecting; onclose hands over to sign-in
-        }
-        return retryDelays[previousRetryCount] ?? 5_000;
-      },
-    };
-
-    const logger = createSignalRLogger(() => disposed || stopping);
+    // No automatic reconnect: its starts are internal and can't be awaited, so a stop() while one was in flight (the
+    // socket dropped, then the browser's `offline` event) made the client log "Failed to start the HttpConnection
+    // before stop() was called." Every start is ours instead (`onclose` schedules the next one), and the sequencer
+    // runs starts and stops one at a time: a stop waits for a start in flight, a start for a stop (M11b, §17.3).
+    const logger = createSignalRLogger(() => disposed || sequencer.isStopping());
     const connection: HubConnection = new HubConnectionBuilder()
       .withUrl(`${apiBaseUrl}/hubs/venue`, { withCredentials: true })
-      .withAutomaticReconnect(retryPolicy)
       .configureLogging(logger)
       .build();
+    const sequencer = createConnectionSequencer(connection);
 
-    const stop = () => {
-      stopping = true;
-      void connection.stop();
-    };
+    const stop = () => void sequencer.stop();
 
     const catchUp = () => void queryClient.invalidateQueries();
 
@@ -137,52 +122,37 @@ export function useVenueConnection(
     // The presenter moved the demo clock (M11a): overdue flags, arriving soon and "now" all changed.
     connection.on("demoClockChanged", catchUp);
 
-    connection.onreconnecting(() => {
-      if (!disposed) setStatus("reconnecting");
-    });
-    connection.onreconnected(() => {
-      if (disposed) return;
-      logger.connected();
-      setStatus("connected");
-      catchUp();
-    });
-    // Automatic reconnect gives up only on a 401 (signed out: go to sign-in). Otherwise a close means stop() was
-    // called (offline or unmount) or the first transport failed after negotiating; start again unless we meant it.
+    // A close is the connection lost (the API or the network went away), our own stop() (offline or unmount), or the
+    // first transport failing after negotiating: start again, after the retry delay, unless we meant it or a start is
+    // already on its way.
     connection.onclose(() => {
-      if (disposed) return;
-      if (signedOut) {
-        onSignedOut();
-        return;
-      }
-      if (!offline && !stopping) {
-        setStatus("reconnecting");
-        scheduleStart();
-      }
+      if (disposed || offline || sequencer.isStopping() || sequencer.isStarting()) return;
+      setStatus("reconnecting");
+      scheduleStart();
     });
 
     const start = async () => {
-      if (disposed || connection.state === HubConnectionState.Connected) return;
+      if (disposed) return;
+      // Already starting or connected, unless a stop is queued (offline, then online again before it ran): then a new
+      // start has to follow that stop.
+      const alreadyUp = sequencer.isStarting() || connection.state === HubConnectionState.Connected;
+      if (alreadyUp && !sequencer.isStopping()) return;
       if (offline) {
         setStatus("reconnecting"); // opened while offline: wait for the "online" event
         return;
       }
-      if (connection.state !== HubConnectionState.Disconnected) {
-        scheduleStart(); // still stopping or reconnecting: look again shortly
-        return;
-      }
-      stopping = false;
       try {
-        await connection.start();
-        if (disposed) return;
+        await sequencer.start(); // after a stop still in flight, if any
+        if (disposed || offline) return;
         logger.connected();
         attempt = 0;
         setStatus("connected");
-        if (hasConnected) catchUp();
+        if (hasConnected) catchUp(); // after any reconnect: fetch whatever was missed (AC2.5)
         hasConnected = true;
       } catch (error) {
-        if (disposed || stopping) return; // we stopped it ourselves: expected, nothing to show
+        if (disposed || offline) return; // we are stopping it ourselves: expected, nothing to show
         if (isUnauthorized(error)) {
-          onSignedOut();
+          onSignedOut(); // the session is missing or has ended: retrying can't help (M11a)
           return;
         }
         if (hasConnected || attempt > 0) setStatus("reconnecting");

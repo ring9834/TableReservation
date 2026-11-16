@@ -11,8 +11,8 @@ import {
   cancelBookings,
   clearBookings,
   createPhoneBooking,
+  expectSentInOrder,
   guestHistory,
-  posMessages,
   seatGuestFromWaitlist,
   seatWalkIns,
   setPosOnline,
@@ -94,23 +94,7 @@ test.describe("POS log, switch and Bill paid (steps 11-12)", () => {
     await expect(posSwitch).toHaveAttribute("aria-checked", "true");
 
     // In order: whenever the API is asked, no message is Sent while an earlier one still waits; all Sent within 10 s.
-    const ours = new Set(walkIns.map((w) => w.bookingId));
-    const deadline = Date.now() + 10_000;
-    let statuses: string[] = [];
-    while (Date.now() < deadline) {
-      const rows = (await posMessages())
-        .filter((m) => m.messageType === "OpenTable" && m.bookingId && ours.has(m.bookingId))
-        .sort((a, b) => a.venueSequence - b.venueSequence);
-      expect(rows, "one OpenTable per seated party").toHaveLength(3);
-      statuses = rows.map((m) => m.status);
-      const firstWaiting = statuses.indexOf("waiting");
-      if (firstWaiting >= 0) {
-        expect(statuses.slice(firstWaiting), `sent out of order: ${statuses.join(", ")}`).not.toContain("sent");
-      }
-      if (statuses.every((s) => s === "sent")) break;
-      await presenter.waitForTimeout(100);
-    }
-    expect(statuses).toEqual(["sent", "sent", "sent"]);
+    await expectSentInOrder(walkIns.map((w) => w.bookingId));
 
     for (const walkIn of walkIns) {
       const row = posRows(presenter, { type: "OpenTable", bookingId: walkIn.bookingId });

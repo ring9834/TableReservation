@@ -136,6 +136,7 @@
     "tableLabel": "Table {{name}}, {{count}} seats",
     "party": "Party of {{count}}",
     "tile": {
+      "labelSeparator": ", ",
       "seatedSince": "seated since {{time}}, {{party}}",
       "next": "next at {{time}}, {{party}}",
       "suggested": "Suggested",
@@ -407,9 +408,10 @@
     "joinButton": "Join waitlist",
     "empty": "Nobody is waiting.",
     "quoted": "Quoted {{minutes}} min",
+    "wasQuoted": "was quoted {{minutes}} min",
     "waited": "Waited {{minutes}} min",
     "notifiedFor": "Notified for {{table}}",
-    "overdue": "Overdue",
+    "overdue": "Not back {{minutes}} min after notify",
     "suggestedFor": "Suggested for {{table}}",
     "freedTable": "Just freed",
     "suggestion": "{{table}} is free: suggested party {{name}} ({{count}}).",
@@ -419,6 +421,8 @@
       "seat": "Seat",
       "notify": "Notify",
       "notifyFor": "Notify for {{table}}",
+      "seatAt": "Seat at {{table}}",
+      "seatElsewhere": "Seat at another table",
       "walkedAway": "Walked away",
       "remove": "Remove"
     },

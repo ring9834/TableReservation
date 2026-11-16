@@ -136,6 +136,7 @@
     "tableLabel": "{{name}} 号桌，{{count}} 座",
     "party": "{{count}} 位",
     "tile": {
+      "labelSeparator": "，",
       "seatedSince": "{{time}} 入座，{{party}}",
       "next": "下一位 {{time}}，{{party}}",
       "suggested": "建议",
@@ -407,9 +408,10 @@
     "joinButton": "加入候位",
     "empty": "目前没有人候位。",
     "quoted": "预计 {{minutes}} 分钟",
+    "wasQuoted": "原预计 {{minutes}} 分钟",
     "waited": "已等 {{minutes}} 分钟",
     "notifiedFor": "已通知：{{table}}",
-    "overdue": "已超时",
+    "overdue": "通知后 {{minutes}} 分钟未到",
     "suggestedFor": "建议入座 {{table}}",
     "freedTable": "刚空出",
     "suggestion": "{{table}} 已空出：建议 {{name}}（{{count}} 位）。",
@@ -419,6 +421,8 @@
       "seat": "入座",
       "notify": "通知",
       "notifyFor": "通知（{{table}}）",
+      "seatAt": "在 {{table}} 入座",
+      "seatElsewhere": "换一张桌入座",
       "walkedAway": "已离开",
       "remove": "移除"
     },

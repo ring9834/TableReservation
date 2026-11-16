@@ -422,3 +422,9 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Once the party is notified, the quote no longer applies: "was quoted …", set apart in italics (M11b). */
+.staleQuote {
+  font-style: italic;
+  opacity: 0.85;
+}

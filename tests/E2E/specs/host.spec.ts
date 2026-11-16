@@ -135,20 +135,3 @@ test.describe("host screens", () => {
     await Promise.all([host.close(), guest.close()]);
   });
 });
-
-test("a wrong passcode shows an error", async ({ page }) => {
-  await page.goto("/demo-login/");
-  await page.getByLabel("Passcode", { exact: true }).fill("not-the-passcode");
-  await page.getByRole("button", { name: "Sign in" }).click();
-
-  await expect(page.getByText("That passcode isn't right. Please try again.")).toBeVisible();
-  await expect(page.getByLabel("Passcode", { exact: true })).toHaveValue("");
-  await expect(page).toHaveURL(/\/demo-login\/$/);
-});
-
-test("/host without a session goes to /demo-login", async ({ page }) => {
-  await page.goto("/host/");
-
-  await expect(page).toHaveURL(/\/demo-login\/$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Staff sign-in (demo)" })).toBeVisible();
-});

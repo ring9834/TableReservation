@@ -15,6 +15,7 @@ import { isApiError } from "@/lib/apiFetch";
 import { venueId } from "@/lib/config";
 import { formatInstantTime } from "@/lib/format";
 import styles from "@/features/host/actions.module.css";
+import { minutesSinceNotify, quoteIsStale } from "./waitlist.mjs";
 
 type Mode = "seat" | "notify" | null;
 
@@ -26,12 +27,17 @@ type Props = Readonly<{
   freedTableId: string | null;
   /** The venue's time zone, for the time the "table ready" text went out. */
   timeZone: string;
+  /** The waitlist answer's business time ("now" on the API's business clock), for the overdue minutes. */
+  at: string;
   onSeated: (tableId: string) => void;
   onNotified: () => void;
 }>;
 
 /**
  * One waiting party (AC3.6, AC3.7, AC4.5, AC4.6): time waited, quote, status, overdue badge, and the host's actions.
+ * Once notified, the quote reads "was quoted …" (it no longer applies), the overdue badge counts the minutes since the
+ * Notify, and "Seat at T4" seats the party at the notified table in one tap (AC4.5), with "Seat at another table" for
+ * the chooser; a table taken meanwhile opens the chooser with the error (M11b, Design §17.3).
  * "Seat" and "Notify" choose a table, pre-selecting the notified table, then the freed table if this party is the
  * suggestion, then the API's suggestion. Notify sends the guest a "table ready" text (M7a); its status shows on the
  * entry, and a failed text asks the host to call (AC4.4, Design §18.7). Every action sends the entry's version as shown.
@@ -42,6 +48,7 @@ export function WaitlistEntry({
   suggested,
   freedTableId,
   timeZone,
+  at,
   onSeated,
   onNotified,
 }: Props) {
@@ -82,6 +89,7 @@ export function WaitlistEntry({
       if (isApiError(error) && error.code === "slot_taken") {
         idempotency.reset();
         setChosen(null);
+        setMode((current) => current ?? "seat"); // a one-tap seat whose table was taken: choose another
       }
       setFailure(messageFor(error));
     }
@@ -128,6 +136,8 @@ export function WaitlistEntry({
   const notifiedTable = entry.notifiedTableId ? tableNames.get(entry.notifiedTableId) : null;
   const freedTableName = freedTableId ? tableNames.get(freedTableId) : null;
   const textStatus = textStatusLine(entry, timeZone, i18n.language, t);
+  const staleQuote = quoteIsStale(entry.status);
+  const oneTapTableId = entry.status === "notified" && notifiedTable ? entry.notifiedTableId : null;
 
   return (
     <li
@@ -142,7 +152,15 @@ export function WaitlistEntry({
         <span>{t("host.party", { count: entry.partySize })}</span>
       </div>
       <p className={styles.entryMeta}>
-        <span>{t("waitlist.quoted", { minutes: entry.quotedWaitMinutes })}</span>
+        <span
+          className={staleQuote ? styles.staleQuote : undefined}
+          data-testid="quoted-line"
+          data-stale={staleQuote || undefined}
+        >
+          {t(staleQuote ? "waitlist.wasQuoted" : "waitlist.quoted", {
+            minutes: entry.quotedWaitMinutes,
+          })}
+        </span>
         <span>{t("waitlist.waited", { minutes: entry.waitedMinutes })}</span>
         {entry.mobileMasked && <span>{entry.mobileMasked}</span>}
       </p>
@@ -155,7 +173,7 @@ export function WaitlistEntry({
         {entry.overdue && (
           <span className={`${styles.statusBadge} ${styles.overdue}`} data-testid="overdue-badge">
             <span aria-hidden="true">⚠ </span>
-            {t("waitlist.overdue")}
+            {t("waitlist.overdue", { minutes: minutesSinceNotify(entry.notifiedAt, at) ?? 0 })}
           </span>
         )}
         {entry.tableReadyFailed && (
@@ -178,14 +196,24 @@ export function WaitlistEntry({
       )}
 
       <div className={styles.buttonRow}>
+        {oneTapTableId && (
+          <button
+            type="button"
+            className={styles.primaryButton}
+            disabled={pending}
+            onClick={() => void seatAtTable(oneTapTableId)}
+          >
+            {t("waitlist.actions.seatAt", { table: notifiedTable ?? "" })}
+          </button>
+        )}
         <button
           type="button"
-          className={styles.primaryButton}
+          className={oneTapTableId ? styles.secondaryButton : styles.primaryButton}
           aria-expanded={mode === "seat"}
           disabled={pending}
           onClick={() => toggle("seat")}
         >
-          {t("waitlist.actions.seat")}
+          {t(oneTapTableId ? "waitlist.actions.seatElsewhere" : "waitlist.actions.seat")}
         </button>
         <button
           type="button"
