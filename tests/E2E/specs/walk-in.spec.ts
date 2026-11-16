@@ -59,6 +59,7 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
   let screenB: Page;
   let presenter: Page;
   const waitingName = uniqueGuestName();
+  let quote = 0;
 
   test.beforeAll(async ({ browser, baseURL }) => {
     await endWaitlistEntries((entry) => entry.name.startsWith("E2E "));
@@ -109,7 +110,7 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
   });
 
   test("a walk-in for 4 finds no table and joins the waitlist in Chinese with the API's quote (AC3.4, AC3.5)", async () => {
-    const quote = await quotedWait(4);
+    quote = await quotedWait(4);
 
     await screenA.getByRole("button", { name: "Walk-in", exact: true }).click();
     const walkIn = screenA.getByTestId("walk-in-dialog");
@@ -132,11 +133,13 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
     await expect(join).toBeHidden();
 
     for (const screen of [screenA, screenB]) {
-      await expect(waitlistEntry(screen, waitingName)).toContainText(`Quoted ${quote} min`, { timeout: 2_000 });
+      await expect(waitlistEntry(screen, waitingName).getByTestId("quoted-line")).toHaveText(`Quoted ${quote} min`, {
+        timeout: 2_000,
+      });
     }
   });
 
-  test("clearing T4 highlights the waiting party of 4; Notify texts them in Chinese; seating them there ends the entry (AC4.1-AC4.4)", async () => {
+  test("clearing T4 highlights the waiting party of 4; Notify texts them in Chinese; one tap seats them there (AC4.1-AC4.5)", async () => {
     await screenA.getByTestId("table-T4").click();
     await screenA.getByTestId("table-panel").getByRole("button", { name: "Clear table" }).click();
 
@@ -167,8 +170,10 @@ test.describe("walk-ins and the waitlist (step 3)", () => {
       );
     }
 
-    await entry.getByRole("button", { name: "Seat", exact: true }).click();
-    await expect(entry.getByTestId("choose-T4")).toBeChecked();
+    // Once notified, the quote no longer applies (M11b), and the party is seated at T4 in one tap (AC4.5).
+    await expect(entry.getByTestId("quoted-line")).toHaveText(`was quoted ${quote} min`);
+    await expect(entry.getByTestId("quoted-line")).toHaveAttribute("data-stale", "true");
+    await expect(entry.getByRole("button", { name: "Seat at another table" })).toBeVisible();
     await entry.getByRole("button", { name: "Seat at T4" }).click();
 
     for (const screen of [screenA, screenB]) {

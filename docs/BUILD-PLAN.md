@@ -1063,6 +1063,76 @@ Verification: dotnet build/test, has-pending-model-changes, generate:api, web li
 format:check/test/build. Playwright and the manual look: I run them. Don't read user secrets.
 ```
 
+### M11b The demo script as one end-to-end test, QA-6, QA-7, QA-8
+```
+Milestone M11b: the demo script as one end-to-end test, plus QA-6, QA-7, QA-8 and two wording fixes
+(Requirements §10 demo script and §8 QA-1–QA-8; Design §17.2). E2E + small web fixes + docs. No API
+change expected; if one is needed, stop and ask. Read CLAUDE.md first.
+
+1. Docs first: an "M11b" block with this prompt (minus the last two lines) after M11a in
+   BUILD-PLAN.md; decisions in a new Design §17.3 Build notes (M11b).
+
+2. tests/E2E/specs/demo-script.spec.ts: Requirements §10 rows 2–12 as ONE continuous run, in order,
+   with three contexts as on stage: guest phone (phone viewport), host (tablet, landscape) and
+   presenter (laptop). Reset first (clock Fixed 18:25). Each row is a test.step named after the row.
+   Assert what "What he sees" says, using the expectations from the M11a script check:
+   - row 2: 2 at 19:30, switching to 中文 halfway; measure the booking time (QA-3 ≤ 60 s practised:
+     record the measured time in the report, fail only above 60 s);
+   - row 3: T1 Booked on the host within 2 s; confirmation in the phone panel;
+   - row 4: 6 at 20:00 on T10 with the deposit (Fake: Simulate payment; Stripe: test card, as
+     deposit.spec does); UpsertMember in the POS log;
+   - row 5: 19:00 for 4 is full and 19:15, 19:30, 19:45 are offered;
+   - row 6: walk-in for 2 in 3 taps, suggested T2; OpenTable in the POS log;
+   - row 7: walk-in for 4 finds nothing; waitlist with the API's quote;
+   - row 8: Bill paid on T4 → BillClosed Matched, T4 free, the party of 4 highlighted;
+   - row 9: Notify → "table ready" in the phone panel; seat them on T4 in one tap;
+   - row 10: Send reminders now → confirm #10, cancel #11 → Confirmed, #11 leaves T9's 20:30 slot,
+     deposit Refunded. Then on the guest phone check whether 6 at 20:30 is bookable again; if it is,
+     assert it and add it to Requirements row 10's wording; if not, report why and don't force it;
+   - row 11: POS offline, seat a table, online → its messages Sent once each, in order;
+   - row 12: expand one message → JSON with the envelope fields.
+   QA-4: each host action in the script (seat, walk-in, notify, bill paid) must respond within 1 s:
+   measure from the tap to the screen change, report the slowest, fail above 1 s.
+
+3. QA-6 (three clean runs): the spec must pass 3 times in a row (npx playwright test demo-script
+   --repeat-each=3), resetting at the start of each repetition. "No errors or reloads": fail on any
+   console error, uncaught page error, failed request with status ≥ 500, or a full page reload/
+   navigation on the host or presenter after the start. Document the command in CLAUDE.md.
+
+4. Fallback recording: when DEMO_RECORD=1 (off by default and in CI), record video for all three
+   contexts at a watchable pace (slowMo from DEMO_SLOWMO, e.g. 400 ms) into
+   tests/E2E/demo-recordings/ (git-ignored). Document how to run it. (The real screen recording
+   of all three screens together is done by me during M12 rehearsals.)
+
+5. QA-7 (language): a spec that opens each screen (book, host, presenter, manage, demo-login) in
+   中文 and checks there is no untranslated English UI text: collect visible text and flag Latin-
+   letter words not on an allowlist (Golden Dragon, NZ$, message types like OpenTable, references,
+   seeded guest names, JSON in the POS log, "Stripe"). And in English, no Chinese UI text except
+   guest names and Chinese message bodies. Report offenders with their element; fix any real ones
+   in en.json / zh-CN.json.
+
+6. QA-8 (devices): add Playwright projects for an iPhone (WebKit) and an Android phone (Chromium
+   or Edge, as the local setup allows) and a tablet. Run the guest booking, deposit-free booking and
+   manage-page specs on the phones and the host specs on the tablet. Every page at phone width: no
+   horizontal scrolling (scrollWidth ≤ clientWidth). Ask me before adding WebKit to CI (download
+   size and time); locally `npx playwright install webkit` once.
+
+7. Wording fixes (from the M11a manual check):
+   - Waitlist: the Overdue badge says what's overdue: "⚠ Not back {n} min after notify"
+     (中文 "通知后 {n} 分钟未到"), counting from notifiedAt.
+   - Once an entry is Notified, the "Quoted n min" line is dimmed (or shown as "was quoted n min"),
+     since it no longer applies.
+   Update the host/walk-in specs that read these texts.
+
+(Agreed, 16 Nov) Row 9 / AC4.5: seating a notified party took two taps (Seat, then Seat at T4); a
+notified entry now shows a one-tap "Seat at T4" and "Seat elsewhere" for the chooser. QA-8's tablet is
+an iPad in WebKit (project tablet-webkit); the Galaxy Tab in Edge stays the default project's host.
+
+Verification: web lint/typecheck/format:check/test/build; dotnet test only if anything outside
+tests/E2E and web changes. Playwright: I run demo-script with --repeat-each=3, then the full suite
+twice. Don't read user secrets.
+```
+
 ### M12 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 

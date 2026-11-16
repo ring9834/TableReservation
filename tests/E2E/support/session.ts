@@ -336,3 +336,48 @@ export const advanceDemoClock = async (minutes: number) =>
     const answer = await api.post("/api/v1/demo/clock/advance", { data: { minutes } });
     expect(answer.status(), `demo/clock/advance answered ${answer.status()}`).toBe(200);
   });
+
+/**
+ * QA-5 / AC6.5: the POS messages of `messageType` for these bookings go out once each and in order. Whenever the API
+ * is asked, no message is Sent while an earlier one (by venue sequence) still waits; all are Sent within `timeout`.
+ * Fails when a booking doesn't have exactly one such message. Returns them in sequence order.
+ */
+export const expectSentInOrder = async (
+  bookingIds: string[],
+  messageType = "OpenTable",
+  timeout = 10_000,
+) => {
+  const ours = new Set(bookingIds);
+  const deadline = Date.now() + timeout;
+  let rows: PosLogEntry[] = [];
+  let statuses: string[] = [];
+  while (Date.now() < deadline) {
+    rows = (await posMessages())
+      .filter((m) => m.messageType === messageType && m.bookingId && ours.has(m.bookingId))
+      .sort((a, b) => a.venueSequence - b.venueSequence);
+    expect(rows, `one ${messageType} per booking`).toHaveLength(bookingIds.length);
+    statuses = rows.map((m) => m.status);
+    const firstWaiting = statuses.indexOf("waiting");
+    if (firstWaiting >= 0) {
+      expect(statuses.slice(firstWaiting), `sent out of order: ${statuses.join(", ")}`).not.toContain("sent");
+    }
+    if (statuses.every((s) => s === "sent")) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  expect(statuses).toEqual(bookingIds.map(() => "sent"));
+  return rows;
+};
+
+/**
+ * Tonight's guest names (the host list) and the waiting parties' names (the waitlist): data, not UI text, so the
+ * language spec allows them in either language (QA-7, M11b).
+ */
+export const guestNames = () =>
+  withHostApi(async (api) => {
+    const [list, waitlist] = await Promise.all([api.get(`${venuePath}/bookings`), api.get(`${venuePath}/waitlist`)]);
+    expect(list.ok(), `host list answered ${list.status()}`).toBe(true);
+    expect(waitlist.ok(), `waitlist answered ${waitlist.status()}`).toBe(true);
+    const { items } = (await list.json()) as { items: { guestName: string | null }[] };
+    const { items: waiting } = (await waitlist.json()) as { items: { name: string }[] };
+    return [...items.map((i) => i.guestName), ...waiting.map((w) => w.name)].filter((n): n is string => !!n);
+  });

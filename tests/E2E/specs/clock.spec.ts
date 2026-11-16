@@ -79,7 +79,10 @@ test.describe("the demo clock and Reset (presenter controls)", () => {
     // One more minute: 11 minutes since the text, and both screens flag it at once.
     await advanceDemoClock(1);
     for (const screen of [screenA, screenB]) {
-      await expect(waitlistEntry(screen, waitingName).getByTestId("overdue-badge")).toBeVisible({ timeout: 2_000 });
+      const badge = waitlistEntry(screen, waitingName).getByTestId("overdue-badge");
+      await expect(badge).toBeVisible({ timeout: 2_000 });
+      // What is overdue, counted from the Notify on the business clock (M11b).
+      await expect(badge).toHaveText("⚠ Not back 11 min after notify");
     }
     await expect(clock).toHaveText("6:36 pm · fixed", { timeout: 2_000 });
   });

@@ -70,7 +70,7 @@ export function TableShape({ table, timeZone, selected, highlighted = false, onS
     highlighted ? t("host.tile.suggestedLabel") : null,
   ]
     .filter(Boolean)
-    .join(", ");
+    .join(t("host.tile.labelSeparator"));
 
   const suggested = t("host.tile.suggested");
   const lines = layoutTile({ shape: table.shape, width, height, rotation }, [

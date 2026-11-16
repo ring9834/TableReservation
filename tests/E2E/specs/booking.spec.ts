@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expectNoHorizontalScroll } from "../support/layout";
 import { openPresenterScreen, phoneMessages, presenterContext } from "../support/screens";
 import { cancelBookings } from "../support/session";
 
@@ -67,11 +68,13 @@ test("a guest books a table for 2 tomorrow at 19:30 in English", async ({
   await page.getByLabel("Date", { exact: true }).fill(tomorrow);
   await page.getByLabel("Time", { exact: true }).selectOption("19:30:00");
   await expect(page.getByText(/is available for 2 guests/)).toBeVisible();
+  await expectNoHorizontalScroll(page, "time step (en)");
   await page.getByRole("button", { name: "Continue" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Your details" }),
   ).toBeFocused();
+  await expectNoHorizontalScroll(page, "details step (en)");
   await page.getByLabel("Name", { exact: true }).fill("Playwright Guest");
   await page.getByLabel("Mobile", { exact: true }).fill("021 011 0198");
   await page.getByRole("button", { name: "Book now" }).click();
@@ -81,6 +84,7 @@ test("a guest books a table for 2 tomorrow at 19:30 in English", async ({
   ).toBeVisible();
   const reference = await rememberBooking(page, tomorrow);
   await expect(page.getByTestId("booking-details")).toContainText("2 guests");
+  await expectNoHorizontalScroll(page, "confirmation (en)");
 
   // AC1.6: the confirmation text is on the phone within 2 s, in English, then delivered.
   const text = phoneMessages(presenter, reference);
@@ -109,6 +113,7 @@ test("a guest books in Chinese and the confirmation is in Chinese", async ({
   await page.getByLabel("用餐人数", { exact: true }).selectOption("2");
   await page.getByLabel("日期", { exact: true }).fill(tomorrow);
   await page.getByLabel("时间", { exact: true }).selectOption("19:45:00");
+  await expectNoHorizontalScroll(page, "time step (zh)");
   await page.getByRole("button", { name: "继续" }).click();
 
   await page.getByLabel("姓名", { exact: true }).fill("王小明");
@@ -120,6 +125,7 @@ test("a guest books in Chinese and the confirmation is in Chinese", async ({
   await expect(page.getByTestId("booking-details")).toContainText("2 位");
   const reference = await rememberBooking(page, tomorrow);
   await expect(page.getByText("You're booked!")).toHaveCount(0);
+  await expectNoHorizontalScroll(page, "confirmation (zh)");
 
   // The text goes out in the language the guest booked in, whatever the presenter screen shows.
   const text = phoneMessages(presenter, reference);

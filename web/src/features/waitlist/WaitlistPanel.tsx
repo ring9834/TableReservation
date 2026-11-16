@@ -84,6 +84,7 @@ export function WaitlistPanel({
               suggested={entry.id === suggestedEntryId}
               freedTableId={freedTableId}
               timeZone={waitlist.timeZone}
+              at={waitlist.at}
               onSeated={onSeated}
               onNotified={onNotified}
             />

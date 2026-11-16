@@ -2,6 +2,7 @@ import { chromium, devices, type Browser, type FullConfig } from "@playwright/te
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { hostSessionPath, presenterSessionPath } from "./support/session";
+import { expectNotRateLimited, submitPasscode } from "./support/signIn";
 
 /** Reads a passcode from the environment; never logged or written anywhere but the sign-in form. */
 const passcodeFrom = (variable: string, setting: string, ciValue: string) => {
@@ -52,9 +53,11 @@ const signIn = async (
   try {
     const page = await context.newPage();
     await page.goto("/demo-login/");
-    await page.getByLabel("Passcode", { exact: true }).fill(passcode);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL(landsOn);
+    await submitPasscode(page, passcode); // after hydration (support/signIn.ts)
+    await page.waitForURL(landsOn).catch(async (error: unknown) => {
+      await expectNotRateLimited(page);
+      throw error;
+    });
     await page.getByTestId(screenTestId).waitFor();
     await mkdir(path.dirname(sessionPath), { recursive: true });
     await context.storageState({ path: sessionPath });

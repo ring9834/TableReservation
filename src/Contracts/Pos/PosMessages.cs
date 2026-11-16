@@ -101,11 +101,15 @@ public sealed record PosBillClosed : PosEnvelope
     public required DateTimeOffset ClosedAt { get; init; }
 }
 
-/// <summary>JSON settings for POS messages: camelCase, nulls left out, nothing else special.</summary>
+/// <summary>
+/// JSON settings for POS messages: camelCase, nulls left out, and every time in UTC ending in <c>Z</c>, as the contract
+/// says (<see cref="UtcDateTimeOffsetConverter"/>; reading also takes <c>+00:00</c>).
+/// </summary>
 public static class PosJson
 {
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Converters = { new UtcDateTimeOffsetConverter() },
     };
 }
