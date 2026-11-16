@@ -87,7 +87,7 @@
 
 .dialog {
   width: min(32rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem - var(--safe-top) - var(--safe-bottom));
   padding: 1rem;
   color: var(--text);
   background: var(--surface);
@@ -111,6 +111,9 @@
     height: 100dvh;
     max-height: 100dvh;
     margin: 0;
+    /* Full screen on a phone: keep the content clear of the notch and the home bar (M11c). */
+    padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right)) max(1rem, var(--safe-bottom))
+      max(1rem, var(--safe-left));
     border: 0;
     border-radius: 0;
   }

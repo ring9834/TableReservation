@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Golden Dragon host app mark (M11c, Design §18.11): an original "GD" monogram, plain strokes, no font.
+       The accent colour is --accent in web/src/app/globals.css. tests/E2E/tools/render-icons.mjs renders the PNGs. -->
+  <rect id="bg" width="512" height="512" rx="112" fill="#9f1239" />
+  <g id="mark" fill="none" stroke="#ffffff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round">
+    <g>
+      <!-- G: from the upper right, the long way round to the right middle, then the bar in. -->
+      <path d="M239.6 192.4 A90 90 0 1 0 266 256 H198" />
+      <!-- D -->
+      <path d="M316 166 H336 A90 90 0 0 1 336 346 H316 Z" />
+    </g>
+  </g>
+</svg>

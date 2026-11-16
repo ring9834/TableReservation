@@ -1133,6 +1133,53 @@ tests/E2E and web changes. Playwright: I run demo-script with --repeat-each=3, t
 twice. Don't read user secrets.
 ```
 
+### M11c Host app installable as a PWA
+```
+Milestone M11c: the host app installable as a PWA, full screen (ADR-001 "Host app delivery",
+Architecture §3/§7.5, ADR-003 offline option A for the demo). Web + small E2E + docs. No API change.
+Ask before adding any package. Read CLAUDE.md first.
+
+1. Docs first: an "M11c" block with this prompt (minus the last two lines) after M11b in
+   BUILD-PLAN.md; decisions in a new Design §18.11 Build notes (M11c).
+
+2. Manifest (works with the static export and trailingSlash):
+   - name "Golden Dragon Host", short_name "GD Host", start_url "/host/", display "standalone",
+     orientation any, theme_color / background_color from the existing colour tokens, lang en.
+   - Scope must include /demo-login/ so signing in never leaves the installed app (on iPad an
+     out-of-scope page opens in Safari with separate cookies). Choose the scope accordingly and
+     explain it in §18.11.
+   - Linked from the host and demo-login pages only (and presenter if it's harmless), NOT from the
+     guest pages (/book/, /manage/): guests shouldn't be offered "install".
+
+3. Icons: an original, simple mark (e.g. a "GD" monogram in our accent colour; no dragon artwork
+   copied from anywhere). PNGs 192, 512, a 512 maskable with safe padding, and apple-touch-icon 180.
+   Prefer generating them once from an SVG with tools we already have (e.g. a small script using the
+   installed Playwright to render the SVG) and commit the PNGs plus the SVG and the script.
+
+4. iPad / iPhone: apple-touch-icon, apple-mobile-web-app-capable / mobile-web-app-capable,
+   apple-mobile-web-app-title "GD Host", status-bar style, viewport-fit=cover, and safe-area insets
+   (env(safe-area-inset-*)) so nothing sits under the notch or the home bar in standalone mode.
+   In standalone mode there is no browser back button: check the host and sign-in flows never
+   depend on it.
+
+5. No offline data caching (ADR-003 option A for the demo): don't cache API responses or SignalR.
+   Only add a service worker if the target browsers need one to offer installation; if so, a
+   minimal one that caches nothing (or only the static shell) and never serves API data, with a
+   clear way to update. Say which browsers need it and why.
+
+6. Tests:
+   - E2E (default project): the manifest is served with the right content type, parses, has the
+     fields above and the icons exist at their declared sizes; host and demo-login link it; /book/
+     and /manage/ don't.
+   - A check that in a standalone display-mode emulation the host page still fits (no horizontal
+     scroll) and the sign-in redirect stays in scope.
+   Real install on an iPad/iPhone/Android is my manual check after M12 deploys over HTTPS; write
+   the steps in §18.11 (Safari Share → Add to Home Screen; Chrome menu → Install app).
+
+7. Note for M12 in §18.11: when a CSP is added, allow manifest-src 'self'; and the session cookie
+   in an installed iOS web app is separate from Safari's, so the host signs in once inside the app.
+```
+
 ### M12 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
