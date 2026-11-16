@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.OpenApi;
 using Reservation.Api.Auth;
 using Reservation.Domain.Bookings;
@@ -11,7 +13,9 @@ internal static class RealtimeRegistration
     /// <summary>SignalR, the broadcaster and a <see cref="RealtimeNotifier{T}"/> for every event in the catalogue.</summary>
     public static IServiceCollection AddRealtime(this IServiceCollection services)
     {
-        services.AddSignalR();
+        // Enums as camelCase strings, the same as the HTTP API (demoClockChanged's mode, M11a).
+        services.AddSignalR().AddJsonProtocol(options =>
+            options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
         services.AddSingleton<IVenueBroadcaster, HubVenueBroadcaster>();
 
         // Replaces Infrastructure's no-op: message changes reach the screens after commit (Design §7.2).
@@ -27,6 +31,8 @@ internal static class RealtimeRegistration
 
         services.AddSingleton<WaitlistOverdueJob>();
         services.AddHostedService(provider => provider.GetRequiredService<WaitlistOverdueJob>());
+        services.AddSingleton<ArrivingSoonTicker>();
+        services.AddHostedService(provider => provider.GetRequiredService<ArrivingSoonTicker>());
 
         return services;
     }
@@ -46,7 +52,7 @@ internal static class RealtimeRegistration
     /// <summary>Adds the notice records to the OpenAPI components, so orval generates them (ADR-004, Design §15).</summary>
     public static OpenApiOptions AddNoticeSchemas(this OpenApiOptions options)
     {
-        Type[] notices = [typeof(FloorPlanChangedNotice), typeof(WaitlistChangedNotice), typeof(MessageLogChangedNotice), typeof(PosLogChangedNotice), typeof(DemoResetNotice)];
+        Type[] notices = [typeof(FloorPlanChangedNotice), typeof(WaitlistChangedNotice), typeof(MessageLogChangedNotice), typeof(PosLogChangedNotice), typeof(DemoResetNotice), typeof(DemoClockChangedNotice)];
         return options.AddDocumentTransformer(async (document, context, cancellationToken) =>
         {
             foreach (var notice in notices)

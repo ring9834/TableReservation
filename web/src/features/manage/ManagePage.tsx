@@ -21,6 +21,7 @@ import {
   pageLanguage,
   resultKeys,
   showsLateWarning,
+  showsTerms,
   visibleActions,
 } from "./manage.mjs";
 import styles from "./manage.module.css";
@@ -229,9 +230,11 @@ function BookingView({
         )}
       </dl>
 
-      <p className={styles.terms} data-testid="manage-terms">
-        {termsText(t, booking, language)}
-      </p>
+      {showsTerms(booking) && (
+        <p className={styles.terms} data-testid="manage-terms">
+          {termsText(t, booking, language)}
+        </p>
+      )}
 
       {showsLateWarning(booking) && !result && (
         <p className={styles.warning} data-testid="manage-late-warning">

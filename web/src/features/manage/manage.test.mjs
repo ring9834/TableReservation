@@ -7,6 +7,7 @@ import {
   pageLanguage,
   resultKeys,
   showsLateWarning,
+  showsTerms,
   visibleActions,
 } from "./manage.mjs";
 
@@ -98,4 +99,15 @@ test("the page opens in the booking's language", () => {
   assert.equal(pageLanguage("zh"), "zh-CN");
   assert.equal(pageLanguage("en"), "en");
   assert.equal(pageLanguage(null), "en");
+});
+
+test("the cancellation terms show only while the booking can still be cancelled (M11a)", () => {
+  for (const status of ["pendingPayment", "booked", "confirmed"]) {
+    assert.equal(showsTerms({ status }), true, status);
+  }
+  for (const status of ["cancelled", "seated", "completed"]) {
+    assert.equal(showsTerms({ status }), false, status);
+  }
+  // A Confirm link allows no cancel, but the guest still sees the terms they booked under.
+  assert.equal(showsTerms({ ...inTime, allowedActions: ["confirm"] }), true);
 });

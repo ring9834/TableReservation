@@ -36,9 +36,18 @@ public static class DependencyInjection
             .Validate(o => o.IsValid, "Demo:Clock:Mode is Fixed, so Demo:Clock:FixedLocalTime must be set (e.g. 18:25).")
             .ValidateOnStart();
         services.AddOptions<DemoDataOptions>().BindConfiguration(DemoDataOptions.Section);
-        services.TryAddSingleton(provider =>
-            DemoClock.Create(provider.GetRequiredService<IOptions<DemoClockOptions>>().Value, TimeProvider.System));
+        // The demo clock always exists (the reset writes its state); it is the business clock only in Fixed mode. It counts
+        // on the infrastructure clock (M11a, Design §17.2).
+        services.TryAddSingleton(provider => DemoClock.Create(
+            provider.GetRequiredService<IOptions<DemoClockOptions>>().Value,
+            provider.GetRequiredKeyedService<TimeProvider>(Clocks.Infrastructure)));
+        services.TryAddSingleton(provider => DemoClock.BusinessClock(
+            provider.GetRequiredService<IOptions<DemoClockOptions>>().Value,
+            provider.GetRequiredService<DemoClock>()));
         services.TryAddKeyedSingleton(Clocks.Infrastructure, TimeProvider.System);
+        services.TryAddSingleton<DemoClockSignal>();
+        services.AddScoped<DemoClockStore>();
+        services.AddHostedService<DemoClockSync>();
 
         services.TryAddSingleton(_ => NpgsqlDataSource.Create(connectionString));
         services.AddDbContext<ReservationsDbContext>((provider, options) =>

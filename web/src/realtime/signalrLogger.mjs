@@ -6,6 +6,7 @@
 // start-up, which React Strict Mode does on every mount in development), and the "reconnecting" banner is the signal
 // for the user. So:
 // - a failure caused by our own stop() is silent;
+// - a 401 (the demo session is missing or has ended) is silent: the hook stops retrying and goes to sign-in (M11a);
 // - a connection failure (API or network down) is one console.warn per outage;
 // - anything else at Error or above stays a console.error.
 
@@ -41,6 +42,19 @@ const connectionFailures = [
   "WebSocket failed to connect",
 ];
 
+/** The text the client puts in a negotiate failure answered 401. */
+const unauthorized = "Status code '401'";
+
+/**
+ * True for the error (or log message) of a negotiate answered 401: the demo session is missing or has ended, so
+ * retrying can't help; the screen goes to sign-in instead (M11a).
+ * @param {unknown} error an Error, or a log message
+ */
+export const isUnauthorized = (error) =>
+  (error instanceof Error ? error.message : typeof error === "string" ? error : "").includes(
+    unauthorized,
+  );
+
 /**
  * How a message should be reported: `"silent"`, `"outage"` (a connection failure, warned once per outage), `"warn"`
  * or `"error"`.
@@ -52,6 +66,7 @@ const connectionFailures = [
 export function classifySignalRLog(level, message, stopping) {
   if (level < SignalRLogLevel.Warning) return "silent";
   if (stopping && stoppedByUs.some((text) => message.includes(text))) return "silent";
+  if (isUnauthorized(message)) return "silent";
   if (connectionFailures.some((text) => message.includes(text))) return "outage";
   return level >= SignalRLogLevel.Error ? "error" : "warn";
 }

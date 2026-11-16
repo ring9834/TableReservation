@@ -12,7 +12,7 @@ import styles from "./presenter.module.css";
  * "Send reminders now" (M10b, AC5.1, BR-13, Design §7.3, §18.10): stands in for the pilot's 24-hour scheduler. The
  * API queues a Reminder for each eligible booking; the phone shows them through `messageLogChanged`. The status line
  * says how many went and why the others were skipped ("2 reminders sent · 4 skipped: 1 already confirmed, 3 starting
- * within 2 hours"); a second press finds nothing new. M11 groups it with the other demo controls.
+ * within 2 hours"); a second press finds nothing new. Part of the presenter's demo controls since M11a.
  */
 export function SendReminders() {
   const { t } = useTranslation();

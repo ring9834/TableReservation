@@ -95,7 +95,10 @@
     "not_signed_in": "That passcode isn't right. Please try again.",
     "payment_provider_error": "Payment service unavailable. Your table is held for a few minutes; please try again.",
     "invalid_link": "This link isn't valid.",
-    "link_expired": "This link has expired: the booking has started."
+    "link_expired": "This link has expired: the booking has started.",
+    "demo_reset_busy": "Busy, try again in a moment.",
+    "demo_clock_past_closing": "That's past closing time, so the demo clock stays where it is.",
+    "demo_clock_backwards": "The demo clock can't go back. Use Reset to start again at 6:25 pm."
   },
   "fieldErrors": {
     "name_length": "Please enter your name (up to 80 characters).",
@@ -262,6 +265,29 @@
     "presenterOnly": "This screen is for the presenter. Sign in with the presenter passcode to see the phone panel.",
     "signInAgain": "Sign in as presenter",
     "openHost": "Open the host screen",
+    "demo": {
+      "label": "Demo",
+      "reset": "Reset",
+      "resetConfirm": "Reset the demo to 18:25 with the sample bookings?",
+      "resetYes": "Yes, reset",
+      "resetNo": "Cancel",
+      "resetting": "Resetting…",
+      "resetDone": "Back at 6:25 pm with the sample bookings.",
+      "clockLabel": "Demo time",
+      "clock": "{{time}} · {{mode}}",
+      "mode": {
+        "fixed": "fixed",
+        "running": "running"
+      },
+      "plus5": "+5 min",
+      "plus15": "+15 min",
+      "plus5Label": "Move the demo time 5 minutes forward",
+      "plus15Label": "Move the demo time 15 minutes forward",
+      "run": "Run",
+      "freeze": "Freeze",
+      "runLabel": "Let the demo time run with real time",
+      "freezeLabel": "Stop the demo time where it is"
+    },
     "reminders": {
       "button": "Send reminders now",
       "sending": "Sending…",

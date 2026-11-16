@@ -304,3 +304,35 @@ export const resetDemo = async () =>
     const answer = await api.post("/api/v1/demo/reset");
     expect(answer.status(), `demo/reset answered ${answer.status()}`).toBe(204);
   });
+
+/**
+ * A waiting party notified for a free table (POST …/waitlist, then POST …/waitlist/{id}/notify {tableId, version},
+ * Design §14.2), so the clock spec has a notified entry to watch go overdue (AC4.6). Returns the entry ID.
+ */
+export const notifyWaitingParty = async (name: string, mobile: string, partySize: number, tableName: string) =>
+  withHostApi(async (api) => {
+    const join = await api.post(`${venuePath}/waitlist`, {
+      data: { name, mobile, partySize, quotedWaitMinutes: 5, language: "en" },
+    });
+    expect(join.status(), `join waitlist answered ${join.status()}`).toBe(201);
+    const entry = (await join.json()) as { id: string; version: number };
+    const plan = await api.get(`${venuePath}/floor-plan`);
+    expect(plan.ok(), `floor plan answered ${plan.status()}`).toBe(true);
+    const table = ((await plan.json()) as { tables: FloorTable[] }).tables.find((t) => t.name === tableName);
+    expect(table, `table ${tableName}`).toBeDefined();
+    const notify = await api.post(`${venuePath}/waitlist/${entry.id}/notify`, {
+      data: { tableId: table!.id, version: entry.version },
+    });
+    expect(notify.ok(), `notify answered ${notify.status()}`).toBe(true);
+    return entry.id;
+  });
+
+/**
+ * Moves the demo clock forward (POST /demo/clock/advance {minutes}, Presenter, M11a, Design §17.2). Only business
+ * time moves; open screens refetch through `demoClockChanged`.
+ */
+export const advanceDemoClock = async (minutes: number) =>
+  withPresenterApi(async (api) => {
+    const answer = await api.post("/api/v1/demo/clock/advance", { data: { minutes } });
+    expect(answer.status(), `demo/clock/advance answered ${answer.status()}`).toBe(200);
+  });

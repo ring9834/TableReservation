@@ -582,6 +582,35 @@ namespace Reservation.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_log", (string)null);
                 });
 
+            modelBuilder.Entity("Reservation.Infrastructure.Demo.DemoClockRow", b =>
+                {
+                    b.Property<short>("Id")
+                        .HasColumnType("smallint")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AnchoredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("anchored_at");
+
+                    b.Property<DateTimeOffset>("BusinessAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("business_at");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("mode");
+
+                    b.HasKey("Id")
+                        .HasName("pk_demo_clock");
+
+                    b.ToTable("demo_clock", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_demo_clock_singleton", "id = 1");
+                        });
+                });
+
             modelBuilder.Entity("Reservation.Infrastructure.Idempotency.IdempotencyRecord", b =>
                 {
                     b.Property<Guid>("VenueId")

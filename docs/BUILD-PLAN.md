@@ -26,7 +26,7 @@ The six demo steps are never cut.
 | M8 | Stripe deposits and refunds | §8 | Step 1 with deposit; step 5 refunds | 1.5 d |
 | M9 | Mock POS and POS log | §6 | Step 6, incl. POS offline (QA-5) | 1.5 d |
 | M10 | Reminders and guest links | §7 (`GuestLinkSigner`), §9.2 | Step 5, BR-13 | 1 d |
-| M11 | Demo controls, reset, i18n polish | §17 | Demo script runs end to end | 1 d |
+| M11 | Demo controls, reset, i18n polish (M11a: demo clock, presenter controls, polish) | §16, §17 | Demo script runs end to end | 1 d |
 | M12 | Deploy to AWS and rehearse | ADR-005 | Public URL; container image scan in CI; QA-6 three clean runs | 1.5 d |
 
 ## Prompts to paste into Claude Code
@@ -1002,7 +1002,68 @@ Verification: dotnet build/test, has-pending-model-changes, generate:api, web li
 format:check/test/build. Playwright and the manual look: I run them. Don't read user secrets.
 ```
 
-### M11 onward
+### M11a Demo controls, demo clock and polish
+```
+Milestone M11a: demo controls, demo clock and polish (Design §16, §17, §15; Requirements §10 demo
+script, AC4.6, QA-6). Read CLAUDE.md first, including rule 14 (two clocks).
+
+0. Script check FIRST, before planning code: walk Requirements §10 rows 2–12 in order against the
+   seed at 18:25 on the business clock, as one continuous run (each row sees the state the previous
+   rows left). For each row say whether it works as written (which table, which time, what the
+   screen shows), especially: row 4 (6 at 20:00 with a deposit), row 5 (19:00 for 4 is full and 3
+   nearest times are offered), row 7 (walk-in for 4 finds nothing), row 8 ("Bill paid" on a 4-seat
+   table frees it and highlights the waiting party), row 10 (confirm one, cancel another with a
+   refunded deposit). If a row can't work, propose the smallest seed or script change and ASK me.
+
+1. Docs first: an "M11a" block with this prompt (minus the last two lines) after M10b in
+   BUILD-PLAN.md, rename "M11 onward" to "M12 onward"; decisions in a new Design §17.1 Build
+   notes (M11a).
+
+2. Demo clock (§17): DemoClock modes Fixed (default: tonight 18:25) and Running (starts at a set time
+   and moves with real time). State stored in the database (survives restarts and works with more
+   than one API instance later), not in memory; demo reset puts it back to Fixed 18:25.
+   - PUT /api/v1/demo/clock {mode, at?} and POST /api/v1/demo/clock/advance {minutes} (Presenter,
+     demo only); GET for the current demo time and mode.
+   - The INFRASTRUCTURE clock never changes (rule 14): holds, retries, message expiry, rate limits
+     are untouched. Only business time moves.
+   - After any clock change, push a notice so every screen refetches (e.g. demoClockChanged, or
+     reuse demoReset's "invalidate everything"), and make the overdue (AC4.6) and arriving-soon
+     jobs re-evaluate at once rather than on their next tick.
+   - Guard rails: advancing can't go backwards; a jump of more than 6 hours or past the venue's
+     closing time is refused with a clear code. Document what moving time does to holds (none:
+     infrastructure clock), reminders (eligibility changes), guest links (expire at the booking
+     start), late-bill matching.
+   - Tests: Running mode moves business time; advance by 11 min makes a notified entry overdue and
+     pushes waitlistChanged; arriving-soon flips at the 30-minute mark; reset restores Fixed 18:25;
+     infrastructure-clock behaviour unchanged; Host 403; routes absent when demo is off.
+
+3. Presenter demo controls: one "Demo" area in the presenter header holding Reset (with a confirm
+   step: "Reset the demo to 18:25 with the sample bookings?"), the demo time ("6:25 pm · fixed" /
+   "6:40 pm · running") with "+5 min", "+15 min", "Run / Freeze", and the existing Send reminders
+   now. Reset shows progress and handles 503 demo_reset_busy ("Busy, try again in a moment").
+   en + zh-CN. Keep the POS switch in the POS panel.
+
+4. Polish:
+   - A 401 from SignalR negotiation stops retrying and goes to sign-in via onSignedOut, instead of
+     logging "retrying / reconnecting".
+   - Guest manage page: hide "Can't make it? Please cancel by …" once the booking is Cancelled (or
+     otherwise past the point where cancelling is possible).
+   - Anything you found in the script check that's a small UI fix; list it and ask before larger ones.
+
+5. Playwright: a clock spec: notify a waiting party, advance 11 min → the overdue badge shows on both
+   host screens within 2 s; Reset → back to 18:25 and the seed. afterAll resets.
+
+(Agreed, 16 Nov) Script check: every row works at 18:25 as one run. Row 6's walk-in of 2 gets T2 (row 2
+took T1 from 19:30); row 5 offers 19:15, 19:30 and 19:45. Row 10's cancelled #11 sits on T9, which #2
+still occupies, so the tile stays seated: the script now says the booking leaves T9's 20:30 slot (no seed
+change). The build notes are §17.2, because §17.1 already holds M5b's. Closing time for the clock guard =
+last booking + longest turn (22:30, the availability service window); only Reset moves time backwards.
+
+Verification: dotnet build/test, has-pending-model-changes, generate:api, web lint/typecheck/
+format:check/test/build. Playwright and the manual look: I run them. Don't read user secrets.
+```
+
+### M12 onward
 Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUILD-PLAN.md. List the acceptance criteria it covers, write the tests first, then the code."
 
 ### M12 Deploy and rehearse

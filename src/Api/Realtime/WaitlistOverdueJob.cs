@@ -3,27 +3,32 @@ using Microsoft.Extensions.Options;
 using Reservation.Domain.Common;
 using Reservation.Domain.Waitlist;
 using Reservation.Infrastructure;
+using Reservation.Infrastructure.Demo;
 using Reservation.Infrastructure.Outbox;
 using Reservation.Infrastructure.Persistence;
 
 namespace Reservation.Api.Realtime;
 
 /// <summary>
-/// Design §16 <c>WaitlistOverdueJob</c> (AC4.6, BR-10): every 30 seconds on the infrastructure clock, finds notified
+/// Design §16 <c>WaitlistOverdueJob</c> (AC4.6, BR-10): every 30 seconds on the infrastructure clock (the signal's), finds notified
 /// entries that have become overdue on the business clock (notified more than the venue's timeout ago) and pushes
 /// <c>waitlistChanged {entryIds}</c> once per entry, so host screens show the flag without polling. Overdue is computed,
 /// not stored (§3.2), so the job writes nothing; it remembers in memory which entries it has already pushed. After a
-/// restart an entry may be pushed once more, which only costs a refetch. Runs only when <c>Outbox:RunWorkers</c> is on.
+/// restart an entry may be pushed once more, which only costs a refetch. Since M11a a demo clock change rings it
+/// (<see cref="DemoClockSignal"/>), so an entry that the jump made overdue is pushed at once (Design §17.2). Runs only when
+/// <c>Outbox:RunWorkers</c> is on.
 /// </summary>
 internal sealed partial class WaitlistOverdueJob(
     IServiceScopeFactory scopeFactory,
     IVenueBroadcaster broadcaster,
     IOptions<OutboxOptions> options,
     TimeProvider businessClock,
-    [FromKeyedServices(Clocks.Infrastructure)] TimeProvider infrastructureClock,
+    DemoClockSignal clockSignal,
     ILogger<WaitlistOverdueJob> logger) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
+
+    private readonly WorkerSignal _clockChanged = clockSignal.Subscribe();
 
     private HashSet<WaitlistEntryId> _pushed = [];
 
@@ -72,7 +77,6 @@ internal sealed partial class WaitlistOverdueJob(
             return;
         }
 
-        using var timer = new PeriodicTimer(Interval, infrastructureClock);
         try
         {
             do
@@ -85,8 +89,11 @@ internal sealed partial class WaitlistOverdueJob(
                 {
                     LogCheckFailed(logger, ex);
                 }
+
+                // The next tick, or at once when the demo clock moves.
+                await _clockChanged.WaitAsync(Interval, stoppingToken);
             }
-            while (await timer.WaitForNextTickAsync(stoppingToken));
+            while (!stoppingToken.IsCancellationRequested);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

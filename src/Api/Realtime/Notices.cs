@@ -30,6 +30,14 @@ internal sealed record PosLogChangedNotice(IReadOnlyList<Guid> PosMessageIds);
 /// <summary>The demo was reset (M10b, Design §18.10): invalidate everything. Carries nothing.</summary>
 internal sealed record DemoResetNotice();
 
+/// <summary>
+/// The presenter moved the demo clock (M11a, Design §17.2): business time changed, so every screen refetches everything
+/// (overdue flags, arriving soon, "now" on the floor plan). Carries the new mode and time, never personal data.
+/// </summary>
+/// <param name="Mode">Fixed or running.</param>
+/// <param name="At">Business time when the change was made (UTC).</param>
+internal sealed record DemoClockChangedNotice(Reservation.Infrastructure.Demo.DemoTimeMode Mode, DateTime At);
+
 /// <summary>A notice and the client method that receives it.</summary>
 internal sealed record RealtimeNotice(string Method, object Payload);
 
@@ -41,6 +49,7 @@ internal static class NoticeMethods
     public const string MessageLogChanged = "messageLogChanged";
     public const string PosLogChanged = "posLogChanged";
     public const string DemoReset = "demoReset";
+    public const string DemoClockChanged = "demoClockChanged";
 }
 
 /// <summary>Which notice each domain event produces (Design §4.3 "Realtime" column, §15.1).</summary>

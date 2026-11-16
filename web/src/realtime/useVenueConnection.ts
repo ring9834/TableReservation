@@ -15,7 +15,7 @@ import { getGetPosMessagesQueryKey } from "@/api/endpoints/pos/pos";
 import { getGetWaitlistQueryKey } from "@/api/endpoints/waitlist/waitlist";
 import type { MessageLogChangedNotice, WaitlistChangedNotice } from "@/api/model";
 import { apiBaseUrl } from "@/lib/apiFetch";
-import { createSignalRLogger } from "./signalrLogger.mjs";
+import { createSignalRLogger, isUnauthorized } from "./signalrLogger.mjs";
 
 /**
  * - `connecting`: first connection, nothing missed yet.
@@ -24,12 +24,11 @@ import { createSignalRLogger } from "./signalrLogger.mjs";
  */
 export type ConnectionStatus = "connecting" | "connected" | "reconnecting";
 
-/** Retry quickly at first, then every 5 s, and never give up: a host screen stays open all evening. */
+/**
+ * Retry quickly at first, then every 5 s, and never give up while the API or the network is away: a host screen stays
+ * open all evening. A 401 is different: the session is missing or has ended, so retrying can't help (M11a).
+ */
 const retryDelays = [0, 1_000, 2_000, 5_000];
-const retryPolicy: IRetryPolicy = {
-  nextRetryDelayInMilliseconds: ({ previousRetryCount }) =>
-    retryDelays[previousRetryCount] ?? 5_000,
-};
 
 /** What a screen wants to hear about besides the query invalidation the hook always does. */
 export type VenueConnectionOptions = Readonly<{
@@ -38,10 +37,6 @@ export type VenueConnectionOptions = Readonly<{
   /** The presenter's phone panel (Design §18.7). */
   onMessageLogChanged?: (notice: MessageLogChangedNotice) => void;
 }>;
-
-/** The negotiate request answered 401: the demo session is missing or has ended. */
-const isUnauthorized = (error: unknown) =>
-  error instanceof Error && /Status code '401'/.test(error.message);
 
 /**
  * The host screen's SignalR connection to `/hubs/venue` (Design §15, §18.5). The demo session cookie is the only
@@ -56,6 +51,9 @@ const isUnauthorized = (error: unknown) =>
  * - `demoReset` invalidates every query (Design §15, §18.10).
  * - `posLogChanged` invalidates the POS log under every filter (the presenter's POS panel, Design §18.9).
  * - After any reconnect every query is invalidated once, so nothing missed while away stays missing (AC2.5).
+ * - A 401 from negotiation, on the first start or while reconnecting (the session ended), stops retrying and calls
+ *   `onSignedOut`, which goes to sign-in; nothing is logged (M11a).
+ * - `demoClockChanged` invalidates every query, as `demoReset` does: business time moved (M11a, Design §17.2).
  * - The browser's `offline` event stops the connection and shows "reconnecting" at once; `online` starts it
  *   again. An open WebSocket can outlive a lost network for a while, and the browser knows sooner.
  * - A start we stop ourselves (unmount; React Strict Mode mounts every effect twice in development) is expected:
@@ -83,6 +81,19 @@ export function useVenueConnection(
     let attempt = 0;
     /** True from our own stop() until the next start: failures it causes are expected. */
     let stopping = false;
+
+    /** Set when a reconnect attempt was answered 401: the close that follows goes to sign-in. */
+    let signedOut = false;
+
+    const retryPolicy: IRetryPolicy = {
+      nextRetryDelayInMilliseconds: ({ previousRetryCount, retryReason }) => {
+        if (isUnauthorized(retryReason)) {
+          signedOut = true;
+          return null; // stop reconnecting; onclose hands over to sign-in
+        }
+        return retryDelays[previousRetryCount] ?? 5_000;
+      },
+    };
 
     const logger = createSignalRLogger(() => disposed || stopping);
     const connection: HubConnection = new HubConnectionBuilder()
@@ -123,6 +134,8 @@ export function useVenueConnection(
 
     // The presenter reset the demo (M10b): everything may have changed.
     connection.on("demoReset", catchUp);
+    // The presenter moved the demo clock (M11a): overdue flags, arriving soon and "now" all changed.
+    connection.on("demoClockChanged", catchUp);
 
     connection.onreconnecting(() => {
       if (!disposed) setStatus("reconnecting");
@@ -133,10 +146,15 @@ export function useVenueConnection(
       setStatus("connected");
       catchUp();
     });
-    // Automatic reconnect never gives up, so a close means stop() was called (offline or unmount) or the
-    // first transport failed after negotiating; start again unless we meant it.
+    // Automatic reconnect gives up only on a 401 (signed out: go to sign-in). Otherwise a close means stop() was
+    // called (offline or unmount) or the first transport failed after negotiating; start again unless we meant it.
     connection.onclose(() => {
-      if (!disposed && !offline && !stopping) {
+      if (disposed) return;
+      if (signedOut) {
+        onSignedOut();
+        return;
+      }
+      if (!offline && !stopping) {
         setStatus("reconnecting");
         scheduleStart();
       }

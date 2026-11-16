@@ -5,20 +5,32 @@
  * OpenAPI spec version: v1
  */
 import {
-  useMutation
+  useMutation,
+  useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
-  UseMutationResult
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  AdvanceDemoClockRequest,
   ApiProblem,
+  DemoClockResponse,
   DemoLoginRequest,
   DemoLoginResponse,
   SendRemindersResponse,
+  SetDemoClockRequest,
   SetMockPosOnlineRequest,
   SimulateBillPaidRequest,
   SimulateBillPaidResponse
@@ -31,6 +43,21 @@ import type { ErrorType } from '../../../lib/apiFetch';
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
 
 export const getSendRemindersNowUrl = () => {
 
@@ -327,6 +354,261 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSimulatePaymentMutationOptions(options), queryClient);
+    }
+    export const getGetDemoClockUrl = () => {
+
+
+
+
+  return `/api/v1/demo/clock`
+}
+
+export const getDemoClock = async ( options?: Parameters<typeof apiFetch>[1]): Promise<DemoClockResponse> => {
+
+  return apiFetch<DemoClockResponse>(getGetDemoClockUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDemoClockQueryKey = () => {
+    return [
+    `/api/v1/demo/clock`
+    ] as const;
+    }
+
+
+export const getGetDemoClockQueryOptions = <TData = Awaited<ReturnType<typeof getDemoClock>>, TError = ErrorType<ApiProblem>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDemoClock>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDemoClockQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDemoClock>>> = ({ signal }) => getDemoClock({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDemoClock>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetDemoClockQueryResult = NonNullable<Awaited<ReturnType<typeof getDemoClock>>>
+export type GetDemoClockQueryError = ErrorType<ApiProblem>
+
+
+export function useGetDemoClock<TData = Awaited<ReturnType<typeof getDemoClock>>, TError = ErrorType<ApiProblem>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDemoClock>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDemoClock>>,
+          TError,
+          Awaited<ReturnType<typeof getDemoClock>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDemoClock<TData = Awaited<ReturnType<typeof getDemoClock>>, TError = ErrorType<ApiProblem>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDemoClock>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDemoClock>>,
+          TError,
+          Awaited<ReturnType<typeof getDemoClock>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDemoClock<TData = Awaited<ReturnType<typeof getDemoClock>>, TError = ErrorType<ApiProblem>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDemoClock>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDemoClock<TData = Awaited<ReturnType<typeof getDemoClock>>, TError = ErrorType<ApiProblem>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getDemoClock>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetDemoClockQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getSetDemoClockUrl = () => {
+
+
+
+
+  return `/api/v1/demo/clock`
+}
+
+export const setDemoClock = async (setDemoClockRequest: SetDemoClockRequest, options?: Parameters<typeof apiFetch>[1]): Promise<DemoClockResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<DemoClockResponse>(getSetDemoClockUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setDemoClockRequest)
+  }
+);}
+
+
+
+
+
+export const getSetDemoClockMutationKey = () => ['setDemoClock'] as const;
+
+export const getSetDemoClockMutationOptions = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDemoClock>>, TError,SetDemoClockMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setDemoClock>>, TError,SetDemoClockMutationVariables, TContext> => {
+
+const mutationKey = getSetDemoClockMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setDemoClock>>, SetDemoClockMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  setDemoClock(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetDemoClockMutationResult = NonNullable<Awaited<ReturnType<typeof setDemoClock>>>
+    export type SetDemoClockMutationBody = SetDemoClockRequest
+    export type SetDemoClockMutationError = ErrorType<ApiProblem>
+    export type SetDemoClockMutationVariables = {data: SetDemoClockRequest}
+
+    export const useSetDemoClock = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDemoClock>>, TError,SetDemoClockMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof setDemoClock>>,
+        TError,
+        SetDemoClockMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetDemoClockMutationOptions(options), queryClient);
+    }
+    export const getAdvanceDemoClockUrl = () => {
+
+
+
+
+  return `/api/v1/demo/clock/advance`
+}
+
+export const advanceDemoClock = async (advanceDemoClockRequest: AdvanceDemoClockRequest, options?: Parameters<typeof apiFetch>[1]): Promise<DemoClockResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return apiFetch<DemoClockResponse>(getAdvanceDemoClockUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(advanceDemoClockRequest)
+  }
+);}
+
+
+
+
+
+export const getAdvanceDemoClockMutationKey = () => ['advanceDemoClock'] as const;
+
+export const getAdvanceDemoClockMutationOptions = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceDemoClock>>, TError,AdvanceDemoClockMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof advanceDemoClock>>, TError,AdvanceDemoClockMutationVariables, TContext> => {
+
+const mutationKey = getAdvanceDemoClockMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof advanceDemoClock>>, AdvanceDemoClockMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  advanceDemoClock(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdvanceDemoClockMutationResult = NonNullable<Awaited<ReturnType<typeof advanceDemoClock>>>
+    export type AdvanceDemoClockMutationBody = AdvanceDemoClockRequest
+    export type AdvanceDemoClockMutationError = ErrorType<ApiProblem>
+    export type AdvanceDemoClockMutationVariables = {data: AdvanceDemoClockRequest}
+
+    export const useAdvanceDemoClock = <TError = ErrorType<ApiProblem>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceDemoClock>>, TError,AdvanceDemoClockMutationVariables, TContext>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof advanceDemoClock>>,
+        TError,
+        AdvanceDemoClockMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAdvanceDemoClockMutationOptions(options), queryClient);
     }
     export const getResetDemoUrl = () => {
 

@@ -17,7 +17,7 @@ public sealed class HubClient : IAsyncDisposable
 {
     private static readonly string[] _methods =
         [NoticeMethods.FloorPlanChanged, NoticeMethods.WaitlistChanged, NoticeMethods.MessageLogChanged, NoticeMethods.PosLogChanged,
-         NoticeMethods.DemoReset];
+         NoticeMethods.DemoReset, NoticeMethods.DemoClockChanged];
 
     private readonly ConcurrentDictionary<string, Channel<JsonElement>> _received = new(StringComparer.Ordinal);
 

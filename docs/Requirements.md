@@ -3,9 +3,9 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Agreed and frozen (v1.1) for the demo build (3–4 weeks) |
+| **Status** | Agreed and frozen (v1.2) for the demo build (3–4 weeks) |
 | **Owner** | Antonio Huang |
-| **Last updated** | 10 November 2026 |
+| **Last updated** | 16 November 2026 |
 | **Related** | [`Architecture.md`](Architecture.md); ADR-001 to ADR-005 |
 
 The demo proves six capabilities in a 20-minute story set at one sample restaurant, built within 3–4 weeks. These requirements drive the target architecture, and they double as the test checklist for the build.
@@ -305,7 +305,7 @@ About 20 minutes, followed by questions. The same script is the end-to-end test,
 | 7 | 8:00 | Try a walk-in for 4 when nothing fits; add them to the waitlist | Quoted wait shown; entry appears on the waitlist | 3 |
 | 8 | 9:30 | Tap "Bill paid" on a 4-seat table | `BillClosed` arrives from the POS; the table turns free; the waiting party is highlighted | 4, 6 |
 | 9 | 10:30 | Tap "Notify" | "Your table is ready" appears in the phone panel; then seat them in one tap | 4 |
-| 10 | 12:00 | Press "Send reminders now"; confirm one booking and cancel another | Statuses update live; the cancelled table frees up; a deposit is refunded | 5 |
+| 10 | 12:00 | Press "Send reminders now"; confirm one booking and cancel another | Statuses update live; the cancelled booking leaves its table's 20:30 slot (T9 stays seated by its earlier party); a deposit is refunded | 5 |
 | 11 | 14:00 | Switch the mock POS offline, seat a table, switch it back online | Messages wait, then arrive once each, in order | 6 |
 | 12 | 15:30 | Open one POS message and show its JSON | Exactly what his POS would receive, ready for his technical team | 6 |
 | 13 | 17:00 | Show the target architecture | How the demo becomes the production system with his POS | — |
@@ -351,3 +351,4 @@ About 20 minutes, followed by questions. The same script is the end-to-end test,
 | 5 Nov 2026 | Exported from the requirements analysis doc. Event names aligned with the ADR-002 catalogue: `TableSeated` and `WalkInSeated` → `BookingSeated` (with `source`); `ConfirmationSent` and `ReminderSent` → `MessageSent` (with `purpose`); `BookingCompleted` added. Answered open questions marked as decided. |
 | 9 Nov 2026 | Added BR-13 (reminder timing and the late-cancellation warning), matching Design §7.1. Status set to frozen (v1.0). |
 | 10 Nov 2026 | v1.1. Demo script: 11 sample bookings (was 8) and the time about 18:25 (was 18:30), so every step works as scripted: all tables of 4+ seats are taken for the step-3 walk-in, and step 5's reminders and in-time refund don't sit on the 2-hour boundary (Design §17). |
+| 16 Nov 2026 | v1.2. Demo script row 10: the cancelled booking (#11, 20:30 on T9) leaves its slot; T9 itself stays seated by the 17:30 party, so the tile does not turn free. No seed change (Design §17.2). |

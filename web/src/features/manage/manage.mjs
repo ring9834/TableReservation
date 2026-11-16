@@ -57,6 +57,17 @@ export const cancelConsequence = (booking) => {
   return { key: "kept", ...money };
 };
 
+/** Statuses a booking can still be cancelled from (Design §3.1); after its start the link has expired anyway. */
+const cancellableStatuses = ["pendingPayment", "booked", "confirmed"];
+
+/**
+ * The cancellation terms ("Can't make it? Please cancel by 6:30 pm.") only while the booking can still be cancelled
+ * (M11a): not once it is cancelled, seated or completed. Read from the status, not the link's actions, so a Confirm
+ * link still shows the terms the guest agreed to.
+ * @param {{ status: string }} booking
+ */
+export const showsTerms = (booking) => cancellableStatuses.includes(booking.status);
+
 /**
  * The late-cancellation warning shown before any tap (BR-13): only while cancelling is still possible.
  * @param {GuestBooking} booking

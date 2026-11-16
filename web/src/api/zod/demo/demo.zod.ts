@@ -44,6 +44,43 @@ export const SimulatePaymentParams = zod.object({
 
 export const SimulatePaymentResponse = zod.void()
 
+export const GetDemoClockResponse = zod.object({
+  "mode": zod.enum(['fixed', 'running']),
+  "at": zod.iso.datetime({"offset":true}),
+  "localTime": zod.iso.time({}),
+  "timeZone": zod.string(),
+  "closesAt": zod.iso.datetime({"offset":true})
+})
+
+export const SetDemoClockBody = zod.object({
+  "mode": zod.union([zod.null(),zod.enum(['fixed', 'running'])]),
+  "at": zod.iso.time({}).nullish()
+})
+
+export const SetDemoClockResponse = zod.object({
+  "mode": zod.enum(['fixed', 'running']),
+  "at": zod.iso.datetime({"offset":true}),
+  "localTime": zod.iso.time({}),
+  "timeZone": zod.string(),
+  "closesAt": zod.iso.datetime({"offset":true})
+})
+
+export const advanceDemoClockBodyMinutesMax = 360;
+
+
+
+export const AdvanceDemoClockBody = zod.object({
+  "minutes": zod.int().min(1).max(advanceDemoClockBodyMinutesMax)
+})
+
+export const AdvanceDemoClockResponse = zod.object({
+  "mode": zod.enum(['fixed', 'running']),
+  "at": zod.iso.datetime({"offset":true}),
+  "localTime": zod.iso.time({}),
+  "timeZone": zod.string(),
+  "closesAt": zod.iso.datetime({"offset":true})
+})
+
 export const ResetDemoResponse = zod.void()
 
 export const demoLoginBodyPasscodeMax = 200;

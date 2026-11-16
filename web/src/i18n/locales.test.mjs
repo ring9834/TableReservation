@@ -12,6 +12,7 @@ import {
 import { purposes, statusKeys } from "../features/presenter/messageStatus.mjs";
 import { actionKinds } from "../features/presenter/phoneLinks.mjs";
 import { posFilters, posStatusKeys, unmatchedReasons } from "../features/presenter/posLog.mjs";
+import { clockModes } from "../features/presenter/demoClock.mjs";
 import { skipReasons } from "../features/presenter/reminders.mjs";
 
 const load = (name) => JSON.parse(readFileSync(new URL(`./${name}`, import.meta.url), "utf8"));
@@ -60,6 +61,9 @@ test("every API error code the pages can meet has a message", () => {
     "payment_provider_error",
     "invalid_link",
     "link_expired",
+    "demo_reset_busy",
+    "demo_clock_past_closing",
+    "demo_clock_backwards",
     "unexpected",
   ];
   for (const code of codes) {
@@ -220,6 +224,17 @@ test("the manage page, phone actions and reminders have every label (Design §18
     }
     for (const response of ["confirmed", "cancelled"]) {
       assert.ok(valueAt(resources, `host.reminder.${response}`), `No words for reply ${response}`);
+    }
+  }
+});
+
+test("the presenter's demo controls name every clock mode (M11a)", () => {
+  for (const resources of [en, zh]) {
+    for (const mode of clockModes) {
+      assert.ok(
+        valueAt(resources, `presenter.demo.mode.${mode}`),
+        `No words for clock mode ${mode}`,
+      );
     }
   }
 });

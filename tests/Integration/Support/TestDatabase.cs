@@ -75,8 +75,20 @@ public sealed class TestDatabase : IAsyncDisposable
     public async Task ResetAsync(DateTimeOffset now)
     {
         await using var db = Context();
-        await new DemoReset(db, new DemoSeeder(new TestClock(now))).ResetAsync(TestContext.Current.CancellationToken);
+        var business = new TestClock(now);
+        await NewDemoReset(db, business).ResetAsync(TestContext.Current.CancellationToken);
     }
+
+    /// <summary>
+    /// A <see cref="DemoReset"/> seeding for <paramref name="businessClock"/>'s evening. Its demo clock (M11a) counts on
+    /// an infrastructure clock at the same instant; it is not the business clock here, so it only gets its row written.
+    /// </summary>
+    public static DemoReset NewDemoReset(ReservationsDbContext db, TestClock businessClock) =>
+        new(db, new DemoSeeder(businessClock), NewDemoClock(businessClock.GetUtcNow()), new DemoClockSignal(TimeProvider.System), businessClock);
+
+    /// <summary>A demo clock reset to 18:25 on the venue-local date of <paramref name="infrastructureNow"/>.</summary>
+    public static DemoClock NewDemoClock(DateTimeOffset infrastructureNow) =>
+        new(new TestClock(infrastructureNow), GoldenDragon.DemoTime, GoldenDragon.TimeZone());
 
     public ValueTask DisposeAsync() => DataSource.DisposeAsync();
 }

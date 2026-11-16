@@ -40,6 +40,12 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
     /// <summary>Replaces the infrastructure clock (always the system clock otherwise), e.g. to expire payment holds.</summary>
     public TestClock? InfrastructureClock { get; init; }
 
+    /// <summary>
+    /// True runs the real demo clock as the business clock (M11a) instead of <see cref="Clock"/>; it counts on
+    /// <see cref="InfrastructureClock"/> when set.
+    /// </summary>
+    public bool UseDemoClock { get; init; }
+
     /// <summary>Extra configuration, e.g. lower rate limits.</summary>
     public IReadOnlyDictionary<string, string?> Settings { get; init; } = new Dictionary<string, string?>();
 
@@ -70,7 +76,10 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
 
         builder.ConfigureTestServices(services =>
         {
-            services.AddSingleton<TimeProvider>(Clock);
+            if (!UseDemoClock)
+            {
+                services.AddSingleton<TimeProvider>(Clock);
+            }
             if (InfrastructureClock is not null)
             {
                 services.AddKeyedSingleton<TimeProvider>(Clocks.Infrastructure, InfrastructureClock);

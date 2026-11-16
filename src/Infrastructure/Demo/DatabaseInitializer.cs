@@ -9,12 +9,15 @@ namespace Reservation.Infrastructure.Demo;
 /// Development only (D8): applies migrations and loads the seed into an empty database. With
 /// <see cref="DemoDataOptions.ResetIfStale"/>, a database whose bookings are all on other days than today (venue-local
 /// date on the business clock) is reset and reseeded, so a local database seeded on an earlier day shows tonight again
-/// (Design §17). CI and AWS run the EF Core migration bundle instead (ADR-005).
+/// (Design §17). Since M11a it first loads the demo clock's stored state; a state from an earlier day goes back to
+/// Fixed at the reset time today, so the stale check looks at today (Design §17.2). CI and AWS run the EF Core migration
+/// bundle instead (ADR-005).
 /// </summary>
 public sealed partial class DatabaseInitializer(
     ReservationsDbContext db,
     DemoSeeder seeder,
     DemoReset reset,
+    DemoClockStore clockStore,
     TimeProvider clock,
     IOptions<DemoDataOptions> options,
     ILogger<DatabaseInitializer> logger)
@@ -23,6 +26,11 @@ public sealed partial class DatabaseInitializer(
     {
         await db.Database.MigrateAsync(cancellationToken);
         LogMigrated(logger);
+
+        if (await clockStore.ResetIfStaleAsync(cancellationToken))
+        {
+            LogClockReset(logger);
+        }
 
         var timeZoneId = await db.Venues.IgnoreQueryFilters().OrderBy(v => v.Id).Select(v => v.TimeZone)
             .FirstOrDefaultAsync(cancellationToken);
@@ -55,6 +63,9 @@ public sealed partial class DatabaseInitializer(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Database migrations applied")]
     private static partial void LogMigrated(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Demo clock was set on an earlier day; back to the reset time today")]
+    private static partial void LogClockReset(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Golden Dragon demo seed loaded")]
     private static partial void LogSeeded(ILogger logger);

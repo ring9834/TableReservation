@@ -93,7 +93,9 @@ public sealed class DatabaseInitializerTests(PostgresFixture postgres)
         using var provider = services.BuildServiceProvider();
 
         var business = Assert.IsType<DemoClock>(provider.GetRequiredService<TimeProvider>());
-        Assert.Equal(new TimeOnly(18, 25), TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(business.Now, GoldenDragon.TimeZone()).DateTime));
+        Assert.Same(provider.GetRequiredService<DemoClock>(), business);
+        Assert.Equal(DemoTimeMode.Fixed, business.State.Mode);
+        Assert.Equal(new TimeOnly(18, 25), TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(business.GetUtcNow(), GoldenDragon.TimeZone()).DateTime));
         Assert.Same(TimeProvider.System, provider.GetRequiredKeyedService<TimeProvider>(Clocks.Infrastructure));
     }
 
@@ -126,8 +128,11 @@ public sealed class DatabaseInitializerTests(PostgresFixture postgres)
         var clock = new TestClock(now);
         var seeder = new DemoSeeder(clock);
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(logs));
+        var demoClock = TestDatabase.NewDemoClock(now);
+        var signal = new DemoClockSignal(TimeProvider.System);
         var initializer = new DatabaseInitializer(
-            db, seeder, new DemoReset(db, seeder), clock,
+            db, seeder, new DemoReset(db, seeder, demoClock, signal, clock),
+            new DemoClockStore(db, demoClock, signal, new TestClock(now)), clock,
             Options.Create(new DemoDataOptions { ResetIfStale = resetIfStale }),
             loggerFactory.CreateLogger<DatabaseInitializer>());
 

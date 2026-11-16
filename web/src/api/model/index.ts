@@ -5,6 +5,7 @@
  * OpenAPI spec version: v1
  */
 
+export * from './advanceDemoClockRequest';
 export * from './apiProblem';
 export * from './apiProblemErrors';
 export * from './availabilityResponse';
@@ -23,9 +24,13 @@ export * from './createBookingRequest';
 export * from './createBookingResponse';
 export * from './createOnlineBookingHeaders';
 export * from './createPhoneBookingHeaders';
+export * from './demoClockChangedNotice';
+export * from './demoClockChangedNoticeMode';
+export * from './demoClockResponse';
 export * from './demoLoginRequest';
 export * from './demoLoginResponse';
 export * from './demoResetNotice';
+export * from './demoTimeMode';
 export * from './depositStatus';
 export * from './endWaitlistRequest';
 export * from './floorAreaDto';
@@ -79,6 +84,7 @@ export * from './seatWalkInHeaders';
 export * from './seatWalkInRequest';
 export * from './seatWalkInResponse';
 export * from './sendRemindersResponse';
+export * from './setDemoClockRequest';
 export * from './setMockPosOnlineRequest';
 export * from './simulateBillPaidRequest';
 export * from './simulateBillPaidResponse';
