@@ -22,6 +22,15 @@ const iPhoneAndIPad: ScreenDevices = { phone: "iPhone 15", tablet: "iPad Pro 11 
 const guestSpecs = [/booking\.spec\.ts/, /deposit\.spec\.ts/, /manage\.spec\.ts/, /phone-layout\.spec\.ts/];
 const hostSpecs = [/host\.spec\.ts/, /walk-in\.spec\.ts/, /floor-plan\.spec\.ts/];
 
+/**
+ * The WebKit projects' test budget (M11c, Design §18.11). Playwright's WebKit on Windows is slow to drive: in the M11c
+ * traces every driver round trip (locate, actionability, click, fill) took 0.4-1.5 s, so a multi-screen walk-in test
+ * spent 4-6 s per click and ran out of 30 s with every request answered and every check passing. Only the test's
+ * total budget is larger; the app-speed checks (2 s screen updates, 1 s host actions, expect timeouts) are the same
+ * everywhere, and the default project keeps 30 s.
+ */
+const webkitTestTimeoutMs = 60_000;
+
 export default defineConfig({
   testDir: "./specs",
   globalSetup: "./global-setup.ts",
@@ -48,12 +57,19 @@ export default defineConfig({
     ? [{ name: "mobile-chromium", use: { ...devices["Pixel 7"] }, metadata: androidAndGalaxyTab }]
     : [
         { name: "mobile-edge", use: { ...devices["Pixel 7"], channel: "msedge" }, metadata: androidAndGalaxyTab },
-        { name: "iphone-webkit", use: { ...devices["iPhone 15"] }, testMatch: guestSpecs, metadata: iPhoneAndIPad },
+        {
+          name: "iphone-webkit",
+          use: { ...devices["iPhone 15"] },
+          testMatch: guestSpecs,
+          metadata: iPhoneAndIPad,
+          timeout: webkitTestTimeoutMs,
+        },
         {
           name: "tablet-webkit",
           use: { ...devices["iPad Pro 11 landscape"] },
           testMatch: hostSpecs,
           metadata: iPhoneAndIPad,
+          timeout: webkitTestTimeoutMs,
         },
       ],
 });
