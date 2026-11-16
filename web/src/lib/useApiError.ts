@@ -14,6 +14,9 @@ export const knownErrorCodes = [
   "payment_provider_error",
   "invalid_link",
   "link_expired",
+  "demo_reset_busy",
+  "demo_clock_past_closing",
+  "demo_clock_backwards",
   "unexpected",
 ] as const;
 

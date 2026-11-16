@@ -1614,6 +1614,184 @@
         }
       }
     },
+    "/api/v1/demo/clock": {
+      "get": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "getDemoClock",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoClockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "setDemoClock",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDemoClockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoClockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/demo/clock/advance": {
+      "post": {
+        "tags": [
+          "Demo"
+        ],
+        "operationId": "advanceDemoClock",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdvanceDemoClockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoClockResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiProblem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/demo/reset": {
       "post": {
         "tags": [
@@ -2368,6 +2546,20 @@
   },
   "components": {
     "schemas": {
+      "AdvanceDemoClockRequest": {
+        "required": [
+          "minutes"
+        ],
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "maximum": 360,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ApiProblem": {
         "required": [
           "type",
@@ -2957,6 +3149,55 @@
           }
         }
       },
+      "DemoClockChangedNotice": {
+        "required": [
+          "mode",
+          "at"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "enum": [
+              "fixed",
+              "running"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DemoClockResponse": {
+        "required": [
+          "mode",
+          "at",
+          "localTime",
+          "timeZone",
+          "closesAt"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/DemoTimeMode"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "localTime": {
+            "type": "string",
+            "format": "time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "closesAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "DemoLoginRequest": {
         "required": [
           "passcode"
@@ -2983,6 +3224,12 @@
       },
       "DemoResetNotice": {
         "type": "object"
+      },
+      "DemoTimeMode": {
+        "enum": [
+          "fixed",
+          "running"
+        ]
       },
       "DepositStatus": {
         "enum": [
@@ -4154,6 +4401,31 @@
             "items": {
               "$ref": "#/components/schemas/SkippedReminders"
             }
+          }
+        }
+      },
+      "SetDemoClockRequest": {
+        "required": [
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DemoTimeMode"
+              }
+            ]
+          },
+          "at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "time"
           }
         }
       },

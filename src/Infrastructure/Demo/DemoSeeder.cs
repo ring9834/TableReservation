@@ -17,11 +17,18 @@ public sealed class DemoSeeder(TimeProvider timeProvider)
     private static readonly TimeOnly _bookedAt = new(12, 0);
     private static readonly TimeOnly _confirmedAt = new(10, 0);
 
-    public async Task SeedAsync(ReservationsDbContext db, CancellationToken cancellationToken)
+    /// <param name="db">The context to seed through.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <param name="tonight">The evening to seed; by default today on the business clock. The reset passes the date its
+    /// clock state starts on (M11a).</param>
+    public async Task SeedAsync(ReservationsDbContext db, CancellationToken cancellationToken, DateOnly? tonight = null)
     {
         ArgumentNullException.ThrowIfNull(db);
+        await SeedAsync(db, tonight ?? GoldenDragon.ServiceDate(timeProvider.GetUtcNow()), cancellationToken);
+    }
 
-        var tonight = GoldenDragon.ServiceDate(timeProvider.GetUtcNow());
+    private async Task SeedAsync(ReservationsDbContext db, DateOnly tonight, CancellationToken cancellationToken)
+    {
         var clock = new SeedClock(GoldenDragon.At(tonight.AddDays(-1), _bookedAt));
 
         var venue = CreateVenue();

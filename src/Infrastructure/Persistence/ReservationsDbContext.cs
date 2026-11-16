@@ -54,6 +54,9 @@ public sealed class ReservationsDbContext(DbContextOptions<ReservationsDbContext
 
     public DbSet<MockPosReceipt> MockPosReceipts => Set<MockPosReceipt>();
 
+    /// <summary>The demo clock's one row (M11a, Design §17.2); never venue-filtered.</summary>
+    public DbSet<Demo.DemoClockRow> DemoClock => Set<Demo.DemoClockRow>();
+
     public DbSet<MockPosOpenTable> MockPosOpenTables => Set<MockPosOpenTable>();
 
     /// <summary>Not venue-filtered: the key already includes the venue.</summary>

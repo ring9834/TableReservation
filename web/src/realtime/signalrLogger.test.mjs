@@ -1,7 +1,12 @@
 // Run with `npm test` (node --test). The SignalR logger of the host screen (Design §18.5).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { classifySignalRLog, createSignalRLogger, SignalRLogLevel } from "./signalrLogger.mjs";
+import {
+  classifySignalRLog,
+  createSignalRLogger,
+  isUnauthorized,
+  SignalRLogLevel,
+} from "./signalrLogger.mjs";
 
 const { Information, Warning, Error } = SignalRLogLevel;
 const stoppedDuringStart =
@@ -60,4 +65,19 @@ test("other warnings are kept and information is dropped", () => {
   logger.log(Information, "Using HubProtocol 'json'.");
   assert.equal(lines.warn.length, 2);
   assert.equal(lines.error.length, 0);
+});
+
+test("a 401 from negotiation is silent and recognised, so the hook goes to sign-in instead of retrying (M11a)", () => {
+  const signedOut =
+    "Failed to complete negotiation with the server: Error: Unauthorized: Status code '401'";
+  assert.equal(classifySignalRLog(Error, signedOut, false), "silent");
+
+  const { lines, sink } = recordingSink();
+  const logger = createSignalRLogger(() => false, sink);
+  logger.log(Error, signedOut);
+  assert.deepEqual(lines, { warn: [], error: [] });
+
+  assert.equal(isUnauthorized(new globalThis.Error("Unauthorized: Status code '401'")), true);
+  assert.equal(isUnauthorized(new globalThis.Error("Failed to fetch")), false);
+  assert.equal(isUnauthorized(undefined), false);
 });

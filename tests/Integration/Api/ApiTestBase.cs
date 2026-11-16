@@ -35,6 +35,9 @@ public abstract class ApiTestBase(PostgresFixture postgres) : IAsyncLifetime
     /// <summary>An infrastructure clock for the API; <c>null</c> keeps the system clock.</summary>
     protected virtual TestClock? InfrastructureClock => null;
 
+    /// <summary>True runs the real demo clock as the business clock (M11a).</summary>
+    protected virtual bool UseDemoClock => false;
+
     public virtual async ValueTask InitializeAsync()
     {
         Database = await TestDatabase.CreateAsync(postgres);
@@ -43,6 +46,7 @@ public abstract class ApiTestBase(PostgresFixture postgres) : IAsyncLifetime
             Settings = Settings,
             ExtraServices = ConfigureServices,
             InfrastructureClock = InfrastructureClock,
+            UseDemoClock = UseDemoClock,
         };
         Client = Factory.CreateApiClient();
     }

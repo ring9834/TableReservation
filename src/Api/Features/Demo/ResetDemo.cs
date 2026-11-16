@@ -21,13 +21,13 @@ namespace Reservation.Api.Features.Demo;
 /// a deadlock, serialization failure or lock timeout rolls that attempt back and it runs again, up to
 /// <see cref="Attempts"/> times. If it still can't run, 503 <c>demo_reset_busy</c>: never <c>slot_taken</c>, which the
 /// central handler would otherwise make of a deadlock.</item>
-/// <item>The business clock is not touched: in Fixed mode it never moves before M11, whose clock controls add their own
-/// reset here.</item>
+/// <item>Since M11a the demo clock goes back to Fixed at 18:25 tonight in the same transaction (Design §17.2), and the
+/// overdue and arriving-soon jobs are rung; <c>demoReset</c> already makes every screen refetch, the clock included.</item>
 /// <item>After the commit, <c>demoReset {}</c> goes to every venue's screens, which refetch everything (§15). It carries
 /// no data; there is no outbox route because the reset empties the outbox. A failed push is logged and swallowed, as in
 /// <see cref="RealtimeNotifier{T}"/>: screens also refetch on reconnect.</item>
 /// </list>
-/// 204, or 503 <c>demo_reset_busy</c>. M10b uses it for the end-to-end tests; M11 puts the button on the presenter screen.
+/// 204, or 503 <c>demo_reset_busy</c>. The presenter's Reset button calls it (M11a).
 /// </summary>
 internal sealed partial class ResetDemoEndpoints : IEndpoint
 {
@@ -135,7 +135,7 @@ internal sealed partial class ResetDemoEndpoints : IEndpoint
     [LoggerMessage(Level = LogLevel.Warning, Message = "Demo reset: gave up, the {What} stayed busy (demo_reset_busy)")]
     private static partial void LogBusy(ILogger logger, string what);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Demo reset: data reseeded, mock POS online")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Demo reset: data reseeded, mock POS online, clock fixed at the reset time")]
     private static partial void LogReset(ILogger logger);
 
     // The exception itself is not attached: its message could echo a payload.

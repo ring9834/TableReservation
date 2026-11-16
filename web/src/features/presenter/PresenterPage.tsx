@@ -14,7 +14,7 @@ import { useApiError } from "@/lib/useApiError";
 import { useVenueConnection } from "@/realtime/useVenueConnection";
 import { PhonePanel } from "./PhonePanel";
 import { PosPanel } from "./PosPanel";
-import { SendReminders } from "./SendReminders";
+import { DemoControls } from "./DemoControls";
 import styles from "./presenter.module.css";
 
 /** A host session may open `/presenter/`; the message log answers 403 (Design §17, §18.7). */
@@ -22,8 +22,8 @@ const isForbidden = (error: unknown) => isApiError(error) && error.status === 40
 
 /**
  * The presenter screen (Design §17, §18.7, §18.9), for a laptop or projector: the phone panel on the left, the POS
- * panel (switch and log) on the right; "Send reminders now" in the header (M10b, §18.10), grouped with the other demo
- * controls in M11. `messageLogChanged` and `posLogChanged`
+ * panel (switch and log) on the right; the demo controls in the header (M11a, §17.2: Reset, the demo clock and "Send
+ * reminders now"). `messageLogChanged` and `posLogChanged`
  * refetch their logs; a reconnect refetches everything (Design §15).
  */
 export function PresenterPage() {
@@ -56,7 +56,7 @@ export function PresenterPage() {
       <header className={styles.header}>
         <h1>{t("presenter.title", { venue: venue.data?.name ?? "" })}</h1>
         <div className={styles.controls}>
-          {!forbidden && !messages.isPending && <SendReminders />}
+          {!forbidden && !messages.isPending && <DemoControls />}
           <LanguageSwitch />
         </div>
       </header>

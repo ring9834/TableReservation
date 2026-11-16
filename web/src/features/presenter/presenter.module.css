@@ -72,7 +72,7 @@
   }
 }
 
-/* "Send reminders now" (M10b, Design §18.10); M11 groups it with the other demo controls. */
+/* The header's controls: the demo group (M11a, Design §17.2) and the language switch. */
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -122,4 +122,51 @@
 .remindersError {
   color: var(--error);
   font-weight: 600;
+}
+
+/* The demo group (M11a): Reset, the demo time with +5 / +15 / Run-Freeze, and "Send reminders now". */
+.demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 2px dashed var(--border);
+  border-radius: 0.75rem;
+}
+
+.demoLabel {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+}
+
+.demoClock {
+  min-width: 9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.demoConfirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.demoDanger {
+  color: #fff;
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
