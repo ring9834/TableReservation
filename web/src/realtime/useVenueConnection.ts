@@ -11,6 +11,7 @@ import { getGetWaitlistQueryKey } from "@/api/endpoints/waitlist/waitlist";
 import type { MessageLogChangedNotice, WaitlistChangedNotice } from "@/api/model";
 import { apiBaseUrl } from "@/lib/apiFetch";
 import { createConnectionSequencer } from "./connectionSequencer.mjs";
+import { hubUrl } from "./hubUrl.mjs";
 import { createSignalRLogger, isUnauthorized } from "./signalrLogger.mjs";
 
 /**
@@ -85,7 +86,8 @@ export function useVenueConnection(
     // runs starts and stops one at a time: a stop waits for a start in flight, a start for a stop (M11b, §17.3).
     const logger = createSignalRLogger(() => disposed || sequencer.isStopping());
     const connection: HubConnection = new HubConnectionBuilder()
-      .withUrl(`${apiBaseUrl}/hubs/venue`, { withCredentials: true })
+      // Absolute, never relative: a relative URL crashes the client in the production bundle (hubUrl.mjs).
+      .withUrl(hubUrl(apiBaseUrl, "/hubs/venue", window.location.origin), { withCredentials: true })
       .configureLogging(logger)
       .build();
     const sequencer = createConnectionSequencer(connection);
