@@ -27,8 +27,9 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// D8: in Development only, migrate and seed at start-up. CI and AWS use the migration bundle (ADR-005).
-if (app.Environment.IsDevelopment() && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+// D8: in Development and the single-instance AWS demo (M12a, Design §17.4), migrate and seed at start-up. The pilot
+// uses the migration bundle (ADR-005).
+if (DemoEnvironment.MayMigrateOnStartup(app.Environment) && app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<DatabaseInitializer>().InitializeAsync(app.Lifetime.ApplicationStopping);

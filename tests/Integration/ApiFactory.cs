@@ -46,6 +46,9 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
     /// </summary>
     public bool UseDemoClock { get; init; }
 
+    /// <summary>The hosting environment; Development unless a test runs the AWS <c>Demo</c> environment (M12a).</summary>
+    public string Environment { get; init; } = "Development";
+
     /// <summary>Extra configuration, e.g. lower rate limits.</summary>
     public IReadOnlyDictionary<string, string?> Settings { get; init; } = new Dictionary<string, string?>();
 
@@ -58,6 +61,7 @@ public sealed class ApiFactory(string connectionString, bool migrateOnStartup = 
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment(Environment);
         builder.UseSetting("ConnectionStrings:Reservations", connectionString);
         builder.UseSetting("Database:MigrateOnStartup", migrateOnStartup ? "true" : "false");
         builder.UseSetting("Outbox:RunWorkers", "false");

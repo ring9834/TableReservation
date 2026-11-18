@@ -4,6 +4,15 @@
     <RootNamespace>Reservation.Api</RootNamespace>
     <UserSecretsId>reservation-demo-api</UserSecretsId>
   </PropertyGroup>
+  <!-- The AWS demo image (M12a, Design §17.4): dotnet publish src/Api -c Release /t:PublishContainer -p:ContainerImageTag=<sha>.
+       SDK container support, no Dockerfile. Debian base (tzdata and ICU for Pacific/Auckland), x64 for Lightsail, port 8080. -->
+  <PropertyGroup>
+    <ContainerRepository>reservation-api</ContainerRepository>
+    <ContainerRuntimeIdentifier>linux-x64</ContainerRuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <ContainerPort Include="8080" Type="tcp" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>

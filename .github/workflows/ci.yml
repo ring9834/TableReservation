@@ -50,6 +50,29 @@ jobs:
             exit 1
           fi
 
+  # The AWS demo stacks (M12a, Design §17.4): build and the CDK assertion tests. Synthesizes in memory only: no AWS
+  # credentials, no deploy (the operator deploys from docs/RUNBOOK-aws.md).
+  infra:
+    name: Infrastructure (CDK) build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # CDK's .NET library runs its constructs in Node (jsii).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Build
+        run: dotnet build infra/Infra.slnx -c Release
+
+      - name: Test
+        run: dotnet test --project infra/tests/Infra.Tests -c Release --no-build
+
   # D12: flag breaking changes to the committed API contract against main (ADR-004 change rules).
   api-contract:
     name: API contract (oasdiff)
@@ -194,7 +217,8 @@ jobs:
           npm run build
 
       # Plain static file server, like S3 + CloudFront in M12: /book/ must resolve to out/book/index.html (same for
-      # /demo-login/ and /host/).
+      # /demo-login/ and /host/). npm run build adds each page's script-src meta (CSP_MODE=enforce, Design §17.4), so
+      # every spec runs with the inline-script hashes enforced.
       - name: Serve web
         run: |
           nohup python3 -m http.server 3000 --directory web/out > web.log 2>&1 &

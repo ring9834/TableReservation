@@ -1185,8 +1185,91 @@ Use the same pattern: "Implement docs/Design.md §X for milestone Mn in docs/BUI
 
 ### M12 Deploy and rehearse
 Also add a container image scan of the API image to the CI pipeline (ADR-005).
-Use the Route 53 demo domain for both (`app.<domain>` for the front end, `api.<domain>` for the API); the default cloudfront.net/amazonlightsail.com hostnames won't work with the demo session cookie (Design §17, §20).
-Also from Design §14.1 and §20: `ForwardedHeaders` trusting only the known proxy, so rate limits see the real client IP; `Demo:Enabled=true` with both passcodes from Secrets Manager in the demo environment; Data Protection keys that survive container restarts; `Cors:AllowedOrigins` set to `https://app.<domain>`; OpenTelemetry export to X-Ray, with the ASP.NET Core instrumentation dropping `url.query` / `url.full` so guest-link tokens never reach a trace (Design §7.3).
+~~Use the Route 53 demo domain for both (`app.<domain>` for the front end, `api.<domain>` for the API)~~: superseded by M12a (17 Nov): one CloudFront `cloudfront.net` origin for site and API, no custom domain yet (Design §17.4).
+Also from Design §14.1 and §20: ~~`ForwardedHeaders` trusting only the known proxy~~ (M12a: `CloudFront-Viewer-Address` behind a secret origin header), so rate limits see the real client IP; `Demo:Enabled=true` with both passcodes from Secrets Manager in the demo environment (M12a); Data Protection keys that survive container restarts; ~~`Cors:AllowedOrigins` set to `https://app.<domain>`~~ (M12a: one origin, no CORS); OpenTelemetry export to X-Ray, with the ASP.NET Core instrumentation dropping `url.query` / `url.full` so guest-link tokens never reach a trace (Design §7.3).
+Still open after M12a: the container image scan in CI, GitHub Actions deployment with OIDC, Data Protection keys, OpenTelemetry.
+
+### M12a AWS infrastructure and a first manual deployment
+```
+Milestone M12a: AWS infrastructure and a first manual deployment (ADR-005; Design §17, §18.10,
+§18.11 M12 notes, §20; BUILD-PLAN M12). Demo account 821797257125, region ap-southeast-2, AWS CLI
+profile "reservation-demo" (aws login, temporary credentials, full access). Read CLAUDE.md first.
+
+SAFETY RULES for this milestone (add them to CLAUDE.md and .claude/settings.json):
+- You may run read-only commands: cdk synth, cdk diff, cdk ls, and aws ... describe-*/list-*/get-*.
+- You must NOT run anything that creates, changes or deletes AWS resources (cdk deploy, cdk destroy,
+  cdk bootstrap, aws ... create/put/update/delete, docker push, lightsail push-container-image).
+  I run those myself; write the exact commands for me in the plan and in a RUNBOOK.
+- Never create IAM users or access keys. Never print or log secret values.
+
+0. Decisions to record first (Design §17.4 Build notes (M12a) and a dated clarification in ADR-005,
+   since these change it). Ask me about any you'd decide differently:
+   a) No custom domain for now: one CloudFront distribution with its default *.cloudfront.net HTTPS
+      address serves everything on ONE origin, so the SameSite=Strict session cookie works and no CORS
+      is needed: default → S3 (static export, origin access control, bucket private);
+      /api/* and /hubs/* → the Lightsail container's HTTPS endpoint (no caching, all methods, all
+      query strings, cookies and headers forwarded except Host, WebSockets working for SignalR).
+      A custom domain can be added later as configuration only; design for it.
+   b) The public address must survive deleting the app: split into a PERMANENT stack (S3 bucket,
+      CloudFront distribution and its functions/policies, Secrets Manager secrets, anything cheap and
+      stable) and an APP stack (Lightsail container service, RDS PostgreSQL db.t4g.micro single-AZ,
+      20 GB, encrypted, not publicly accessible). Recreating the app stack must not change the
+      cloudfront.net address; solve how the distribution learns the (possibly new) Lightsail endpoint.
+   c) Secrets: Lightsail containers have no IAM role, so the API can't read Secrets Manager itself.
+      Propose the safest workable route (e.g. the deploy step reads Secrets Manager and passes values
+      as container environment variables), and say who can see them afterwards.
+   d) Real client IP: behind CloudFront every request would come from CloudFront, so all guests would
+      share one rate-limit bucket. Read the viewer IP (e.g. CloudFront-Viewer-Address via an origin
+      request policy) and trust it ONLY when the request carries a secret origin header that
+      CloudFront adds; requests to the Lightsail endpoint without that header are refused (except the
+      health check Lightsail needs). Integration tests for both cases.
+   e) Database reachability: Lightsail VPC peering to the default VPC, RDS security group allowing
+      5432 only from the Lightsail peering range. Say whether peering needs a one-time call I run.
+   f) Migrations and seed in the demo environment: the API migrates at start-up (single instance) and
+      the demo seed/ResetIfStale behave as in Development. Use a dedicated environment name (e.g.
+      ASPNETCORE_ENVIRONMENT=Demo with appsettings.Demo.json), never Development in AWS.
+
+1. CDK in C# under infra/ (Infrastructure.sln or added to the main one; ask before new packages
+   beyond Amazon.CDK.Lib and Constructs). Stacks: Permanent and App, both ap-southeast-2, tagged
+   Project=reservation-demo. No NAT gateway, no load balancer, no Elastic IP. Unit tests with CDK
+   assertions (bucket not public, OAC, no caching on /api/*, WebSocket-friendly policies, RDS not
+   public, no NAT, deletion protection off for the demo DB, removal policies so the app stack can be
+   destroyed cleanly; the permanent stack keeps the bucket and secrets).
+
+2. Edge configuration on the distribution:
+   - a CloudFront Function so /host/ etc. serve host/index.html (static export with trailingSlash);
+   - S3 objects uploaded with correct Content-Type, including application/manifest+json for
+     .webmanifest;
+   - a response headers policy: HSTS, nosniff, Referrer-Policy, and a CSP that allows only our origin
+     plus Stripe (script-src/frame-src https://js.stripe.com https://hooks.stripe.com, connect-src
+     https://api.stripe.com), manifest-src 'self', frame-ancestors 'self' (the phone panel frames
+     /manage/). Test the CSP against the real pages in a later step, don't loosen it blindly.
+
+3. Demo environment configuration (no secret values in the repo): Demo:Enabled=true, Payments:Provider
+   =Stripe (test mode), GuestLinks:BaseUrl = the cloudfront address, Stripe/POS/GuestLinks/passcode
+   secrets from Secrets Manager. New passcodes and signing keys for AWS, never the local ones; I'll put
+   the values in Secrets Manager myself with commands you write (no values in the commands' files).
+   Stripe: a webhook endpoint in the Stripe sandbox for https://<cloudfront>/api/v1/webhooks/stripe
+   with events payment_intent.succeeded and charge.refunded; its signing secret goes to Secrets
+   Manager. Write the steps for me.
+
+4. RUNBOOK (docs/RUNBOOK-aws.md): every command I run, in order, PowerShell syntax: cdk bootstrap,
+   deploy permanent, put secrets, build and push the image, deploy app, peering if needed, upload the
+   web app, invalidate CloudFront, check health, and how to DELETE the app stack and recreate it
+   later. Include a cost line per resource and the US$50 spend limit.
+
+5. Verification you can run: dotnet build/test (incl. new tests), cdk synth both stacks, cdk diff
+   (needs my login; read-only), web build. Then I deploy by following the RUNBOOK; after that,
+   the existing Playwright suite against the deployed address (BASE_URL) is my check.
+
+Agreed in planning (17 Nov): CSP inline scripts by per-page sha256 hashes; secrets as CloudFormation
+dynamic references; machine-only keys generated in AWS; the Lightsail host passed to Permanent as
+-c ApiOrigin. Revisions: the CSP goes out report-only first (-c CspMode=report|enforce; RUNBOOK:
+Playwright + a manual 4242 and 3-D Secure payment + console check, then enforce); deny rules in
+.claude/settings.json as explicit prefixes; the RUNBOOK states the account's US$50 project spend
+limit, which pauses all resources, and the Budget's 80/100 % alerts before it; the aws-cdk npm CLI
+pinned in infra/package.json; E2E_STRIPE_WEBHOOK=deployed for deposit.spec.
+```
 
 ## Definition of done (every milestone)
 

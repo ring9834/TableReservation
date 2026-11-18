@@ -18,7 +18,8 @@ import { bookingByReference, cancelBookings, paymentConfig } from "../support/se
 //   payment_intent.succeeded through the API's webhook path; the Fake's refund comes back as a signed charge.refunded.
 // - Stripe test mode (Payments:Provider=Stripe locally): the card 4242 4242 4242 4242 in the PaymentElement's frame.
 //   The webhook needs `stripe listen` running; without one, the booking never becomes Booked and the test is skipped
-//   with a message saying so.
+//   with a message saying so. Against the AWS demo, E2E_STRIPE_WEBHOOK=deployed: Stripe calls the deployed endpoint, and
+//   a missing webhook fails instead (Design §17.4).
 // Clean-up: the booking is registered as soon as the API creates it, and afterAll cancels it if it is still active.
 
 const created: string[] = [];

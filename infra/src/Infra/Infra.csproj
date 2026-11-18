@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The AWS demo infrastructure (ADR-005, Design §17.4): CDK app with the Permanent and App stacks. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Reservation.Infra</AssemblyName>
+    <RootNamespace>Reservation.Infra</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Amazon.CDK.Lib" />
+    <PackageReference Include="Constructs" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Reservation.Infra.Tests" />
+  </ItemGroup>
+</Project>

@@ -4,6 +4,22 @@ Antonio Huang · 5 November 2026 · Accepted 9 November 2026 · [live version](h
 
 **Decision:** for the demo, run the API as one container on Amazon Lightsail, with Amazon RDS for PostgreSQL and the front end as static files on Amazon S3 behind Amazon CloudFront. For the pilot, the same container image moves to Amazon ECS on Fargate in the partner's own AWS account. Everything is defined in AWS CDK (C#) and deployed by GitHub Actions. All data stays in AWS.
 
+## Clarification, 17 November 2026 (M12a)
+
+Agreed while building the first deployment; details in Design §17.4. Where this clarification and the sections below
+disagree for the **demo**, this clarification wins. The pilot is unchanged.
+
+| # | Topic | Demo decision | Replaces |
+| --- | --- | --- | --- |
+| a | Domain and edge | No custom domain for now. One CloudFront distribution at its default `https://<id>.cloudfront.net` address serves everything on **one origin**: the static export from S3 (private, origin access control) by default, and `/api/*`, `/hubs/*`, `/health/*` from the Lightsail container's HTTPS endpoint (no caching, all methods, all headers except `Host`, cookies and query strings forwarded; WebSockets for SignalR). The `SameSite=Strict` session cookie works and no CORS is needed. A domain is added later as configuration only (ACM certificate, alternate name) | "Domains: `app.<demo-domain>` and `api.<demo-domain>`"; "host screens connect to `api.…` directly, not through CloudFront" |
+| b | Stacks | A **Permanent** stack (bucket, distribution, its function and policies, secrets, budget) and an **App** stack (Lightsail container service, RDS). Deleting and recreating the App stack keeps the public address; the operator passes the new Lightsail host to the Permanent stack (`-c ApiOrigin`) | One stack per environment |
+| c | Secrets | Lightsail containers have no IAM role, so the API can't read Secrets Manager itself. The App stack passes secrets as **environment variables built from CloudFormation dynamic references**, resolved inside AWS: never on a laptop, in the template or in the repo. Readable afterwards by account principals allowed to read the Lightsail deployment (and, for the origin header, the CloudFront configuration): in the demo account, the operator only. Machine-only keys are generated in AWS; passcodes and Stripe keys are put in by the operator | "The API reads secrets at start-up through the .NET configuration provider for Secrets Manager" |
+| d | Client IP | CloudFront adds a secret origin header; the API refuses requests without it (except `/health/live` for Lightsail's health check) and, with it, takes the client IP from `CloudFront-Viewer-Address` for rate limits | Design §20's `ForwardedHeaders` plan |
+| e | Database network | Lightsail VPC peering with the default VPC (one call by the operator); RDS not publicly accessible, its security group allowing 5432 from the Lightsail range only | (as before; made concrete) |
+| f | Migrations | The demo runs one instance in an environment named `Demo` (never Development in AWS), which migrates and seeds at start-up like Development. The migration bundle stays the pilot's route | Pipeline step 3 "Migrate", for the demo |
+| g | Images and pipeline | Images go to the Lightsail service's own registry, not ECR. The first deployment is manual, by the operator, from `docs/RUNBOOK-aws.md`; GitHub Actions with OIDC, the image scan and ECR follow in a later M12 step | Pipeline steps 2 and 4, for now |
+| h | Spend | The demo account also has a **project spend limit of US$50** that pauses all resources when reached; the AWS Budget of US$50 (in the Permanent stack) alerts at 80 % and 100 % before that | "budget alarm at USD 50 a month" (now both) |
+
 ## Status and context
 
 | Item | Value |

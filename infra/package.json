@@ -1,0 +1,9 @@
+{
+  "name": "reservation-demo-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The AWS CDK CLI, pinned (npx cdk …). The stacks are C# in src/Infra.",
+  "devDependencies": {
+    "aws-cdk": "2.1148.1"
+  }
+}
