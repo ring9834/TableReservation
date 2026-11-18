@@ -59,7 +59,7 @@ dotnet ef migrations add <Name> --project src/Infrastructure --startup-project s
 dotnet ef migrations has-pending-model-changes --project src/Infrastructure --startup-project src/Api   # what CI runs
 dotnet run --project src/Api --Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command=Information   # log SQL when debugging (parameter values stay hidden; Warning by default)
 cd web && npm ci && npm run dev         # https://localhost:3000 (next dev --experimental-https; self-signed certificate in web/certificates/)
-cd web && npm run build                  # next build, then tools/csp-hashes.mjs: each page gets a script-src <meta> with its inline-script hashes (CSP_MODE=enforce, default); CSP_MODE=report adds no meta and writes out/csp-script-hashes.json for the report-only header (Design §17.4). AWS builds set NEXT_PUBLIC_API_BASE_URL="" (one origin)
+cd web && npm run build                  # next build, then tools/flatten-segments.mjs (copies each __next.<seg>/<file> segment prefetch file to the dotted __next.<seg>.<file> the client requests), then tools/csp-hashes.mjs: each page gets a script-src <meta> with its inline-script hashes (CSP_MODE=enforce, default); CSP_MODE=report adds no meta and writes out/csp-script-hashes.json for the report-only header (Design §17.4). AWS builds set NEXT_PUBLIC_API_BASE_URL="" (one origin)
 cd web && npm run generate:api           # after an API change: regenerate src/api (orval) from docs/api/openapi.json, then commit it
 cd web && npm run lint && npm run typecheck && npm run format:check && npm test && npm run build   # what CI runs (plus "generate:api leaves src/api unchanged")
 dotnet build infra/Infra.slnx            # the AWS demo stacks (CDK in C#, Design §17.4); separate from the main solution
