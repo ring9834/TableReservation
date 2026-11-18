@@ -1,0 +1,9 @@
+{
+  "app": "dotnet run --project src/Infra/Infra.csproj",
+  "watch": {
+    "include": []
+  },
+  "context": {
+    "@aws-cdk/core:target-partitions": ["aws"]
+  }
+}

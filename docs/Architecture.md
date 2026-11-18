@@ -327,8 +327,8 @@ Every failure leaves as **Problem Details** with a stable `code` and a `traceId`
 - A `venue_ids` claim is checked against the route on every request; endpoints deny by default.
 - Demo passcodes (`HostPasscode`, `PresenterPasscode`) are secrets, compared in constant time. The session cookie is `HttpOnly`, `Secure`, `SameSite=Strict` and valid for 12 hours; `/demo-login` is limited to 5 attempts a minute per IP address. Guest pages stay public.
 - Card details never reach our servers (Stripe Elements, PCI DSS SAQ A).
-- Secrets come from AWS Secrets Manager. Locally, .NET user secrets. Never in code.
-- HTTPS and HSTS; CORS limited to our domains; a content security policy that allows only the app and Stripe.
+- Secrets come from AWS Secrets Manager (in the demo, resolved by CloudFormation into the container's environment, Design §17.4). Locally, .NET user secrets. Never in code.
+- HTTPS and HSTS; one origin in the demo, so no CORS (locally, CORS limited to the dev origin); a content security policy that allows only the app and Stripe.
 
 ### 8.3 Contracts
 
@@ -376,12 +376,15 @@ Every failure leaves as **Problem Details** with a stable `code` and a `traceId`
 
 ## 9. Deployment (ADR-005)
 
+Demo since M12a (ADR-005 clarification of 17 Nov 2026, Design §17.4): one CloudFront address serves the static site
+and proxies `/api/*`, `/hubs/*` and `/health/*` to Lightsail, so the browser sees one origin.
+
 ```mermaid
 flowchart LR
-    user([Browsers]) --> cf[CloudFront] --> s3[(S3<br/>static front end)]
-    user --> ls[Lightsail container<br/>API, SignalR, worker]
+    user([Browsers]) --> cf[CloudFront<br/>one origin] --> s3[(S3<br/>static front end)]
+    cf -->|/api, /hubs, /health<br/>origin header| ls[Lightsail container<br/>API, SignalR, worker]
     ls -->|VPC peering| rds[(RDS PostgreSQL<br/>db.t4g.micro)]
-    ls --> sm[Secrets Manager]
+    sm[Secrets Manager] -.->|resolved at deploy| ls
     ls --> ext[Stripe, SMS]
     ls --> cw[CloudWatch Logs]
 ```
@@ -392,9 +395,9 @@ flowchart LR
 | API | One Lightsail container (Micro) | ECS on Fargate: API (2+ tasks, two zones) and a separate worker service |
 | Front end | S3 + CloudFront | Same, plus WAF |
 | Database | RDS, one zone, 7-day backups | RDS Multi-AZ, private subnets, cross-region snapshot copy |
-| Edge | Lightsail HTTPS endpoint | Application Load Balancer + WAF |
+| Edge | CloudFront in front of the Lightsail HTTPS endpoint (one origin) | Application Load Balancer + WAF |
 | SignalR backplane | None | ElastiCache (Redis) when there are 2+ API tasks |
-| Cost (approx.) | USD 35 a month | USD 220 a month |
+| Cost (approx.) | USD 33 a month (USD 1.65 with the app stack deleted) | USD 220 a month |
 
 ### 9.1 Pipeline (GitHub Actions)
 

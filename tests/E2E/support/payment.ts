@@ -34,12 +34,17 @@ export const stripeCardFrame = async (page: Page): Promise<FrameLocator> => {
   return found!;
 };
 
+/** True against the AWS demo: Stripe's webhook endpoint is the deployed API, so no `stripe listen` is needed. */
+const webhookDeployed = process.env.E2E_STRIPE_WEBHOOK === "deployed";
+
 /**
  * Pays the deposit on the guest's pay step (English) and waits for "Deposit paid NZ$…" (Design §18.8):
  * - Fake provider (CI, and locally unless Stripe test mode is on): "Simulate payment (test mode)", tapped twice; the
  *   button turns into "Paying…" and is disabled, so only one payment is sent (payment.test.mjs);
- * - Stripe test mode: the card 4242 4242 4242 4242 in the PaymentElement's frame. The webhook needs `stripe listen`;
- *   without one the booking never becomes Booked and the test is skipped with a message saying so.
+ * - Stripe test mode: the card 4242 4242 4242 4242 in the PaymentElement's frame. Locally the webhook needs
+ *   `stripe listen`; without one the booking never becomes Booked and the test is skipped with a message saying so.
+ *   Against the AWS demo (`E2E_STRIPE_WEBHOOK=deployed`, Design §17.4) Stripe calls the deployed webhook endpoint
+ *   itself, so a missing webhook fails the test instead of skipping it.
  */
 export const payDeposit = async (page: Page, provider: "fake" | "stripe", amount: string) => {
   const paid = page.getByTestId("deposit-paid");
@@ -54,10 +59,16 @@ export const payDeposit = async (page: Page, provider: "fake" | "stripe", amount
   await card.getByLabel("Expiration date").fill("12 / 34");
   await card.getByLabel("Security code").fill("123");
   await page.getByTestId("pay-button").click();
-  try {
-    await expect(paid).toBeVisible({ timeout: 15_000 });
-  } catch {
-    test.skip(true, "No Stripe webhook arrived within 15 s: is `stripe listen` running (Design §8.4)?");
+  if (webhookDeployed) {
+    await expect(paid, "the deployed Stripe webhook should mark the deposit paid (Design §17.4)").toBeVisible({
+      timeout: 30_000,
+    });
+  } else {
+    try {
+      await expect(paid).toBeVisible({ timeout: 15_000 });
+    } catch {
+      test.skip(true, "No Stripe webhook arrived within 15 s: is `stripe listen` running (Design §8.4)?");
+    }
   }
   await expect(paid).toHaveText(`Deposit paid ${amount}`);
 };

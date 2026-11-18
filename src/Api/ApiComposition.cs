@@ -45,6 +45,7 @@ internal static class ApiComposition
         services.AddProblemDetails(options => options.CustomizeProblemDetails = ApiProblems.Customize);
         services.AddExceptionHandler<GlobalExceptionHandler>();
 
+        services.AddEdgeOrigin();
         services.AddApiRateLimiting();
         services.AddDemoSession();
 
@@ -97,6 +98,9 @@ internal static class ApiComposition
     /// </summary>
     public static WebApplication UseApi(this WebApplication app)
     {
+        // Before anything else (M12a, Design §17.4): refuse requests that bypassed CloudFront, and take the client IP
+        // from the CDN, so logging, rate limits and sign-in see the viewer. Off when Edge:OriginSecret is unset.
+        app.UseMiddleware<EdgeOriginMiddleware>();
         // First, so error, rate-limit and status-page responses for guest links get the headers too (Design §7.3).
         app.UseMiddleware<GuestLinkHeadersMiddleware>();
         app.UseExceptionHandler();

@@ -24,6 +24,9 @@ internal static class ProblemCodes
     // Guest links (M10a, Design §7.3): malformed, forged, unknown key or wrong action (400); past its expiry (410).
     public const string InvalidLink = "invalid_link";
     public const string LinkExpired = "link_expired";
+
+    // Edge origin (M12a, Design §17.4): a request to the API that didn't come through CloudFront (403).
+    public const string DirectAccessRefused = "direct_access_refused";
 }
 
 /// <summary>
@@ -55,6 +58,7 @@ internal static class ApiProblems
         [ProblemCodes.InvalidLink] = "The link is not valid",
         [ProblemCodes.LinkExpired] = "The link has expired",
         [ProblemCodes.DemoResetBusy] = "The demo is busy; the reset did not run",
+        [ProblemCodes.DirectAccessRefused] = "Requests must come through the CDN",
         [ProblemCodes.Unexpected] = "An unexpected error occurred",
     };
 
