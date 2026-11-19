@@ -1271,6 +1271,43 @@ limit, which pauses all resources, and the Budget's 80/100 % alerts before it; t
 pinned in infra/package.json; E2E_STRIPE_WEBHOOK=deployed for deposit.spec.
 ```
 
+### M12b Scan to book and host full screen
+```
+New branch m12b-qr-fullscreen from main.
+
+Goal: in the live demo the partner scans a QR code on the presenter screen with his own phone, books
+on /book/, and sees it appear on the host screen; the host screen can go full screen on a laptop or
+iPad.
+
+1) Presenter: a "Scan to book" card with a QR code for `${window.location.origin}/book/`, computed in
+   the browser (so it follows localhost or the CloudFront address automatically). Generate it locally
+   (e.g. the `qrcode` package to an SVG string, or our own SVG); no external QR service. No inline
+   style attributes or <style> elements: use a CSS module (we keep CSP style-src 'self' clean).
+   Show the plain URL under it. A button enlarges it to a large overlay (dark modules on white, quiet
+   zone kept) that closes with Esc, a Close button or a tap outside. English and 中文 labels.
+   Guest page only: never staff URLs or passcodes.
+2) Host: a "Full screen" button using the Fullscreen API (document.documentElement.requestFullscreen,
+   with the webkit prefix for iPad Safari). Hidden when unsupported (iPhone Safari) or when already
+   running as the installed app (display-mode: standalone). The label switches to "Exit full screen"
+   and back when the user leaves with Esc (listen to fullscreenchange). Bilingual. Must not break the
+   host layout on phone or tablet (phone-layout and pwa specs).
+3) Tests: unit tests for the QR URL and the fullscreen-support check. Playwright: the presenter shows
+   the QR; decode it (e.g. jsQR on the element's screenshot, as a dev dependency) and check it equals
+   <base>/book/; the overlay opens and closes; the host shows the Full screen button on mobile-edge.
+   QA-7 language check must still pass.
+4) Docs: Design §17 (new subsection), BUILD-PLAN M12b, Requirements demo script row where the
+   partner books, if it needs a wording change.
+Run web tests, lint, type-check, format check. Don't commit.
+
+Agreed in planning (19 Nov): the card sits above the POS panel and must not push the POS heading
+and the top of its log below the fold at 1366×768 or 1440×900 (else it moves right of the Demo
+controls; Playwright checks both sizes); Design §17.5 notes that a booking from his phone still
+texts the presenter's phone panel and the 10/min per-IP booking limit is unchanged; only qrcode's
+encoder is imported (create from qrcode/lib/core/qrcode.js) and the presenter page's JS is
+reported before and after. The SVG is our own path from qrcode's module matrix; jsQR reads the
+screenshot through pngjs (E2E dev dependency). Requirements v1.4: row 2 is booked on his phone.
+```
+
 ## Definition of done (every milestone)
 
 - [ ] `dotnet build` and `dotnet test` pass locally and in CI

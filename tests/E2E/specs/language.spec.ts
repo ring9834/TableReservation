@@ -141,7 +141,7 @@ test.describe("QA-7: each screen in one language", () => {
         }
       });
 
-      await test.step("presenter: phone panel, POS log with an open message, demo controls", async () => {
+      await test.step("presenter: phone panel, POS log with an open message, demo controls, Scan to book", async () => {
         const context = await presenterContext(browser, baseURL);
         try {
           const page = await openPresenterScreen(context);
@@ -151,6 +151,13 @@ test.describe("QA-7: each screen in one language", () => {
           await posRows(page).first().getByRole("button").first().click();
           await expect(page.getByTestId("pos-json")).toBeVisible();
           await check(page, "presenter");
+
+          // M12b: the "Scan to book" code full size (Design §17.5).
+          await page.getByTestId("scan-to-book").getByRole("button").click();
+          await expect(page.getByTestId("scan-overlay")).toBeVisible();
+          await check(page, "presenter, Scan to book overlay");
+          await page.keyboard.press("Escape");
+          await expect(page.getByTestId("scan-overlay")).toHaveCount(0);
         } finally {
           await context.close();
         }

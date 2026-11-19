@@ -21,6 +21,7 @@ import { LanguageSwitch } from "@/i18n/LanguageSwitch";
 import { venueId } from "@/lib/config";
 import { useApiError } from "@/lib/useApiError";
 import { useVenueConnection } from "@/realtime/useVenueConnection";
+import { useFullscreen } from "./useFullscreen";
 import { useRedirectOnSignedOut } from "./useRedirectOnSignedOut";
 import styles from "./host.module.css";
 import actionStyles from "./actions.module.css";
@@ -52,6 +53,7 @@ export function HostPage() {
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [freed, setFreed] = useState<Freed | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const fullscreen = useFullscreen();
 
   const venue = useGetVenue(venueId, { query: { staleTime: 5 * 60_000 } });
   const plan = useGetFloorPlan(venueId);
@@ -131,6 +133,17 @@ export function HostPage() {
           >
             {t("waitlist.joinButton")}
           </button>
+          {fullscreen.supported && (
+            <button
+              type="button"
+              className={actionStyles.secondaryButton}
+              data-testid="fullscreen-button"
+              aria-pressed={fullscreen.active}
+              onClick={fullscreen.toggle}
+            >
+              {t(fullscreen.active ? "host.fullscreen.exit" : "host.fullscreen.enter")}
+            </button>
+          )}
           <LanguageSwitch />
         </div>
       </header>
