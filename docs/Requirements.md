@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **System** | Restaurant and catering reservation system, demo build |
-| **Status** | Agreed and frozen (v1.3) for the demo build (3–4 weeks) |
+| **Status** | Agreed and frozen (v1.4) for the demo build (3–4 weeks) |
 | **Owner** | Antonio Huang |
 | **Last updated** | 16 November 2026 |
 | **Related** | [`Architecture.md`](Architecture.md); ADR-001 to ADR-005 |
@@ -292,12 +292,12 @@ These are the main drivers for the architecture decisions. Each quality attribut
 
 About 20 minutes, followed by questions. The same script is the end-to-end test, run three times before the meeting (QA-6).
 
-**Before starting:** press Reset; open the guest page on a phone, the host app on a tablet or laptop, and the presenter screen with the phone panel and POS log. The time is set to Tuesday evening, about 18:25, with 11 bookings already in the sample data.
+**Before starting:** press Reset; open the guest page on a phone, the host app on a tablet or laptop, and the presenter screen with the phone panel, the POS log and the "Scan to book" QR code for the guest page. The time is set to Tuesday evening, about 18:25, with 11 bookings already in the sample data.
 
 | # | Time | What you do | What he sees | Step |
 | --- | --- | --- | --- | --- |
 | 1 | 0:00 | Introduce Golden Dragon and the three screens | The floor plan with tonight's bookings | — |
-| 2 | 1:00 | On the phone, book a table for 2 at 19:30; switch to 中文 halfway | Booking done in under a minute, in Chinese | 1 |
+| 2 | 1:00 | He scans the "Scan to book" code on the presenter screen with his own phone (or use the demo phone) and books a table for 2 at 19:30; switch to 中文 halfway | Booking done in under a minute, in Chinese | 1 |
 | 3 | 2:30 | Point at the host screen | The table turns "booked" instantly; confirmation appears in the phone panel | 2 |
 | 4 | 3:30 | On the phone, book for 6 at 20:00 and pay the deposit with a Stripe test card | Deposit step, then confirmation; `UpsertMember` in the POS log | 1, 6 |
 | 5 | 5:30 | Choose a full time, e.g. 19:00 for 4 | The 3 nearest available times are offered | 1 |
@@ -353,3 +353,4 @@ About 20 minutes, followed by questions. The same script is the end-to-end test,
 | 10 Nov 2026 | v1.1. Demo script: 11 sample bookings (was 8) and the time about 18:25 (was 18:30), so every step works as scripted: all tables of 4+ seats are taken for the step-3 walk-in, and step 5's reminders and in-time refund don't sit on the 2-hour boundary (Design §17). |
 | 16 Nov 2026 | v1.2. Demo script row 10: the cancelled booking (#11, 20:30 on T9) leaves its slot; T9 itself stays seated by the 17:30 party, so the tile does not turn free. No seed change (Design §17.2). |
 | 16 Nov 2026 | v1.3. Demo script row 10: once #11 is cancelled, a party of 6 can book 20:30 again on the guest page (before, no table for 6 is free then), as the demo-script test checks (Design §17.3). |
+| 19 Nov 2026 | v1.4. Demo script row 2: he books on his own phone by scanning the "Scan to book" QR code on the presenter screen (the demo phone stays the fallback); "Before starting" mentions the code. The confirmation still appears in the presenter's phone panel, not on his phone (Design §17.5). |

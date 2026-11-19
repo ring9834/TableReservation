@@ -15,6 +15,7 @@ import { useVenueConnection } from "@/realtime/useVenueConnection";
 import { PhonePanel } from "./PhonePanel";
 import { PosPanel } from "./PosPanel";
 import { DemoControls } from "./DemoControls";
+import { ScanToBook } from "./ScanToBook";
 import styles from "./presenter.module.css";
 
 /** A host session may open `/presenter/`; the message log answers 403 (Design §17, §18.7). */
@@ -22,7 +23,7 @@ const isForbidden = (error: unknown) => isApiError(error) && error.status === 40
 
 /**
  * The presenter screen (Design §17, §18.7, §18.9), for a laptop or projector: the phone panel on the left, the POS
- * panel (switch and log) on the right; the demo controls in the header (M11a, §17.2: Reset, the demo clock and "Send
+ * panel (switch and log) on the right under the "Scan to book" card (M12b, §17.5); the demo controls in the header (M11a, §17.2: Reset, the demo clock and "Send
  * reminders now"). `messageLogChanged` and `posLogChanged`
  * refetch their logs; a reconnect refetches everything (Design §15).
  */
@@ -85,7 +86,10 @@ export function PresenterPage() {
               error={messages.error ? messageFor(messages.error) : null}
               venueName={venue.data?.name ?? ""}
             />
-            <PosPanel />
+            <div className={styles.side}>
+              <ScanToBook />
+              <PosPanel />
+            </div>
           </div>
         </>
       )}

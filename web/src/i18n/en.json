@@ -126,6 +126,10 @@
   },
   "host": {
     "documentTitle": "Floor · {{venue}}",
+    "fullscreen": {
+      "enter": "Full screen",
+      "exit": "Exit full screen"
+    },
     "title": "{{venue}} · Floor",
     "reconnecting": "Connection lost. Reconnecting…",
     "signedOut": "Your session has ended. Going to sign-in…",
@@ -266,6 +270,13 @@
     "presenterOnly": "This screen is for the presenter. Sign in with the presenter passcode to see the phone panel.",
     "signInAgain": "Sign in as presenter",
     "openHost": "Open the host screen",
+    "scan": {
+      "heading": "Scan to book",
+      "hint": "Book a table on your own phone",
+      "qrLabel": "QR code for the booking page",
+      "enlarge": "Enlarge",
+      "close": "Close"
+    },
     "demo": {
       "label": "Demo",
       "reset": "Reset",

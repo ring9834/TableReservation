@@ -126,6 +126,10 @@
   },
   "host": {
     "documentTitle": "楼面 · {{venue}}",
+    "fullscreen": {
+      "enter": "全屏",
+      "exit": "退出全屏"
+    },
     "title": "{{venue}} · 楼面",
     "reconnecting": "连接已断开，正在重新连接…",
     "signedOut": "登录已过期，正在前往登录页面…",
@@ -266,6 +270,13 @@
     "presenterOnly": "此页面仅供演示者使用。请用演示者密码登录以查看手机面板。",
     "signInAgain": "以演示者身份登录",
     "openHost": "打开迎宾页面",
+    "scan": {
+      "heading": "扫码预订",
+      "hint": "用您自己的手机预订餐位",
+      "qrLabel": "预订页面二维码",
+      "enlarge": "放大",
+      "close": "关闭"
+    },
     "demo": {
       "label": "演示",
       "reset": "重置",

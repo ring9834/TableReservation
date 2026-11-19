@@ -1,0 +1,133 @@
+/* "Scan to book" (M12b, Design §17.5): a compact card above the POS panel, and the code full size in an overlay.
+   The code is black on white in both themes, with its quiet zone, so any phone camera reads it. */
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface-muted);
+}
+
+.qr {
+  display: block;
+  flex: none;
+  width: 140px;
+  height: 140px;
+  shape-rendering: crispEdges;
+}
+
+.qrLight {
+  fill: #ffffff;
+}
+
+.qrDark {
+  fill: #000000;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.text h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+.url,
+.overlayUrl {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.button {
+  min-height: 2.75rem;
+  padding: 0.4rem 1rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent-text);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* On a phone the code sits above its text. */
+@media (max-width: 480px) {
+  .card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* The overlay: the dialog's box is the card itself, so a click on the dialog element is a click on the backdrop. */
+.overlay {
+  padding: 0;
+  border: none;
+  border-radius: 1rem;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+  color: #1c1917;
+  background: #ffffff;
+}
+
+.overlay::backdrop {
+  background: rgb(0 0 0 / 0.7);
+}
+
+.overlayCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.overlayHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  align-self: stretch;
+}
+
+.overlayHeader h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+/* Fixed colours inside the white overlay, so the button reads in the dark theme too. */
+.overlay .button {
+  color: #9f1239;
+  background: #ffffff;
+  border-color: #9f1239;
+}
+
+.qrLarge {
+  width: min(70vmin, 36rem);
+  height: min(70vmin, 36rem);
+}
+
+.overlayUrl {
+  font-size: 1.25rem;
+  text-align: center;
+}

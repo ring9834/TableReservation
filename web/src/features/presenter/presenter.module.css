@@ -72,6 +72,15 @@
   }
 }
 
+/* The right column (M12b, Design §17.5): the compact "Scan to book" card above the POS panel. */
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  width: 100%;
+}
+
 /* The header's controls: the demo group (M11a, Design §17.2) and the language switch. */
 .controls {
   display: flex;
