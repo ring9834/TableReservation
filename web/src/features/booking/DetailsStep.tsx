@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { useForm, type FieldError } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { z } from "zod";
+import { z } from "@/lib/zod";
 import {
   getGetAvailabilityQueryKey,
   useCreateOnlineBooking,

@@ -7,7 +7,7 @@
     "build": "next build && node tools/flatten-segments.mjs && node tools/csp-hashes.mjs",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --test \"src/**/*.test.mjs\" \"tools/**/*.test.mjs\"",
+    "test": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning --test \"src/**/*.test.mjs\" \"tools/**/*.test.mjs\"",
     "generate:api": "orval",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

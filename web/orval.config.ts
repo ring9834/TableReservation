@@ -30,5 +30,7 @@ export default defineConfig({
       fileExtension: ".zod.ts",
       clean: true,
     },
+    // orval always imports 'zod'; the schemas must use src/lib/zod.ts (jitless: no eval under the CSP, Design §17.4).
+    hooks: { afterAllFilesWrite: "node tools/use-zod-wrapper.mjs" },
   },
 });

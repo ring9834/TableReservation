@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, type FieldError } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import type { z } from "zod";
+import type { z } from "@/lib/zod";
 import { useGetQuotedWait, useJoinWaitlist } from "@/api/endpoints/waitlist/waitlist";
 import type { JoinWaitlistRequest } from "@/api/model";
 import {

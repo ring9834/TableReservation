@@ -4,7 +4,7 @@
  * Reservation demo API
  * OpenAPI spec version: v1
  */
-import * as zod from 'zod';
+import * as zod from '@/lib/zod';
 
 
 export const GetGuestBookingQueryParams = zod.object({

@@ -9,12 +9,34 @@
   overflow: hidden;
 }
 
+/* The rules react-zoom-pan-pinch injects as an inline <style> (blocked by style-src 'self', Design §17.4), on our
+   classes for the same two elements (TransformComponent's wrapperClass and contentClass). Its fit-content width is
+   overridden by ours, as before. Its infiniteGrid rule is left out: we don't use `infinite`. */
 .zoomWrapper {
+  position: relative;
   width: 100% !important;
+  height: -moz-fit-content;
+  height: fit-content;
+  overflow: hidden;
+  -webkit-touch-callout: none;
+  margin: 0;
+  padding: 0;
+  transform: translate3d(0, 0, 0);
 }
 
 .zoomContent {
+  display: flex;
+  flex-wrap: wrap;
   width: 100% !important;
+  height: -moz-fit-content;
+  height: fit-content;
+  margin: 0;
+  padding: 0;
+  transform-origin: 0% 0%;
+}
+
+.zoomContent img {
+  pointer-events: none;
 }
 
 /* The zoom buttons sit in their own row above the drawing, never over it, so they cover no table at any width
