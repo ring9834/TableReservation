@@ -1,13 +1,14 @@
 # Restaurant & Catering Reservation System
 
-A reservation, waitlist and floor-plan system for restaurants, designed to connect to a partner's point-of-sale (POS) system. Guests book and pay deposits online; hosts run the floor on a tablet; seated tables, deposits and bills flow to and from the POS.
+A reservation, waitlist and floor-plan system for restaurants, designed to connect to a partner's point-of-sale (POS) system. Guests book online (with an optional deposit); hosts run the floor on a tablet; seated tables, deposits and bills flow to and from the POS.
+
+> **This is the demo version, and it is complete.** It was presented to the partner on 19 November 2026. Development towards the pilot continues in a private repository, so this one is no longer updated.
 
 | | |
 | --- | --- |
-| **Phase** | Design frozen (v1.0, 9 November 2026) — demo build next |
-| **Next milestone** | Build the working demo (3–4 weeks, about 17 working days), then a 20-minute walkthrough with the partner |
+| **Phase** | Demo complete and presented; pilot in development (private) |
 | **Owner** | Antonio Huang |
-| **Last updated** | 9 November 2026 |
+| **Last updated** | 21 November 2026 |
 
 ---
 
@@ -18,21 +19,19 @@ flowchart LR
     p1[1. Business requirements<br/>and proposal] --> p2[2. Demo requirements] --> p3[3. Architecture<br/>ADR-001 to 005] --> p4[4. Detailed design] --> p5[5. Demo build] --> p6[6. Demo to partner] --> p7[7. Pilot]
     classDef done fill:#d9ead3,stroke:#6aa84f
     classDef now fill:#fff2cc,stroke:#e69138,stroke-width:2px
-    classDef next fill:#ffffff,stroke:#999999
-    class p1,p2,p3,p4 done
-    class p5 now
-    class p6,p7 next
+    class p1,p2,p3,p4,p5,p6 done
+    class p7 now
 ```
 
 | Phase | Status | Output |
 | --- | --- | --- |
 | 1. Business requirements and proposal | Done | Business requirements and delivery proposal (Word, with Appendix A) |
-| 2. Demo requirements | Done, agreed | [`docs/Requirements.md`](docs/Requirements.md) |
+| 2. Demo requirements | Done (v1.4) | [`docs/Requirements.md`](docs/Requirements.md) |
 | 3. Architecture decisions | Done, all ADRs *Accepted* | [`docs/adr/`](docs/adr/), [`docs/Architecture.md`](docs/Architecture.md) |
-| 4. Detailed design | Done, frozen (v1.0) | [`docs/Design.md`](docs/Design.md), `docs/Design.docx` (8 November changes highlighted) |
-| 5. Demo build | **Next** | This repository's code |
-| 6. Demo to the partner | Not scheduled | Six-step, 20-minute script (Requirements §10) |
-| 7. Pilot | Not started | Partner's AWS accounts, real venues |
+| 4. Detailed design | Done (v1.0, with build notes added per milestone) | [`docs/Design.md`](docs/Design.md) |
+| 5. Demo build | **Done**: milestones M0 to M12b | This repository; [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) |
+| 6. Demo to the partner | **Done**, 19 November 2026, on AWS | Requirements §10 demo script |
+| 7. Pilot | In development (private repository) | Real venues |
 
 ---
 
@@ -40,135 +39,103 @@ flowchart LR
 
 One dinner service at a fictional restaurant, **Golden Dragon** (Auckland, 14 tables, English and Chinese):
 
-1. A guest books a table on a phone in under a minute, paying a deposit for 6+ guests (Stripe test mode).
+1. A guest scans a QR code on the presenter screen and books a table on their own phone in under a minute; parties of 6 or more pay a deposit (Stripe test mode, including 3-D Secure).
 2. The booking appears on the host's floor plan within 2 seconds, on every screen.
-3. The host seats a walk-in in three taps or adds the party to a waitlist with a quoted wait.
+3. The host seats a walk-in in three taps, or adds the party to the waitlist with a quoted wait.
 4. A table frees up and the waiting guest gets a "table ready" text (on-screen phone panel).
 5. Guests get a reminder they can confirm or cancel with one tap; deposits are refunded by rule.
 6. A POS log shows exactly what the system sends to and receives from the POS, including delivery while the POS is offline.
 
-Out of scope for the demo: real SMS and POS connections, staff sign-in (the demo uses a passcode page), the floor-plan editor, split bills, reports and multiple venues.
+The host screen installs as an app on an iPad (Add to Home Screen) or goes full screen in the browser. A presenter screen runs the demo: a demo clock, reset, reminders, the simulated phone and the mock POS.
+
+Out of scope for the demo: real SMS and POS connections, staff accounts (the demo uses a passcode page), the floor-plan editor, split bills, reports and multiple venues.
+
+### Measured results
+
+| Check | Result |
+| --- | --- |
+| Demo script as one end-to-end run (QA-6) | Passes three times in a row from a reset |
+| Host actions (QA-4, limit 1 s) | 86–162 ms locally; 187–536 ms on AWS through CloudFront |
+| A booking reaches every host screen (AC2.1) | Within 2 seconds |
+| Tests | xUnit unit and integration tests (Testcontainers), CDK assertion tests, 117 web unit tests and 43 Playwright end-to-end tests, run in GitHub Actions |
+
+---
+
+## Technology (as built)
+
+| Layer | Choice |
+| --- | --- |
+| Front end | Next.js 16 (React 19, TypeScript), static export, installable as a PWA; SVG floor plan; TanStack Query; react-i18next (English and Chinese) |
+| API | .NET 10, ASP.NET Core minimal APIs, EF Core (Npgsql), SignalR |
+| Data | PostgreSQL 16 |
+| Events | Domain events, transactional outbox and inbox, background workers |
+| Validation and errors | FluentValidation; central exception handler with Problem Details |
+| Contracts | OpenAPI → generated TypeScript client (`orval`); signed POS message contract ([`docs/api/pos-messages.md`](docs/api/pos-messages.md)) |
+| Payments | Stripe (test mode) with signed webhooks |
+| Hosting (demo) | AWS: CloudFront + S3 for the site, a Lightsail container for the API, RDS PostgreSQL, Secrets Manager; the API accepts traffic only through CloudFront; security headers and a hash-based Content Security Policy (report-only) |
+| Infrastructure and CI | AWS CDK in C#; GitHub Actions |
+| Tests | xUnit, Testcontainers, Playwright |
+
+The AWS demo environment has been removed now that the demo is over. [`docs/RUNBOOK-aws.md`](docs/RUNBOOK-aws.md) recreates it step by step.
 
 ---
 
 ## Documents
 
-| Document | Purpose | Status |
-| --- | --- | --- |
-| [`docs/Requirements.md`](docs/Requirements.md) | Demo scope, acceptance criteria, business rules BR-01–BR-13, quality targets QA-1–QA-8, demo script | Frozen (v1.0) |
-| [`docs/Architecture.md`](docs/Architecture.md) | One-page architecture: context, stack, events, data, cross-cutting concerns, deployment | Frozen (v1.0) |
-| [`docs/Design.md`](docs/Design.md) | Detailed design: domain model, state machines, events, outbox, POS, messaging, payments, schema, API, jobs | Frozen (v1.0) |
-| [ADR-001](docs/adr/ADR-001%20Technology%20Selection.md) | Technology selection (Next.js vs Nuxt, .NET, PostgreSQL, SignalR, PWA, floor plan) | Accepted |
-| [ADR-002](docs/adr/ADR-002%20Event-driven%20Architecture.md) | Event-driven architecture (outbox, worker, event catalogue, delivery rules) | Accepted |
-| [ADR-003](docs/adr/ADR-003%20Data%20Architecture.md) | Data architecture (PostgreSQL vs SQL Server, double booking, offline, privacy) | Accepted |
-| [ADR-004](docs/adr/ADR-004%20Cross-cutting%20Concerns.md) | Cross-cutting concerns (security, contracts, FluentValidation, error handling, logging) | Accepted |
-| [ADR-005](docs/adr/ADR-005%20AWS%20Hosting%20and%20Deployment.md) | AWS hosting and deployment (Lightsail demo, ECS pilot, CDK, GitHub Actions) | Accepted |
-
-The `docs/adr/` files are the authoritative versions; revisions are made there.
-
-### Design changes before the freeze (5–8 November 2026)
-
-| Change | Design section |
+| Document | Purpose |
 | --- | --- |
-| Booking terms (deposit, cancellation, turn time) copied onto each booking at booking time | §2.6 |
-| Late-match rule: a POS bill that arrives after the host cleared the table still reaches the right booking | §6.5 |
-| One bill per booking, keyed by POS bill ID, with room for split bills later | §6.6 |
-| `MessageDeliveryWorker`: texts and emails queued in PostgreSQL, sent with retries and expiry | §7.1 |
+| [`docs/Requirements.md`](docs/Requirements.md) | Demo scope, acceptance criteria, business rules BR-01–BR-13, quality targets QA-1–QA-8, demo script |
+| [`docs/Architecture.md`](docs/Architecture.md) | One-page architecture: context, stack, events, data, cross-cutting concerns, deployment |
+| [`docs/Design.md`](docs/Design.md) | Detailed design, with build notes for each milestone |
+| [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) | The milestones M0–M12b and what each one delivered |
+| [`docs/RUNBOOK-aws.md`](docs/RUNBOOK-aws.md) | Deploying the demo to AWS by hand, and removing it |
+| [`docs/api/pos-messages.md`](docs/api/pos-messages.md) | The POS message contract |
+| [`docs/api/openapi.json`](docs/api/openapi.json) | The API contract |
+| [ADR-001](docs/adr/ADR-001%20Technology%20Selection.md) | Technology selection |
+| [ADR-002](docs/adr/ADR-002%20Event-driven%20Architecture.md) | Event-driven architecture |
+| [ADR-003](docs/adr/ADR-003%20Data%20Architecture.md) | Data architecture |
+| [ADR-004](docs/adr/ADR-004%20Cross-cutting%20Concerns.md) | Cross-cutting concerns |
+| [ADR-005](docs/adr/ADR-005%20AWS%20Hosting%20and%20Deployment.md) | AWS hosting and deployment |
 
 ---
 
-## Technology (planned)
-
-| Layer | Choice |
-| --- | --- |
-| Front end | Next.js (React, TypeScript), static export, installable as a PWA; SVG floor plan |
-| API | ASP.NET Core, C#, EF Core (Npgsql), SignalR |
-| Data | PostgreSQL (Amazon RDS) |
-| Events | Domain events, transactional outbox and inbox, background workers |
-| Validation and errors | FluentValidation; central exception handler with Problem Details |
-| Contracts | OpenAPI → generated TypeScript client (`orval`) |
-| Payments | Stripe (test mode in the demo) |
-| Hosting | AWS: Lightsail container + RDS + S3/CloudFront (demo); ECS on Fargate (pilot) |
-| Infrastructure and CI/CD | AWS CDK (C#), GitHub Actions with OIDC |
-| Tests | xUnit, Testcontainers, Playwright |
-
-All data stays in AWS. Exact versions will be pinned when the code starts.
-
----
-
-## Repository layout (planned)
+## Repository layout
 
 ```
 /
-├─ docs/
-│  ├─ Requirements.md
-│  ├─ Architecture.md
-│  ├─ Design.md
-│  └─ adr/                    ← ADR-001 … ADR-005
+├─ docs/                      ← requirements, architecture, design, build plan, runbook, ADRs, API contracts
 ├─ src/
-│  ├─ Api/                    ← endpoints, features (vertical slices), pipeline, SignalR hub
+│  ├─ Api/                    ← endpoints (vertical slices), pipeline, SignalR hub
 │  ├─ Domain/                 ← aggregates, value objects, policies, domain events
 │  ├─ Contracts/              ← event envelope and event types
-│  └─ Infrastructure/         ← EF Core, outbox/inbox, workers, Stripe, mock POS (in-process), message senders
-├─ web/                       ← Next.js app (guest, host, presenter screens)
+│  └─ Infrastructure/         ← EF Core, outbox/inbox, workers, Stripe, mock POS, message senders
+├─ web/                       ← Next.js app (guest, host and presenter screens)
 ├─ tests/                     ← Unit, Integration (Testcontainers), E2E (Playwright)
-├─ infra/                     ← AWS CDK stacks
+├─ infra/                     ← AWS CDK stacks (C#)
 └─ docker-compose.yml         ← local PostgreSQL
 ```
 
-## Getting started
+## Running it locally
 
 Prerequisites: .NET 10 SDK (pinned in `global.json`), Node.js 22, Docker Desktop.
 
 ```bash
-docker compose up -d       # PostgreSQL 16 (the mock POS runs inside the API)
-dotnet user-secrets set ConnectionStrings:Reservations "Host=localhost;Port=5432;Database=reservations;Username=reservations;Password=local_dev_only" --project src/Api
-dotnet test                # unit + integration (Testcontainers needs Docker running)
-dotnet run --project src/Api                 # https://localhost:5001/health/ready
-cd web && npm ci && npm run dev              # http://localhost:3000
+docker compose up -d                          # PostgreSQL 16 (the mock POS runs inside the API)
+# once: set the user secrets listed under "Commands" in CLAUDE.md (connection string, demo passcodes, signing keys)
+dotnet test                                   # unit + integration (Docker must be running)
+dotnet run --project src/Api                  # https://localhost:5001, migrates and seeds the Golden Dragon evening
+cd web && npm ci && npm run dev               # https://localhost:3000
 ```
 
-Resetting the Golden Dragon demo data arrives with the seed (M2) and the presenter controls (M11).
-
----
-
-## Next steps
-
-1. **Set up the repository.** Solution skeleton, `docker-compose.yml`, CI with build and tests, demo AWS account with a budget alarm.
-2. **Build the demo in this order:** data model and seed → booking and availability → floor plan and SignalR → walk-ins and waitlist → messages and phone panel → Stripe deposits and refunds → mock POS and POS log → reminders → demo controls and reset.
-3. **Rehearse.** Run the demo script end to end three times without errors (QA-6), and record a 3-minute fallback video.
-4. **Arrange the walkthrough** with the partner, and bring the open questions below.
-
-Design changes after the freeze go through a new or superseding ADR, then `Design.md`.
-
-## Consistency pass (9 November 2026)
-
-| Gap | Resolution |
-| --- | --- |
-| Staff sign-in: out of scope in the requirements, Cognito in ADR-004 and `Architecture.md` | Demo uses a fixed demo host session; Cognito is for the pilot (ADR-004, ADR-005, `Architecture.md`) |
-| ADR-001 listed the floor-plan editor and combining tables as demo needs | Marked as pilot features; the demo uses a seeded layout. `react-i18next` named for languages |
-| ADR-004 validation examples (deposit 8+, party 1–20) | Deposit 6+ (BR-06), online party 1–8 (BR-04) |
-| Requirements doc used older event names | Aligned with ADR-002 (`BookingSeated`, `MessageSent`) |
-| ADR-002 catalogue lacked late bill matching | `BookingBillAttached` added; `BookingCompleted` carries `source` and `posBillId`; `sequence` comes from `LastEventSequence` |
-| ADR-003 and `Architecture.md` lacked recent design changes | Booking terms (DM-11), `booking_bills` (DM-12), message and POS workers, late match |
-| Reminder timing only in the design | BR-13 added to the requirements |
-
-## Questions for the partner
-
-- How does the POS send "bill paid" (webhook, polling or export)? Does it accept idempotency keys?
-- Can the POS return the booking ID it received when the table was opened?
-- Does the POS support split bills per table, and do venues use virtual tables to fake them?
-- Does the partner already use Cognito or another identity service for POS staff (pilot only)?
-- Are the reminder timing rules (BR-13) right for their venues?
-- Which AWS accounts and region should the pilot use (Auckland or Sydney)?
-- What uptime and recovery targets do they promise venues today?
-- Which domain should guests see on booking pages and texts?
+Open `/demo-login/` to sign in to the host or presenter screen. The presenter's **Reset** brings back the seeded evening at 6:25 pm.
 
 ---
 
 ## Conventions
 
 - **Decisions** are recorded as ADRs; the design must not contradict an accepted ADR.
-- **Design changes** are made in `docs/Design.md` first; `Design.docx` is generated from it.
 - **Commits** use Conventional Commits, e.g. `docs(design): …`, `feat(bookings): …`, `fix(pos): …`.
 - **Confidentiality:** the partner and their products are not named in this repository.
+- **No secrets in the repository:** local secrets live in .NET user secrets, AWS secrets in Secrets Manager.
+
+Copyright © 2026 Antonio Huang. All rights reserved. The code is published to show the work; no licence is granted to copy or reuse it.
